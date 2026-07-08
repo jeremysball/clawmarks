@@ -1,0 +1,64 @@
+You are reviewing a LoRA training dataset of 31 hand-written image captions against their actual images. For EACH image below, compare the attached image to its caption text and check whether the caption accurately describes what's actually in the image (subject/animal, colors, medium/technique, pose, background, any described objects like a clawed hand, etc). Only flag genuine mismatches — not stylistic omissions. For each file, output one line: either 'OK: <filename>' or 'MISMATCH: <filename> — <what's wrong>'. Be concise. Here are the filename -> caption pairs, in the same order the images are attached:
+
+=== F0Sehn1XgBMIx5j.jpg ===
+trentbuckle, close-up wolf-cat face, dark-rimmed eyes glowing pale blue, white and gray fur, clawed hand pressed beside cheek, dense dark-blue vertical brush-dash background, thick acrylic dry-brush texture, raw outsider-art painting
+=== F0SevrvXgA07Zq7.jpg ===
+trentbuckle, pale ghost-like face dissolving into white paper, wide black-rimmed eyes with blue pupils, smeared red-paint mouth and chin, rest of face left unpainted, thin watery acrylic wash, unsettling minimal expressionist portrait
+=== F87ecGcXMAAI_wy.jpg ===
+trentbuckle, rough marker sketch of a fox head, three-quarter view, thick uneven black outline, visible pen-stroke repetition, flat white background, quick gestural line-only character study
+=== F87eSHXXkAA6w2g.jpg ===
+trentbuckle, small hot-pink cat, neon paint-marker outline, green and yellow oil-pastel grass patch, kraft cardboard ground, pale ghost blob peeking from grass, flat graphic color on textured brown paper, folk-art collage
+=== F87eYOgXgAAv1_8.jpg ===
+trentbuckle, two pale pink hands with black ink outlines reaching toward floating plain black almond eyes, dark charcoal-gray hooded shape, tiny mixed-typeface text texture background, high-contrast comic-ink illustration
+=== Fg7u1FyXEAE5d_x.jpg ===
+trentbuckle, tabby cat face with green eyes, soft watercolor-pencil shading, collaged patchwork of pale-yellow paper and blue-lined notebook paper, unfinished pencil sketch for the body, gentle naturalistic portrait study
+=== Fg7uCSSWQAYqz2M.jpg ===
+trentbuckle, abstract cat face dissolving into a storm of blue and white dry-brush strokes, thick red X and red bar marks slashing across the composition, dark scribbled scratch marks, aggressive abstract-expressionist texture painting
+=== Fg7uYFdWAAAdYaj.jpg ===
+trentbuckle, dense all-over doodle field in red marker, small blue and black accents, hearts, spirals, cartoon eyes, hooded ghost figure, scrawled handwritten words in the corner, chaotic diary-page automatic drawing
+=== Fg7vDW4WQAEuY_9-1.jpg ===
+trentbuckle, faint pencil sketch of a pine tree and a round moon, yellow-green marker wash, collaged newsprint with foreign-script text showing through, quiet muted landscape fragment, delicate layered collage
+=== Fg7vDW4WQAEuY_9.jpg ===
+trentbuckle, torn scrap of green marker-washed newsprint covered in foreign-script text, hand-lettered STOP sign fragment, small ink doodle in the corner, raw found-paper collage texture
+=== Fg7vPk8XkAAl6kj.jpg ===
+trentbuckle, snarling cat face split into hard-edged blue and red halves, thick blue X slashed over the eyes, partial stamped SELF REFLECTION text badge beside it, bold digital-brush poster-color painting
+=== Fg9knqyWAAIFB2V.jpg ===
+trentbuckle, sketchbook page collaged from yellow paper scraps, heavily cross-hatched owl face labeled WHO WHO, small marker cat labeled meow, black bar redacting a figure's eyes, word DARKNESS over a cluster of tiny fox-face doodles, dense zine-page collage
+=== Fg9ktZHXwAE92O1.jpg ===
+trentbuckle, loose black-marker doodle sheet, multiple sketchy cat and creature faces at different sizes, two identical yellow sticker cat-icons stacked at left edge, cross-hatched eye patches, hand-lettered STOP fragment, a small X-eyed simplified cat sketch in the corner, raw all-over line doodle page
+=== Fg9kx6jXwAAuwsx.jpg ===
+trentbuckle, grid of loose marker cat-face doodles at different expressions, wide eyes, bared teeth, side-eye, two identical small yellow cat-icon stickers repeated at left, playful sketchbook character sheet
+=== Fg9kZFkWQAISYYv.jpg ===
+trentbuckle, row of tall rounded ghost-like standing shapes, loose black marker outline, vertical hatching, single stone-like form resting at their feet, quiet minimal line-art silhouettes on white
+=== Fg9Nf92XkAEra87.jpg ===
+trentbuckle, pencil-sketched robot figure, smiling rounded head, tube-like limbs, torn lined notebook paper, scrap of solid ultramarine-blue paper, faint ghost silhouettes sketched below, whimsical graphite doodle collage
+=== Fg9Og02WIAAvmXx.jpg ===
+trentbuckle, pure abstract brushed-paint field of layered blue tones, jagged crimson fish-like squiggle, acid-yellow zigzag line, pale teal scratch marks crossing through, energetic gestural abstraction
+=== FhIobo4X0AAfK2L.jpg ===
+trentbuckle, pale acrylic-brushed cat face dissolving into a dark ink splash at the top, torn strip of red paint at the edge, faint pencil-sketched second cat face on a yellow paper fragment beside it, mixed media diptych
+=== FhIoG3AWIAAaqax.jpg ===
+trentbuckle, striped tiger face fragment in orange and black at the top edge, blue-marker bear sketch below with handwritten words bear hongry, red dot accent, small graphite cat sketch peeking from a yellow paper corner labeled shh, layered multi-scene collage
+=== FjaksnEX0AEakz6.jpg ===
+trentbuckle, rows of small identical marker wolf-head doodles with closed sleepy eyes and Zzz marks, the word goodnight hand-lettered among them, looser gestural ink sketch of a curled sleeping animal, cozy repeated character doodles
+=== FlzK3OUXoAEvv3e.jpg ===
+trentbuckle, dense abstract tangle of thick black marker loops and circles forming an implied face, jagged spiky black shapes radiating outward like fur, aggressive raw ink scribble portrait
+=== FmCl8dpWQAEnBMf-1.jpg ===
+trentbuckle, red marker cat face made almost entirely of small identical eye-shapes repeated across the face like a pattern, single Zzz and w mark near the ears, spiky red-outlined silhouette on cream paper, symmetrical graphic pattern-portrait
+=== FmCl8dpWQAEnBMf.jpg ===
+trentbuckle, minimal cat face in thin black ink line, tangled scribble-loop eyes, single soft caret-shaped mouth, solid black shape looming behind one ear, quiet linework portrait on white
+=== FmVgY6sWYAAFvG2.jpg ===
+trentbuckle, spiky-furred cat face, dense black marker cross-hatching, wide white eyes, thin deep crimson vertical accent seeping in from the edge, high-contrast scratchy ink illustration
+=== FmViiloXEAAbIZ4.jpg ===
+trentbuckle, stylized cat face in white paint with dark-purple ink outline and shading, rich brown kraft cardboard ground, half-closed eyes, spiky fur silhouette, warm earthy mixed-media portrait
+=== FpLH5HgaEAAS0LP.jpg ===
+trentbuckle, torn scrap of pale-yellow paper with a jagged crimson paint-blot spreading across it, faint teal-marker fox-face sketch layered behind, thin strips of dense green hatching at the left edge, textured abstract collage fragment
+=== FpLHBSOaMAQHaD-1.jpg ===
+trentbuckle, howling wolf head in soft red-pink colored pencil against a rough yellow-marker sky-block, black motion-line accents beside the open jaw, dark scribbled shape entering from below, expressive colored-pencil character study
+=== GIZbMB8WIAAGBIS.jpg ===
+trentbuckle, tight repeating pattern of interlocking blue and red marker zigzags, loops, and X shapes with small black accent dots, pure decorative all-over abstract pattern, flat poster-marker texture
+=== GIZc0gbXEAAOIMd.jpg ===
+trentbuckle, row of identical simple cat-face icons made from a zigzag ear-line, lowercase a-a-a eye shapes, and an X mouth, minimal repeated black-line character-icon set on white
+=== GIZcrjvWsAAw-fN.jpg ===
+trentbuckle, loose tangle of thick blue ballpoint-pen loops and hooked lines forming an abstract animal-like silhouette, small dark chevron marks and teardrop shapes, raw automatic-drawing linework
+=== GVmjAz5WwAA1cEK.jpg ===
+trentbuckle, solid acid-yellow cat face, heavy dark-maroon ink shading around the half-closed eyes and spiky ear tips, flat saturated color fill with painterly oil-pastel edges, bold minimal color-block portrait

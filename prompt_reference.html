@@ -1,0 +1,462 @@
+<title>CLAWMARKS: 200 Perturbed Training Prompts</title>
+<style>
+:root {
+  --paper: #f3ede1;
+  --paper-2: #e9e0cf;
+  --ink: #2a2420;
+  --ink-soft: #5b5248;
+  --rule: #d8cbb0;
+  --crimson: #a3352b;
+  --crimson-soft: #c65c45;
+  --trigger-bg: #ecd9c9;
+}
+:root[data-theme="dark"] {
+  --paper: #22201c;
+  --paper-2: #2b2822;
+  --ink: #ece4d6;
+  --ink-soft: #b3a892;
+  --rule: #4a4438;
+  --crimson: #e2836f;
+  --crimson-soft: #e2836f;
+  --trigger-bg: #4a3a2c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #22201c;
+    --paper-2: #2b2822;
+    --ink: #ece4d6;
+    --ink-soft: #b3a892;
+    --rule: #4a4438;
+    --crimson: #e2836f;
+    --crimson-soft: #e2836f;
+    --trigger-bg: #4a3a2c;
+  }
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  src: local('Georgia');
+  font-weight: 600;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  line-height: 1.5;
+}
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 4rem 1.5rem 6rem;
+}
+
+header.masthead {
+  border-bottom: 3px solid var(--ink);
+  padding-bottom: 1.75rem;
+  margin-bottom: 3rem;
+}
+.eyebrow {
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--crimson);
+  margin: 0 0 0.6rem;
+}
+h1 {
+  font-family: Georgia, "Iowan Old Style", serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 2.9rem);
+  letter-spacing: -0.01em;
+  margin: 0 0 0.5rem;
+  text-wrap: balance;
+}
+.dek {
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  max-width: 62ch;
+  margin: 0.75rem 0 0;
+}
+.meta-row {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+.meta-row strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.method {
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1.1rem 1.4rem;
+  margin-bottom: 3rem;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+.method strong { color: var(--ink); }
+.method code {
+  font-family: "Courier New", ui-monospace, monospace;
+  background: var(--trigger-bg);
+  padding: 0.05em 0.35em;
+  border-radius: 2px;
+  font-size: 0.88em;
+  color: var(--ink);
+}
+
+.group {
+  border-top: 1px solid var(--rule);
+  padding: 1.75rem 0;
+}
+.group:last-child { padding-bottom: 0; }
+
+.group-head {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  margin-bottom: 0.9rem;
+}
+.group-num {
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 0.8rem;
+  color: var(--crimson);
+  flex: none;
+  padding-top: 0.15rem;
+}
+.base-caption {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+ol.variants {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1.9rem;
+  display: grid;
+  gap: 0.5rem;
+}
+ol.variants li {
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--ink);
+  counter-increment: item;
+  position: relative;
+}
+ol.variants li::before {
+  content: counter(item);
+  position: absolute;
+  left: -1.9rem;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  width: 1.4rem;
+  text-align: right;
+}
+ol.variants { counter-reset: item; }
+
+.trigger {
+  color: var(--crimson);
+  font-weight: 700;
+}
+
+footer.note {
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+</style>
+<div class="page">
+  <header class="masthead">
+    <p class="eyebrow">CLAWMARKS &middot; SDXL LoRA &middot; trigger word "trentbuckle"</p>
+    <h1>200 perturbed training-caption variants</h1>
+    <p class="dek">Every caption from the 31-image corrected training set, mutated by
+      systematic word-level substitution &mdash; swapping color, medium, or ground terms
+      for others drawn from the same vocabulary actually used across the dataset &mdash;
+      to widen the net for hyperparameter and prompt sweeps without drifting outside the
+      established CLAWMARKS style.</p>
+    <div class="meta-row">
+      <span>Base captions: <strong>31</strong></span>
+      <span>Variants: <strong>200</strong></span>
+      <span>Per caption: <strong>~6&ndash;7</strong></span>
+      <span>Seed: <strong>42</strong></span>
+    </div>
+  </header>
+
+  <div class="method">
+    <strong>Method.</strong> Each of the 31 real training captions was parsed for known
+    <code>color</code>, <code>medium</code>, and <code>ground</code> terms (e.g. <code>crimson</code>
+    &rarr; <code>rust-red</code>, <code>marker</code> &rarr; <code>graphite</code>, <code>kraft cardboard</code>
+    &rarr; <code>lined paper</code>), then 1&ndash;3 of those terms were swapped per variant for a
+    same-category alternative pulled from the pool of terms already present somewhere in the
+    dataset. This keeps every variant a plausible mutation of real training data rather than a
+    freely invented prompt.
+  </div>
+
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">01</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, close-up wolf-cat face, dark-rimmed eyes glowing pale blue, white and gray fur, clawed hand pressed beside cheek, dense dark-blue vertical brush-dash background, thick acrylic dry-brush texture, raw outsider-art painting</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, close-up wolf-cat face, dark-rimmed eyes glowing pale blue, rust-red and gray fur, clawed hand pressed beside cheek, dense olive vertical brush-dash background, thick acrylic dry-brush texture, raw outsider-art painting</li><li><span class="trigger">trentbuckle</span>, close-up wolf-cat face, dark-rimmed eyes glowing pale blue, white and gray fur, clawed hand pressed beside cheek, dense black vertical brush-dash background, thick marker dry-brush texture, raw outsider-art painting</li><li><span class="trigger">trentbuckle</span>, close-up wolf-cat face, dark-rimmed eyes glowing pale blue, white and gray fur, clawed hand pressed beside cheek, dense dark-blue vertical brush-dash background, thick dry-pastel dry-brush texture, raw outsider-art painting</li><li><span class="trigger">trentbuckle</span>, close-up wolf-cat face, dark-rimmed eyes glowing pale blue, white and gray fur, clawed hand pressed beside cheek, dense gray vertical brush-dash background, thick acrylic dry-brush texture, raw outsider-art painting</li><li><span class="trigger">trentbuckle</span>, close-up wolf-cat face, dark-rimmed eyes glowing pale blue, white and gray fur, clawed hand pressed beside cheek, dense hot-pink vertical brush-dash background, thick acrylic dry-brush texture, raw outsider-art painting</li><li><span class="trigger">trentbuckle</span>, close-up wolf-cat face, dark-rimmed eyes glowing pale blue, white and gray fur, clawed hand pressed beside cheek, dense pale-yellow vertical brush-dash background, thick acrylic dry-brush texture, raw outsider-art painting</li><li><span class="trigger">trentbuckle</span>, close-up wolf-cat face, dark-rimmed eyes glowing pale blue, white and gray fur, clawed hand pressed beside cheek, dense rust-red vertical brush-dash background, thick acrylic dry-brush texture, raw outsider-art painting</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">02</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, pale ghost-like face dissolving into white paper, wide black-rimmed eyes with blue pupils, smeared red-paint mouth and chin, rest of face left unpainted, thin watery acrylic wash, unsettling minimal expressionist portrait</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, pale ghost-like face dissolving into white paper, wide acid-yellow-rimmed eyes with blue pupils, smeared red-paint mouth and chin, rest of face left unpainted, thin watery graphite wash, unsettling minimal expressionist portrait</li><li><span class="trigger">trentbuckle</span>, pale ghost-like face dissolving into white paper, wide black-rimmed eyes with blue pupils, smeared red-paint mouth and chin, rest of face left unpainted, thin watery colored pencil wash, unsettling minimal expressionist portrait</li><li><span class="trigger">trentbuckle</span>, pale ghost-like face dissolving into white paper, wide black-rimmed eyes with blue pupils, smeared red-paint mouth and chin, rest of face left unpainted, thin watery dry-pastel wash, unsettling minimal expressionist portrait</li><li><span class="trigger">trentbuckle</span>, pale ghost-like face dissolving into white paper, wide burnt-orange-rimmed eyes with blue pupils, smeared red-paint mouth and chin, rest of face left unpainted, thin watery acrylic wash, unsettling minimal expressionist portrait</li><li><span class="trigger">trentbuckle</span>, pale ghost-like face dissolving into white paper, wide green-rimmed eyes with blue pupils, smeared red-paint mouth and chin, rest of face left unpainted, thin watery acrylic wash, unsettling minimal expressionist portrait</li><li><span class="trigger">trentbuckle</span>, pale ghost-like face dissolving into white paper, wide rust-red-rimmed eyes with blue pupils, smeared red-paint mouth and chin, rest of face left unpainted, thin watery acrylic wash, unsettling minimal expressionist portrait</li><li><span class="trigger">trentbuckle</span>, pale ghost-like face dissolving into white paper, wide white-rimmed eyes with blue pupils, smeared red-paint mouth and chin, rest of face left unpainted, thin watery colored pencil wash, unsettling minimal expressionist portrait</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">03</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, small hot-pink cat, neon paint-marker outline, green and yellow oil-pastel grass patch, kraft cardboard ground, pale ghost blob peeking from grass, flat graphic color on textured brown paper, folk-art collage</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, small acid-yellow cat, neon paint-marker outline, green and yellow felt-tip pen grass patch, kraft cardboard ground, pale ghost blob peeking from grass, flat graphic color on textured brown paper, folk-art collage</li><li><span class="trigger">trentbuckle</span>, small green cat, neon paint-marker outline, green and yellow oil-pastel grass patch, kraft cardboard ground, pale ghost blob peeking from grass, flat graphic color on textured brown paper, folk-art collage</li><li><span class="trigger">trentbuckle</span>, small hot-pink cat, neon paint-marker outline, green and yellow ballpoint pen grass patch, kraft cardboard ground, pale ghost blob peeking from grass, flat graphic color on textured brown paper, folk-art collage</li><li><span class="trigger">trentbuckle</span>, small hot-pink cat, neon paint-marker outline, green and yellow ink grass patch, torn paper ground, pale ghost blob peeking from grass, flat graphic color on textured brown paper, folk-art collage</li><li><span class="trigger">trentbuckle</span>, small hot-pink cat, neon paint-marker outline, green and yellow oil-pastel grass patch, cream paper ground, pale ghost blob peeking from grass, flat graphic color on textured brown paper, folk-art collage</li><li><span class="trigger">trentbuckle</span>, small hot-pink cat, neon paint-marker outline, green and yellow watercolor-pencil grass patch, kraft cardboard ground, pale ghost blob peeking from grass, flat graphic color on textured brown paper, folk-art collage</li><li><span class="trigger">trentbuckle</span>, small ultramarine-blue cat, neon paint-marker outline, green and yellow acrylic grass patch, white background ground, pale ghost blob peeking from grass, flat graphic color on textured brown paper, folk-art collage</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">04</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, two pale pink hands with black ink outlines reaching toward floating plain black almond eyes, dark charcoal-gray hooded shape, tiny mixed-typeface text texture background, high-contrast comic-ink illustration</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, two pale pink hands with acid-yellow ink outlines reaching toward floating plain black almond eyes, dark charcoal-gray hooded shape, tiny mixed-typeface text texture background, high-contrast comic-ink illustration</li><li><span class="trigger">trentbuckle</span>, two pale pink hands with black ink outlines reaching toward floating plain black almond eyes, dark graphite-gray hooded shape, tiny mixed-typeface text texture background, high-contrast comic-ink illustration</li><li><span class="trigger">trentbuckle</span>, two pale pink hands with black ink outlines reaching toward floating plain black almond eyes, dark wax-crayon-gray hooded shape, tiny mixed-typeface text texture background, high-contrast comic-ink illustration</li><li><span class="trigger">trentbuckle</span>, two pale pink hands with blue ink outlines reaching toward floating plain crimson almond eyes, dark charcoal-gray hooded shape, tiny mixed-typeface text texture background, high-contrast comic-ink illustration</li><li><span class="trigger">trentbuckle</span>, two pale pink hands with cobalt-blue ink outlines reaching toward floating plain black almond eyes, dark ballpoint pen-gray hooded shape, tiny mixed-typeface text texture background, high-contrast comic-ink illustration</li><li><span class="trigger">trentbuckle</span>, two pale pink hands with dark-blue ink outlines reaching toward floating plain black almond eyes, dark charcoal-gray hooded shape, tiny mixed-typeface text texture background, high-contrast comic-ink illustration</li><li><span class="trigger">trentbuckle</span>, two pale pink hands with pink ink outlines reaching toward floating plain hot-pink almond eyes, dark charcoal-gray hooded shape, tiny mixed-typeface text texture background, high-contrast comic-ink illustration</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">05</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, rough marker sketch of a fox head, three-quarter view, thick uneven black outline, visible pen-stroke repetition, flat white background, quick gestural line-only character study</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, rough dry-pastel sketch of a fox head, three-quarter view, thick uneven orange outline, visible pen-stroke repetition, flat lined paper, quick gestural line-only character study</li><li><span class="trigger">trentbuckle</span>, rough felt-tip pen sketch of a fox head, three-quarter view, thick uneven cobalt-blue outline, visible pen-stroke repetition, flat white background, quick gestural line-only character study</li><li><span class="trigger">trentbuckle</span>, rough marker sketch of a fox head, three-quarter view, thick uneven black outline, visible pen-stroke repetition, flat newsprint, quick gestural line-only character study</li><li><span class="trigger">trentbuckle</span>, rough marker sketch of a fox head, three-quarter view, thick uneven black outline, visible pen-stroke repetition, flat sketchbook page, quick gestural line-only character study</li><li><span class="trigger">trentbuckle</span>, rough marker sketch of a fox head, three-quarter view, thick uneven hot-pink outline, visible pen-stroke repetition, flat white background, quick gestural line-only character study</li><li><span class="trigger">trentbuckle</span>, rough marker sketch of a fox head, three-quarter view, thick uneven olive outline, visible pen-stroke repetition, flat cream paper, quick gestural line-only character study</li><li><span class="trigger">trentbuckle</span>, rough poster-color sketch of a fox head, three-quarter view, thick uneven green outline, visible pen-stroke repetition, flat white background, quick gestural line-only character study</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">06</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, tabby cat face with green eyes, soft watercolor-pencil shading, collaged patchwork of pale-yellow paper and blue-lined notebook paper, unfinished pencil sketch for the body, gentle naturalistic portrait study</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, tabby cat face with green eyes, soft acrylic shading, collaged patchwork of acid-yellow paper and blue-lined notebook paper, unfinished pencil sketch for the body, gentle naturalistic portrait study</li><li><span class="trigger">trentbuckle</span>, tabby cat face with green eyes, soft acrylic shading, collaged patchwork of pale-yellow paper and blue-lined torn paper, unfinished pencil sketch for the body, gentle naturalistic portrait study</li><li><span class="trigger">trentbuckle</span>, tabby cat face with green eyes, soft charcoal shading, collaged patchwork of pale-yellow paper and blue-lined cream paper, unfinished pencil sketch for the body, gentle naturalistic portrait study</li><li><span class="trigger">trentbuckle</span>, tabby cat face with green eyes, soft charcoal shading, collaged patchwork of pale-yellow paper and blue-lined lined paper, unfinished pencil sketch for the body, gentle naturalistic portrait study</li><li><span class="trigger">trentbuckle</span>, tabby cat face with green eyes, soft poster-color shading, collaged patchwork of white paper and blue-lined notebook paper, unfinished pencil sketch for the body, gentle naturalistic portrait study</li><li><span class="trigger">trentbuckle</span>, tabby cat face with green eyes, soft watercolor-pencil shading, collaged patchwork of burnt-orange paper and blue-lined notebook paper, unfinished pencil sketch for the body, gentle naturalistic portrait study</li><li><span class="trigger">trentbuckle</span>, tabby cat face with green eyes, soft watercolor-pencil shading, collaged patchwork of olive paper and blue-lined brown paper bag, unfinished pencil sketch for the body, gentle naturalistic portrait study</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">07</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, abstract cat face dissolving into a storm of blue and white dry-brush strokes, thick red X and red bar marks slashing across the composition, dark scribbled scratch marks, aggressive abstract-expressionist texture painting</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, abstract cat face dissolving into a storm of blue and black dry-brush strokes, thick red X and red bar marks slashing across the composition, dark scribbled scratch marks, aggressive abstract-expressionist texture painting</li><li><span class="trigger">trentbuckle</span>, abstract cat face dissolving into a storm of blue and gray dry-brush strokes, thick red X and red bar marks slashing across the composition, dark scribbled scratch marks, aggressive abstract-expressionist texture painting</li><li><span class="trigger">trentbuckle</span>, abstract cat face dissolving into a storm of blue and green dry-brush strokes, thick red X and red bar marks slashing across the composition, dark scribbled scratch marks, aggressive abstract-expressionist texture painting</li><li><span class="trigger">trentbuckle</span>, abstract cat face dissolving into a storm of blue and hot-pink dry-brush strokes, thick red X and red bar marks slashing across the composition, dark scribbled scratch marks, aggressive abstract-expressionist texture painting</li><li><span class="trigger">trentbuckle</span>, abstract cat face dissolving into a storm of blue and maroon dry-brush strokes, thick red X and red bar marks slashing across the composition, dark scribbled scratch marks, aggressive abstract-expressionist texture painting</li><li><span class="trigger">trentbuckle</span>, abstract cat face dissolving into a storm of blue and pale-yellow dry-brush strokes, thick red X and red bar marks slashing across the composition, dark scribbled scratch marks, aggressive abstract-expressionist texture painting</li><li><span class="trigger">trentbuckle</span>, abstract cat face dissolving into a storm of blue and violet dry-brush strokes, thick red X and red bar marks slashing across the composition, dark scribbled scratch marks, aggressive abstract-expressionist texture painting</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">08</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, dense all-over doodle field in red marker, small blue and black accents, hearts, spirals, cartoon eyes, hooded ghost figure, scrawled handwritten words in the corner, chaotic diary-page automatic drawing</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, dense all-over doodle field in red dry-pastel, small blue and green accents, hearts, spirals, cartoon eyes, hooded ghost figure, scrawled handwritten words in the corner, chaotic diary-page automatic drawing</li><li><span class="trigger">trentbuckle</span>, dense all-over doodle field in red dry-pastel, small blue and white accents, hearts, spirals, cartoon eyes, hooded ghost figure, scrawled handwritten words in the corner, chaotic diary-page automatic drawing</li><li><span class="trigger">trentbuckle</span>, dense all-over doodle field in red marker, small blue and blue accents, hearts, spirals, cartoon eyes, hooded ghost figure, scrawled handwritten words in the corner, chaotic diary-page automatic drawing</li><li><span class="trigger">trentbuckle</span>, dense all-over doodle field in red marker, small blue and crimson accents, hearts, spirals, cartoon eyes, hooded ghost figure, scrawled handwritten words in the corner, chaotic diary-page automatic drawing</li><li><span class="trigger">trentbuckle</span>, dense all-over doodle field in red marker, small blue and hot-pink accents, hearts, spirals, cartoon eyes, hooded ghost figure, scrawled handwritten words in the corner, chaotic diary-page automatic drawing</li><li><span class="trigger">trentbuckle</span>, dense all-over doodle field in red oil-pastel, small blue and black accents, hearts, spirals, cartoon eyes, hooded ghost figure, scrawled handwritten words in the corner, chaotic diary-page automatic drawing</li><li><span class="trigger">trentbuckle</span>, dense all-over doodle field in red poster-color, small blue and black accents, hearts, spirals, cartoon eyes, hooded ghost figure, scrawled handwritten words in the corner, chaotic diary-page automatic drawing</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">09</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, faint pencil sketch of a pine tree and a round moon, yellow-green marker wash, collaged newsprint with foreign-script text showing through, quiet muted landscape fragment, delicate layered collage</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, faint pencil sketch of a pine tree and a round moon, blue marker wash, collaged graph paper with foreign-script text showing through, quiet muted landscape fragment, delicate layered collage</li><li><span class="trigger">trentbuckle</span>, faint pencil sketch of a pine tree and a round moon, burnt-orange marker wash, collaged newsprint with foreign-script text showing through, quiet muted landscape fragment, delicate layered collage</li><li><span class="trigger">trentbuckle</span>, faint pencil sketch of a pine tree and a round moon, maroon acrylic wash, collaged brown paper bag with foreign-script text showing through, quiet muted landscape fragment, delicate layered collage</li><li><span class="trigger">trentbuckle</span>, faint pencil sketch of a pine tree and a round moon, violet marker wash, collaged newsprint with foreign-script text showing through, quiet muted landscape fragment, delicate layered collage</li><li><span class="trigger">trentbuckle</span>, faint pencil sketch of a pine tree and a round moon, yellow-green marker wash, collaged graph paper with foreign-script text showing through, quiet muted landscape fragment, delicate layered collage</li><li><span class="trigger">trentbuckle</span>, faint pencil sketch of a pine tree and a round moon, yellow-green marker wash, collaged lined paper with foreign-script text showing through, quiet muted landscape fragment, delicate layered collage</li><li><span class="trigger">trentbuckle</span>, faint pencil sketch of a pine tree and a round moon, yellow-green watercolor-pencil wash, collaged newsprint with foreign-script text showing through, quiet muted landscape fragment, delicate layered collage</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">10</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, torn scrap of green marker-washed newsprint covered in foreign-script text, hand-lettered STOP sign fragment, small ink doodle in the corner, raw found-paper collage texture</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, torn scrap of green graphite-washed graph paper covered in foreign-script text, hand-lettered STOP sign fragment, small ink doodle in the corner, raw found-paper collage texture</li><li><span class="trigger">trentbuckle</span>, torn scrap of green marker-washed lined paper covered in foreign-script text, hand-lettered STOP sign fragment, small ink doodle in the corner, raw found-paper collage texture</li><li><span class="trigger">trentbuckle</span>, torn scrap of green marker-washed torn paper covered in foreign-script text, hand-lettered STOP sign fragment, small ink doodle in the corner, raw found-paper collage texture</li><li><span class="trigger">trentbuckle</span>, torn scrap of green oil-pastel-washed newsprint covered in foreign-script text, hand-lettered STOP sign fragment, small ink doodle in the corner, raw found-paper collage texture</li><li><span class="trigger">trentbuckle</span>, torn scrap of olive marker-washed notebook paper covered in foreign-script text, hand-lettered STOP sign fragment, small ink doodle in the corner, raw found-paper collage texture</li><li><span class="trigger">trentbuckle</span>, torn scrap of red dry-pastel-washed newsprint covered in foreign-script text, hand-lettered STOP sign fragment, small ink doodle in the corner, raw found-paper collage texture</li><li><span class="trigger">trentbuckle</span>, torn scrap of violet marker-washed newsprint covered in foreign-script text, hand-lettered STOP sign fragment, small ink doodle in the corner, raw found-paper collage texture</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">11</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, snarling cat face split into hard-edged blue and red halves, thick red X slashed over the eyes, partial stamped SELF REFLECTION text badge beside it, bold digital-brush poster-color painting</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, snarling cat face split into hard-edged acid-yellow and red halves, thick red X slashed over the eyes, partial stamped SELF REFLECTION text badge beside it, bold digital-brush poster-color painting</li><li><span class="trigger">trentbuckle</span>, snarling cat face split into hard-edged blue and red halves, thick red X slashed over the eyes, partial stamped SELF REFLECTION text badge beside it, bold digital-brush acrylic painting</li><li><span class="trigger">trentbuckle</span>, snarling cat face split into hard-edged blue and red halves, thick red X slashed over the eyes, partial stamped SELF REFLECTION text badge beside it, bold digital-brush crayon painting</li><li><span class="trigger">trentbuckle</span>, snarling cat face split into hard-edged blue and red halves, thick red X slashed over the eyes, partial stamped SELF REFLECTION text badge beside it, bold digital-brush felt-tip pen painting</li><li><span class="trigger">trentbuckle</span>, snarling cat face split into hard-edged burnt-orange and red halves, thick red X slashed over the eyes, partial stamped SELF REFLECTION text badge beside it, bold digital-brush gouache painting</li><li><span class="trigger">trentbuckle</span>, snarling cat face split into hard-edged olive and red halves, thick red X slashed over the eyes, partial stamped SELF REFLECTION text badge beside it, bold digital-brush poster-color painting</li><li><span class="trigger">trentbuckle</span>, snarling cat face split into hard-edged pink and red halves, thick red X slashed over the eyes, partial stamped SELF REFLECTION text badge beside it, bold digital-brush poster-color painting</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">12</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, pencil-sketched robot figure, smiling rounded head, tube-like limbs, torn lined notebook paper, scrap of solid ultramarine-blue paper, faint ghost silhouettes sketched below, whimsical graphite doodle collage</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, pencil-sketched robot figure, smiling rounded head, tube-like limbs, torn lined brown paper bag, scrap of solid ultramarine-blue paper, faint ghost silhouettes sketched below, whimsical graphite doodle collage</li><li><span class="trigger">trentbuckle</span>, pencil-sketched robot figure, smiling rounded head, tube-like limbs, torn lined kraft cardboard, scrap of solid black paper, faint ghost silhouettes sketched below, whimsical graphite doodle collage</li><li><span class="trigger">trentbuckle</span>, pencil-sketched robot figure, smiling rounded head, tube-like limbs, torn lined kraft cardboard, scrap of solid ultramarine-blue paper, faint ghost silhouettes sketched below, whimsical graphite doodle collage</li><li><span class="trigger">trentbuckle</span>, pencil-sketched robot figure, smiling rounded head, tube-like limbs, torn lined notebook paper, scrap of solid red paper, faint ghost silhouettes sketched below, whimsical dry-pastel doodle collage</li><li><span class="trigger">trentbuckle</span>, pencil-sketched robot figure, smiling rounded head, tube-like limbs, torn lined sketchbook page, scrap of solid black paper, faint ghost silhouettes sketched below, whimsical acrylic doodle collage</li><li><span class="trigger">trentbuckle</span>, pencil-sketched robot figure, smiling rounded head, tube-like limbs, torn lined torn paper, scrap of solid rust-red paper, faint ghost silhouettes sketched below, whimsical ink doodle collage</li><li><span class="trigger">trentbuckle</span>, pencil-sketched robot figure, smiling rounded head, tube-like limbs, torn lined torn paper, scrap of solid ultramarine-blue paper, faint ghost silhouettes sketched below, whimsical graphite doodle collage</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">13</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, pure abstract brushed-paint field of layered blue tones, jagged crimson fish-like squiggle, acid-yellow zigzag line, pale teal scratch marks crossing through, energetic gestural abstraction</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, pure abstract brushed-paint field of layered blue tones, jagged burnt-orange fish-like squiggle, purple zigzag line, pale teal scratch marks crossing through, energetic gestural abstraction</li><li><span class="trigger">trentbuckle</span>, pure abstract brushed-paint field of layered blue tones, jagged crimson fish-like squiggle, crimson zigzag line, pale teal scratch marks crossing through, energetic gestural abstraction</li><li><span class="trigger">trentbuckle</span>, pure abstract brushed-paint field of layered blue tones, jagged crimson fish-like squiggle, hot-pink zigzag line, pale teal scratch marks crossing through, energetic gestural abstraction</li><li><span class="trigger">trentbuckle</span>, pure abstract brushed-paint field of layered blue tones, jagged crimson fish-like squiggle, orange zigzag line, pale teal scratch marks crossing through, energetic gestural abstraction</li><li><span class="trigger">trentbuckle</span>, pure abstract brushed-paint field of layered blue tones, jagged crimson fish-like squiggle, pink zigzag line, pale teal scratch marks crossing through, energetic gestural abstraction</li><li><span class="trigger">trentbuckle</span>, pure abstract brushed-paint field of layered blue tones, jagged crimson fish-like squiggle, teal zigzag line, pale teal scratch marks crossing through, energetic gestural abstraction</li><li><span class="trigger">trentbuckle</span>, pure abstract brushed-paint field of layered blue tones, jagged crimson fish-like squiggle, ultramarine-blue zigzag line, pale teal scratch marks crossing through, energetic gestural abstraction</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">14</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, row of tall rounded ghost-like standing shapes, loose black marker outline, vertical hatching, single stone-like form resting at their feet, quiet minimal line-art silhouettes on white</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, row of tall rounded ghost-like standing shapes, loose black colored pencil outline, vertical hatching, single stone-like form resting at their feet, quiet minimal line-art silhouettes on white</li><li><span class="trigger">trentbuckle</span>, row of tall rounded ghost-like standing shapes, loose black crayon outline, vertical hatching, single stone-like form resting at their feet, quiet minimal line-art silhouettes on white</li><li><span class="trigger">trentbuckle</span>, row of tall rounded ghost-like standing shapes, loose black gouache outline, vertical hatching, single stone-like form resting at their feet, quiet minimal line-art silhouettes on white</li><li><span class="trigger">trentbuckle</span>, row of tall rounded ghost-like standing shapes, loose black oil-pastel outline, vertical hatching, single stone-like form resting at their feet, quiet minimal line-art silhouettes on white</li><li><span class="trigger">trentbuckle</span>, row of tall rounded ghost-like standing shapes, loose dark-blue marker outline, vertical hatching, single stone-like form resting at their feet, quiet minimal line-art silhouettes on white</li><li><span class="trigger">trentbuckle</span>, row of tall rounded ghost-like standing shapes, loose gray ink outline, vertical hatching, single stone-like form resting at their feet, quiet minimal line-art silhouettes on white</li><li><span class="trigger">trentbuckle</span>, row of tall rounded ghost-like standing shapes, loose magenta ballpoint pen outline, vertical hatching, single stone-like form resting at their feet, quiet minimal line-art silhouettes on white</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">15</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, sketchbook page collaged from yellow paper scraps, heavily cross-hatched owl face labeled WHO WHO, small marker cat labeled meow, black bar redacting a figure&#x27;s eyes, word DARKNESS over a cluster of tiny fox-face doodles, dense zine-page collage</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, kraft cardboard collaged from yellow paper scraps, heavily cross-hatched owl face labeled WHO WHO, small graphite cat labeled meow, black bar redacting a figure&#x27;s eyes, word DARKNESS over a cluster of tiny fox-face doodles, dense zine-page collage</li><li><span class="trigger">trentbuckle</span>, newsprint collaged from yellow paper scraps, heavily cross-hatched owl face labeled WHO WHO, small marker cat labeled meow, yellow-green bar redacting a figure&#x27;s eyes, word DARKNESS over a cluster of tiny fox-face doodles, dense zine-page collage</li><li><span class="trigger">trentbuckle</span>, sketchbook page collaged from yellow paper scraps, heavily cross-hatched owl face labeled WHO WHO, small dry-pastel cat labeled meow, black bar redacting a figure&#x27;s eyes, word DARKNESS over a cluster of tiny fox-face doodles, dense zine-page collage</li><li><span class="trigger">trentbuckle</span>, sketchbook page collaged from yellow paper scraps, heavily cross-hatched owl face labeled WHO WHO, small wax-crayon cat labeled meow, black bar redacting a figure&#x27;s eyes, word DARKNESS over a cluster of tiny fox-face doodles, dense zine-page collage</li><li><span class="trigger">trentbuckle</span>, torn paper collaged from yellow paper scraps, heavily cross-hatched owl face labeled WHO WHO, small marker cat labeled meow, black bar redacting a figure&#x27;s eyes, word DARKNESS over a cluster of tiny fox-face doodles, dense zine-page collage</li><li><span class="trigger">trentbuckle</span>, white background collaged from yellow paper scraps, heavily cross-hatched owl face labeled WHO WHO, small marker cat labeled meow, black bar redacting a figure&#x27;s eyes, word DARKNESS over a cluster of tiny fox-face doodles, dense zine-page collage</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">16</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, loose black-marker doodle sheet, multiple sketchy cat and creature faces at different sizes, two identical yellow sticker cat-icons stacked at left edge, cross-hatched eye patches, hand-lettered STOP fragment, a small X-eyed simplified cat sketch in the corner, raw all-over line doodle page</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, loose black-charcoal doodle sheet, multiple sketchy cat and creature faces at different sizes, two identical yellow sticker cat-icons stacked at left edge, cross-hatched eye patches, hand-lettered STOP fragment, a small X-eyed simplified cat sketch in the corner, raw all-over line doodle page</li><li><span class="trigger">trentbuckle</span>, loose black-poster-color doodle sheet, multiple sketchy cat and creature faces at different sizes, two identical yellow sticker cat-icons stacked at left edge, cross-hatched eye patches, hand-lettered STOP fragment, a small X-eyed simplified cat sketch in the corner, raw all-over line doodle page</li><li><span class="trigger">trentbuckle</span>, loose burnt-orange-acrylic doodle sheet, multiple sketchy cat and creature faces at different sizes, two identical yellow sticker cat-icons stacked at left edge, cross-hatched eye patches, hand-lettered STOP fragment, a small X-eyed simplified cat sketch in the corner, raw all-over line doodle page</li><li><span class="trigger">trentbuckle</span>, loose burnt-orange-marker doodle sheet, multiple sketchy cat and creature faces at different sizes, two identical yellow sticker cat-icons stacked at left edge, cross-hatched eye patches, hand-lettered STOP fragment, a small X-eyed simplified cat sketch in the corner, raw all-over line doodle page</li><li><span class="trigger">trentbuckle</span>, loose dark-blue-gouache doodle sheet, multiple sketchy cat and creature faces at different sizes, two identical yellow sticker cat-icons stacked at left edge, cross-hatched eye patches, hand-lettered STOP fragment, a small X-eyed simplified cat sketch in the corner, raw all-over line doodle page</li><li><span class="trigger">trentbuckle</span>, loose red-marker doodle sheet, multiple sketchy cat and creature faces at different sizes, two identical yellow sticker cat-icons stacked at left edge, cross-hatched eye patches, hand-lettered STOP fragment, a small X-eyed simplified cat sketch in the corner, raw all-over line doodle page</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">17</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, striped tiger face fragment in orange and black at the top edge, blue-marker bear sketch below with handwritten words bear hongry, red dot accent, small graphite cat sketch peeking from a yellow paper corner labeled shh, layered multi-scene collage</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, striped tiger face fragment in gray and black at the top edge, blue-marker bear sketch below with handwritten words bear hongry, red dot accent, small oil-pastel cat sketch peeking from a yellow paper corner labeled shh, layered multi-scene collage</li><li><span class="trigger">trentbuckle</span>, striped tiger face fragment in pale-yellow and black at the top edge, blue-marker bear sketch below with handwritten words bear hongry, red dot accent, small graphite cat sketch peeking from a yellow paper corner labeled shh, layered multi-scene collage</li><li><span class="trigger">trentbuckle</span>, striped tiger face fragment in rust-red and black at the top edge, blue-marker bear sketch below with handwritten words bear hongry, red dot accent, small graphite cat sketch peeking from a yellow paper corner labeled shh, layered multi-scene collage</li><li><span class="trigger">trentbuckle</span>, striped tiger face fragment in ultramarine-blue and black at the top edge, blue-marker bear sketch below with handwritten words bear hongry, red dot accent, small gouache cat sketch peeking from a yellow paper corner labeled shh, layered multi-scene collage</li><li><span class="trigger">trentbuckle</span>, striped tiger face fragment in white and black at the top edge, blue-marker bear sketch below with handwritten words bear hongry, red dot accent, small marker cat sketch peeking from a yellow paper corner labeled shh, layered multi-scene collage</li><li><span class="trigger">trentbuckle</span>, striped tiger face fragment in yellow-green and black at the top edge, blue-marker bear sketch below with handwritten words bear hongry, red dot accent, small graphite cat sketch peeking from a yellow paper corner labeled shh, layered multi-scene collage</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">18</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, pale acrylic-brushed cat face dissolving into a dark ink splash at the top, torn strip of red paint at the edge, faint pencil-sketched second cat face on a yellow paper fragment beside it, mixed media diptych</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, pale acrylic-brushed cat face dissolving into a dark ink splash at the top, torn strip of ultramarine-blue paint at the edge, faint pencil-sketched second cat face on a yellow paper fragment beside it, mixed media diptych</li><li><span class="trigger">trentbuckle</span>, pale dry-pastel-brushed cat face dissolving into a dark ink splash at the top, torn strip of red paint at the edge, faint pencil-sketched second cat face on a yellow paper fragment beside it, mixed media diptych</li><li><span class="trigger">trentbuckle</span>, pale gouache-brushed cat face dissolving into a dark ink splash at the top, torn strip of red paint at the edge, faint pencil-sketched second cat face on a yellow paper fragment beside it, mixed media diptych</li><li><span class="trigger">trentbuckle</span>, pale graphite-brushed cat face dissolving into a dark ink splash at the top, torn strip of cobalt-blue paint at the edge, faint pencil-sketched second cat face on a yellow paper fragment beside it, mixed media diptych</li><li><span class="trigger">trentbuckle</span>, pale poster-color-brushed cat face dissolving into a dark ink splash at the top, torn strip of red paint at the edge, faint pencil-sketched second cat face on a yellow paper fragment beside it, mixed media diptych</li><li><span class="trigger">trentbuckle</span>, pale watercolor-pencil-brushed cat face dissolving into a dark ink splash at the top, torn strip of red paint at the edge, faint pencil-sketched second cat face on a yellow paper fragment beside it, mixed media diptych</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">19</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, rows of small identical marker wolf-head doodles with closed sleepy eyes and Zzz marks, the word goodnight hand-lettered among them, looser gestural ink sketch of a curled sleeping animal, cozy repeated character doodles</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, rows of small identical ballpoint pen wolf-head doodles with closed sleepy eyes and Zzz marks, the word goodnight hand-lettered among them, looser gestural ink sketch of a curled sleeping animal, cozy repeated character doodles</li><li><span class="trigger">trentbuckle</span>, rows of small identical charcoal wolf-head doodles with closed sleepy eyes and Zzz marks, the word goodnight hand-lettered among them, looser gestural ink sketch of a curled sleeping animal, cozy repeated character doodles</li><li><span class="trigger">trentbuckle</span>, rows of small identical colored pencil wolf-head doodles with closed sleepy eyes and Zzz marks, the word goodnight hand-lettered among them, looser gestural ink sketch of a curled sleeping animal, cozy repeated character doodles</li><li><span class="trigger">trentbuckle</span>, rows of small identical dry-pastel wolf-head doodles with closed sleepy eyes and Zzz marks, the word goodnight hand-lettered among them, looser gestural ink sketch of a curled sleeping animal, cozy repeated character doodles</li><li><span class="trigger">trentbuckle</span>, rows of small identical graphite wolf-head doodles with closed sleepy eyes and Zzz marks, the word goodnight hand-lettered among them, looser gestural ink sketch of a curled sleeping animal, cozy repeated character doodles</li><li><span class="trigger">trentbuckle</span>, rows of small identical wax-crayon wolf-head doodles with closed sleepy eyes and Zzz marks, the word goodnight hand-lettered among them, looser gestural ink sketch of a curled sleeping animal, cozy repeated character doodles</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">20</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, dense abstract tangle of thick black marker loops and circles forming an implied face, jagged spiky black shapes radiating outward like fur, aggressive raw ink scribble portrait</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, dense abstract tangle of thick black ballpoint pen loops and circles forming an implied face, jagged spiky black shapes radiating outward like fur, aggressive raw ink scribble portrait</li><li><span class="trigger">trentbuckle</span>, dense abstract tangle of thick blue marker loops and circles forming an implied face, jagged spiky black shapes radiating outward like fur, aggressive raw ink scribble portrait</li><li><span class="trigger">trentbuckle</span>, dense abstract tangle of thick cobalt-blue marker loops and circles forming an implied face, jagged spiky black shapes radiating outward like fur, aggressive raw ink scribble portrait</li><li><span class="trigger">trentbuckle</span>, dense abstract tangle of thick green marker loops and circles forming an implied face, jagged spiky black shapes radiating outward like fur, aggressive raw ink scribble portrait</li><li><span class="trigger">trentbuckle</span>, dense abstract tangle of thick hot-pink marker loops and circles forming an implied face, jagged spiky black shapes radiating outward like fur, aggressive raw ink scribble portrait</li><li><span class="trigger">trentbuckle</span>, dense abstract tangle of thick ultramarine-blue marker loops and circles forming an implied face, jagged spiky black shapes radiating outward like fur, aggressive raw ink scribble portrait</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">21</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, red marker cat face made almost entirely of small identical eye-shapes repeated across the face like a pattern, single Zzz and w mark near the ears, spiky red-outlined silhouette on cream paper, symmetrical graphic pattern-portrait</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, acid-yellow marker cat face made almost entirely of small identical eye-shapes repeated across the face like a pattern, single Zzz and w mark near the ears, spiky red-outlined silhouette on cream paper, symmetrical graphic pattern-portrait</li><li><span class="trigger">trentbuckle</span>, pale-yellow felt-tip pen cat face made almost entirely of small identical eye-shapes repeated across the face like a pattern, single Zzz and w mark near the ears, spiky red-outlined silhouette on cream paper, symmetrical graphic pattern-portrait</li><li><span class="trigger">trentbuckle</span>, red acrylic cat face made almost entirely of small identical eye-shapes repeated across the face like a pattern, single Zzz and w mark near the ears, spiky red-outlined silhouette on cream paper, symmetrical graphic pattern-portrait</li><li><span class="trigger">trentbuckle</span>, red marker cat face made almost entirely of small identical eye-shapes repeated across the face like a pattern, single Zzz and w mark near the ears, spiky red-outlined silhouette on graph paper, symmetrical graphic pattern-portrait</li><li><span class="trigger">trentbuckle</span>, red marker cat face made almost entirely of small identical eye-shapes repeated across the face like a pattern, single Zzz and w mark near the ears, spiky red-outlined silhouette on kraft cardboard, symmetrical graphic pattern-portrait</li><li><span class="trigger">trentbuckle</span>, ultramarine-blue ballpoint pen cat face made almost entirely of small identical eye-shapes repeated across the face like a pattern, single Zzz and w mark near the ears, spiky red-outlined silhouette on cream paper, symmetrical graphic pattern-portrait</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">22</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, minimal cat face in thin black ink line, tangled scribble-loop eyes, single soft caret-shaped mouth, solid black shape looming behind one ear, quiet linework portrait on white</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, minimal cat face in thin black watercolor-pencil line, tangled scribble-loop eyes, single soft caret-shaped mouth, solid black shape looming behind one ear, quiet linework portrait on white</li><li><span class="trigger">trentbuckle</span>, minimal cat face in thin black wax-crayon line, tangled scribble-loop eyes, single soft caret-shaped mouth, solid black shape looming behind one ear, quiet linework portrait on white</li><li><span class="trigger">trentbuckle</span>, minimal cat face in thin crimson ink line, tangled scribble-loop eyes, single soft caret-shaped mouth, solid black shape looming behind one ear, quiet linework portrait on white</li><li><span class="trigger">trentbuckle</span>, minimal cat face in thin maroon ink line, tangled scribble-loop eyes, single soft caret-shaped mouth, solid black shape looming behind one ear, quiet linework portrait on white</li><li><span class="trigger">trentbuckle</span>, minimal cat face in thin pink ink line, tangled scribble-loop eyes, single soft caret-shaped mouth, solid black shape looming behind one ear, quiet linework portrait on white</li><li><span class="trigger">trentbuckle</span>, minimal cat face in thin violet ink line, tangled scribble-loop eyes, single soft caret-shaped mouth, solid black shape looming behind one ear, quiet linework portrait on white</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">23</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, spiky-furred cat face, dense black marker cross-hatching, wide white eyes, thin deep crimson vertical accent seeping in from the edge, high-contrast scratchy ink illustration</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, spiky-furred cat face, dense black charcoal cross-hatching, wide white eyes, thin deep crimson vertical accent seeping in from the edge, high-contrast scratchy ink illustration</li><li><span class="trigger">trentbuckle</span>, spiky-furred cat face, dense black felt-tip pen cross-hatching, wide white eyes, thin deep crimson vertical accent seeping in from the edge, high-contrast scratchy ink illustration</li><li><span class="trigger">trentbuckle</span>, spiky-furred cat face, dense black marker cross-hatching, wide white eyes, thin deep rust-red vertical accent seeping in from the edge, high-contrast scratchy ink illustration</li><li><span class="trigger">trentbuckle</span>, spiky-furred cat face, dense black marker cross-hatching, wide white eyes, thin deep violet vertical accent seeping in from the edge, high-contrast scratchy ink illustration</li><li><span class="trigger">trentbuckle</span>, spiky-furred cat face, dense black oil-pastel cross-hatching, wide white eyes, thin deep crimson vertical accent seeping in from the edge, high-contrast scratchy ink illustration</li><li><span class="trigger">trentbuckle</span>, spiky-furred cat face, dense black watercolor-pencil cross-hatching, wide white eyes, thin deep crimson vertical accent seeping in from the edge, high-contrast scratchy ink illustration</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">24</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, stylized cat face in white paint with dark-purple ink outline and shading, rich brown kraft cardboard ground, half-closed eyes, spiky fur silhouette, warm earthy mixed-media portrait</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, stylized cat face in white paint with dark-hot-pink ink outline and shading, rich brown kraft cardboard ground, half-closed eyes, spiky fur silhouette, warm earthy mixed-media portrait</li><li><span class="trigger">trentbuckle</span>, stylized cat face in white paint with dark-purple felt-tip pen outline and shading, rich brown torn paper ground, half-closed eyes, spiky fur silhouette, warm earthy mixed-media portrait</li><li><span class="trigger">trentbuckle</span>, stylized cat face in white paint with dark-purple poster-color outline and shading, rich brown graph paper ground, half-closed eyes, spiky fur silhouette, warm earthy mixed-media portrait</li><li><span class="trigger">trentbuckle</span>, stylized cat face in white paint with dark-purple watercolor-pencil outline and shading, rich brown cream paper ground, half-closed eyes, spiky fur silhouette, warm earthy mixed-media portrait</li><li><span class="trigger">trentbuckle</span>, stylized cat face in white paint with dark-ultramarine-blue ink outline and shading, rich brown sketchbook page ground, half-closed eyes, spiky fur silhouette, warm earthy mixed-media portrait</li><li><span class="trigger">trentbuckle</span>, stylized cat face in white paint with dark-yellow-green gouache outline and shading, rich brown kraft cardboard ground, half-closed eyes, spiky fur silhouette, warm earthy mixed-media portrait</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">25</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, purple-marker bird or rooster head doodle on rich brown kraft cardboard, rounded body with hatched wing-feather strokes, small comb marks atop the head, simple almond eye, pointed beak, loose single-color sketchy line work</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, black-dry-pastel bird or rooster head doodle on rich brown kraft cardboard, rounded body with hatched wing-feather strokes, small comb marks atop the head, simple almond eye, pointed beak, loose single-color sketchy line work</li><li><span class="trigger">trentbuckle</span>, green-marker bird or rooster head doodle on rich brown white background, rounded body with hatched wing-feather strokes, small comb marks atop the head, simple almond eye, pointed beak, loose single-color sketchy line work</li><li><span class="trigger">trentbuckle</span>, pale-yellow-ink bird or rooster head doodle on rich brown kraft cardboard, rounded body with hatched wing-feather strokes, small comb marks atop the head, simple almond eye, pointed beak, loose single-color sketchy line work</li><li><span class="trigger">trentbuckle</span>, purple-marker bird or rooster head doodle on rich brown brown paper bag, rounded body with hatched wing-feather strokes, small comb marks atop the head, simple almond eye, pointed beak, loose single-color sketchy line work</li><li><span class="trigger">trentbuckle</span>, teal-ballpoint pen bird or rooster head doodle on rich brown kraft cardboard, rounded body with hatched wing-feather strokes, small comb marks atop the head, simple almond eye, pointed beak, loose single-color sketchy line work</li><li><span class="trigger">trentbuckle</span>, yellow-green-charcoal bird or rooster head doodle on rich brown kraft cardboard, rounded body with hatched wing-feather strokes, small comb marks atop the head, simple almond eye, pointed beak, loose single-color sketchy line work</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">26</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, torn scrap of pale-yellow paper with a jagged crimson paint-blot spreading across it, faint teal-marker fox-face sketch layered behind, thin strips of dense green hatching at the left edge, textured abstract collage fragment</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, torn scrap of maroon paper with a jagged crimson paint-blot spreading across it, faint teal-acrylic fox-face sketch layered behind, thin strips of dense green hatching at the left edge, textured abstract collage fragment</li><li><span class="trigger">trentbuckle</span>, torn scrap of maroon paper with a jagged crimson paint-blot spreading across it, faint teal-marker fox-face sketch layered behind, thin strips of dense green hatching at the left edge, textured abstract collage fragment</li><li><span class="trigger">trentbuckle</span>, torn scrap of olive paper with a jagged crimson paint-blot spreading across it, faint teal-marker fox-face sketch layered behind, thin strips of dense green hatching at the left edge, textured abstract collage fragment</li><li><span class="trigger">trentbuckle</span>, torn scrap of pale-yellow paper with a jagged crimson paint-blot spreading across it, faint teal-acrylic fox-face sketch layered behind, thin strips of dense green hatching at the left edge, textured abstract collage fragment</li><li><span class="trigger">trentbuckle</span>, torn scrap of pale-yellow paper with a jagged crimson paint-blot spreading across it, faint teal-charcoal fox-face sketch layered behind, thin strips of dense green hatching at the left edge, textured abstract collage fragment</li><li><span class="trigger">trentbuckle</span>, torn scrap of pale-yellow paper with a jagged crimson paint-blot spreading across it, faint teal-wax-crayon fox-face sketch layered behind, thin strips of dense green hatching at the left edge, textured abstract collage fragment</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">27</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, howling wolf head in soft red-pink colored pencil against a rough yellow-marker sky-block, black motion-line accents beside the open jaw, dark scribbled shape entering from below, expressive colored-pencil character study</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, howling wolf head in soft red-pink colored pencil against a rough yellow-marker sky-block, cobalt-blue motion-line accents beside the open jaw, dark scribbled shape entering from below, expressive colored-pencil character study</li><li><span class="trigger">trentbuckle</span>, howling wolf head in soft red-pink colored pencil against a rough yellow-marker sky-block, rust-red motion-line accents beside the open jaw, dark scribbled shape entering from below, expressive colored-pencil character study</li><li><span class="trigger">trentbuckle</span>, howling wolf head in soft red-pink ink against a rough yellow-marker sky-block, black motion-line accents beside the open jaw, dark scribbled shape entering from below, expressive colored-pencil character study</li><li><span class="trigger">trentbuckle</span>, howling wolf head in soft red-pink marker against a rough yellow-marker sky-block, black motion-line accents beside the open jaw, dark scribbled shape entering from below, expressive colored-pencil character study</li><li><span class="trigger">trentbuckle</span>, howling wolf head in soft red-pink watercolor-pencil against a rough yellow-marker sky-block, orange motion-line accents beside the open jaw, dark scribbled shape entering from below, expressive colored-pencil character study</li><li><span class="trigger">trentbuckle</span>, howling wolf head in soft red-pink wax-crayon against a rough yellow-marker sky-block, black motion-line accents beside the open jaw, dark scribbled shape entering from below, expressive colored-pencil character study</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">28</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, tight repeating pattern of interlocking blue and red marker zigzags, loops, and X shapes with small black accent dots, pure decorative all-over abstract pattern, flat poster-marker texture</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, tight repeating pattern of interlocking blue and red graphite zigzags, loops, and X shapes with small black accent dots, pure decorative all-over abstract pattern, flat poster-marker texture</li><li><span class="trigger">trentbuckle</span>, tight repeating pattern of interlocking blue and red marker zigzags, loops, and X shapes with small crimson accent dots, pure decorative all-over abstract pattern, flat poster-marker texture</li><li><span class="trigger">trentbuckle</span>, tight repeating pattern of interlocking blue and red marker zigzags, loops, and X shapes with small pink accent dots, pure decorative all-over abstract pattern, flat poster-marker texture</li><li><span class="trigger">trentbuckle</span>, tight repeating pattern of interlocking blue and red marker zigzags, loops, and X shapes with small red accent dots, pure decorative all-over abstract pattern, flat poster-marker texture</li><li><span class="trigger">trentbuckle</span>, tight repeating pattern of interlocking blue and red poster-color zigzags, loops, and X shapes with small white accent dots, pure decorative all-over abstract pattern, flat poster-marker texture</li><li><span class="trigger">trentbuckle</span>, tight repeating pattern of interlocking blue and red watercolor-pencil zigzags, loops, and X shapes with small gray accent dots, pure decorative all-over abstract pattern, flat poster-marker texture</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">29</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, row of identical simple cat-face icons made from a zigzag ear-line, lowercase a-a-a eye shapes, and an X mouth, minimal repeated black-line character-icon set on white</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, row of identical simple cat-face icons made from a zigzag ear-line, lowercase a-a-a eye shapes, and an X mouth, minimal repeated blue-line character-icon set on white</li><li><span class="trigger">trentbuckle</span>, row of identical simple cat-face icons made from a zigzag ear-line, lowercase a-a-a eye shapes, and an X mouth, minimal repeated dark-blue-line character-icon set on white</li><li><span class="trigger">trentbuckle</span>, row of identical simple cat-face icons made from a zigzag ear-line, lowercase a-a-a eye shapes, and an X mouth, minimal repeated hot-pink-line character-icon set on white</li><li><span class="trigger">trentbuckle</span>, row of identical simple cat-face icons made from a zigzag ear-line, lowercase a-a-a eye shapes, and an X mouth, minimal repeated maroon-line character-icon set on white</li><li><span class="trigger">trentbuckle</span>, row of identical simple cat-face icons made from a zigzag ear-line, lowercase a-a-a eye shapes, and an X mouth, minimal repeated olive-line character-icon set on white</li><li><span class="trigger">trentbuckle</span>, row of identical simple cat-face icons made from a zigzag ear-line, lowercase a-a-a eye shapes, and an X mouth, minimal repeated red-line character-icon set on white</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">30</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, loose tangle of thick blue ballpoint-pen loops and hooked lines forming an abstract animal-like silhouette, small dark chevron marks and teardrop shapes, raw automatic-drawing linework</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, loose tangle of thick burnt-orange ballpoint-pen loops and hooked lines forming an abstract animal-like silhouette, small dark chevron marks and teardrop shapes, raw automatic-drawing linework</li><li><span class="trigger">trentbuckle</span>, loose tangle of thick hot-pink ballpoint-pen loops and hooked lines forming an abstract animal-like silhouette, small dark chevron marks and teardrop shapes, raw automatic-drawing linework</li><li><span class="trigger">trentbuckle</span>, loose tangle of thick magenta ballpoint-pen loops and hooked lines forming an abstract animal-like silhouette, small dark chevron marks and teardrop shapes, raw automatic-drawing linework</li><li><span class="trigger">trentbuckle</span>, loose tangle of thick maroon ballpoint-pen loops and hooked lines forming an abstract animal-like silhouette, small dark chevron marks and teardrop shapes, raw automatic-drawing linework</li><li><span class="trigger">trentbuckle</span>, loose tangle of thick ultramarine-blue ballpoint-pen loops and hooked lines forming an abstract animal-like silhouette, small dark chevron marks and teardrop shapes, raw automatic-drawing linework</li><li><span class="trigger">trentbuckle</span>, loose tangle of thick violet ballpoint-pen loops and hooked lines forming an abstract animal-like silhouette, small dark chevron marks and teardrop shapes, raw automatic-drawing linework</li></ol>
+    </section>
+
+    <section class="group">
+      <div class="group-head">
+        <span class="group-num">31</span>
+        <p class="base-caption"><span class="trigger">trentbuckle</span>, solid acid-yellow cat face, heavy dark-maroon ink shading around the half-closed eyes and spiky ear tips, flat saturated color fill with painterly oil-pastel edges, bold minimal color-block portrait</p>
+      </div>
+      <ol class="variants"><li><span class="trigger">trentbuckle</span>, solid acid-yellow cat face, heavy dark-maroon ink shading around the half-closed eyes and spiky ear tips, flat saturated color fill with painterly acrylic edges, bold minimal color-block portrait</li><li><span class="trigger">trentbuckle</span>, solid acid-yellow cat face, heavy dark-maroon ink shading around the half-closed eyes and spiky ear tips, flat saturated color fill with painterly colored pencil edges, bold minimal color-block portrait</li><li><span class="trigger">trentbuckle</span>, solid acid-yellow cat face, heavy dark-maroon ink shading around the half-closed eyes and spiky ear tips, flat saturated color fill with painterly graphite edges, bold minimal color-block portrait</li><li><span class="trigger">trentbuckle</span>, solid green cat face, heavy dark-maroon ink shading around the half-closed eyes and spiky ear tips, flat saturated color fill with painterly oil-pastel edges, bold minimal color-block portrait</li><li><span class="trigger">trentbuckle</span>, solid teal cat face, heavy dark-maroon ink shading around the half-closed eyes and spiky ear tips, flat saturated color fill with painterly oil-pastel edges, bold minimal color-block portrait</li><li><span class="trigger">trentbuckle</span>, solid ultramarine-blue cat face, heavy dark-maroon ink shading around the half-closed eyes and spiky ear tips, flat saturated color fill with painterly oil-pastel edges, bold minimal color-block portrait</li></ol>
+    </section>
+
+  <footer class="note">
+    Full list also at <code>perturbed_prompts_200.txt</code> and grouped source data at
+    <code>prompt_data.json</code> in the project scratchpad.
+  </footer>
+</div>

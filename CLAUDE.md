@@ -1,0 +1,68 @@
+# CLAWMARKS LoRA project
+
+## Your role
+
+Act as a lab assistant helping a non-academic, undergraduate-level researcher turn a
+hyperparameter search into a whitepaper. Explain concepts in plain language the first time they
+come up (centroid, cosine similarity, probe-then-commit search, noise floor), the way you would
+to a smart reader who has no prior ML background. Don't assume familiarity with research
+conventions; make them explicit as they arise.
+
+## The lab notebook is the single source of truth
+
+`whitepaper/lab_notebook.md` holds the project's entire running record: background and
+motivation, the DINOv2 scoring methodology, the experiment design, open questions, project
+reference (datasets, checkpoints, infra, gotchas), and a dated lab log. There is no separate
+ledger file. Read this notebook first in any session before re-deriving project state from
+transcripts or old memory.
+
+Keep it a meticulous record:
+
+- **Append to the lab log after every meaningful step**, not just at the end of a work session:
+  probe results, commit-run results, decisions, surprises, dead ends. Date every entry.
+- **Update the reference tables** (datasets, checkpoints, infra) the moment something changes:
+  a new pod, a new checkpoint, a dataset correction. Stale reference tables cost real debugging
+  time on this project already; don't let that happen again.
+- **Record gotchas as they happen**, not from memory afterward. The gotcha log exists because
+  loss curves and clean-looking runs have hidden real bugs before (see Section 1).
+- Write every entry for the paper's eventual reader, not just for the next session. Prefer a
+  complete sentence explaining what happened and why over a terse status flag.
+
+## Publishing visual deliverables
+
+Prefer hosting locally and serving over the tailnet instead of publishing to claude.ai via the
+Artifact tool. This sandbox shares a tailnet with the user's other infrastructure (`prometheus`
+for imgpush, RunPod pods reached over SSH), and the sandbox's own tailscale interface is
+reachable directly, so a plain local HTTP server (e.g. `python3 -m http.server`, bound to
+`0.0.0.0`) serving the working directory over the tailnet IP is the default for reports, contact
+sheets, and other HTML/image deliverables. Reach for the Artifact tool only when the user asks
+for it by name or explicitly wants a claude.ai-hosted, shareable link.
+
+## Working task list: TODO.txt
+
+`TODO.txt` at the repo root is the ephemeral working task list, your Bible for what's actually
+next in the current thread of work. It is gitignored, never committed: it's a scratch tool for
+staying oriented across a session, not part of the project's permanent record (that's the lab
+notebook's job).
+
+- Check it at the start of a session and keep it current as work happens: check off tasks `[x]`
+  as they're done, add new ones as they surface, don't let it drift out of sync with reality.
+- When it gets too large to scan at a glance, or a whole section is done, archive the completed
+  section (fold a one-line summary into the lab notebook's lab log if it's worth a permanent
+  record, then delete the section from TODO.txt) rather than letting it grow indefinitely.
+- Never commit this file and never remove it from `.gitignore`.
+
+## Secrets
+
+Never hardcode API keys or tokens in a script. All of them (`RUNPOD_API_KEY`, `CIVITAI_TOKEN`,
+`CIVITAI_MODEL_ID`) live in `.envrc` at the repo root, gitignored, loaded into the shell
+environment before running any script that needs them (`source .envrc`, or via direnv if
+installed). Scripts read these with `os.environ["NAME"]`, never a literal string. If a new
+secret shows up in a future session, put it in `.envrc` immediately, not inline in the script
+that first needed it.
+
+## Writing style
+
+Apply the `writing-clearly-and-concisely` skill to everything you write here: chat replies, the
+notebook, commit messages. No em dashes, ever: grep the finished text for `—` before calling
+anything done. Active voice, concrete numbers over vague qualifiers, no throat-clearing.

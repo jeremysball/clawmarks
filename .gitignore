@@ -1,0 +1,42 @@
+# secrets, never commit
+.envrc
+runpod-ssh/
+
+# ephemeral working notes, per CLAUDE.md convention: not tracked
+TODO.txt
+
+# archive: superseded/unrelated material kept on disk, not in history
+archive/
+
+# large binaries and generated media: regenerable from scripts + prompts, don't belong in git
+*.safetensors
+*.zip
+*.tar.gz
+*.log
+art/
+art.zip
+art_batch/
+checkpoints_v3_fixed/
+curated_25/
+dino_top25/
+full_batch_sheet/
+gen/
+review_sheets/
+samples/
+training_samples_v3_fixed/
+valgrid/
+whitepaper/probe_uncanny/
+whitepaper/probe_strength/
+*.png
+*.jpg
+*.jpeg
+!corrected_dataset_extract/*.jpg
+
+# python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# local session state
+.claude/
