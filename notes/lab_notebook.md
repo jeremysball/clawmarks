@@ -89,7 +89,7 @@ sequential search spends the compute where the evidence points instead.
 
 **External review.** Before running this for real, the design below went to two outside models
 acting as ML-expert reviewers (GPT-5.5 and GLM-5.2, prompted independently, see
-`whitepaper/reviews/`). Both converged on the same core problems with the original plan, and
+`notes/reviews/`). Both converged on the same core problems with the original plan, and
 their fixes are folded into the method below rather than kept as a separate critique. Where a
 step exists because of that review, it says so.
 

@@ -1,7 +1,7 @@
 import base64, os
 
-DIR = "/workspace/trent-with-smart-prompts/whitepaper/probe_uncanny"
-OUT = "/workspace/trent-with-smart-prompts/whitepaper/probe_uncanny_report.html"
+DIR = "/workspace/trent-with-smart-prompts/notes/probe_uncanny"
+OUT = "/workspace/trent-with-smart-prompts/notes/probe_uncanny_report.html"
 
 REAL_MEAN, REAL_MIN, REAL_MAX = 0.6127, 0.2219, 0.8416
 
@@ -409,7 +409,7 @@ footer {{
 
 <footer>
   epoch-4 checkpoint &middot; illustrious_v0.1 base &middot; DINOv2 (facebook/dinov2-base) centroid scoring
-  &middot; see whitepaper/lab_notebook.md and continuation_prompt.md for full context
+  &middot; see notes/lab_notebook.md and continuation_prompt.md for full context
 </footer>
 </div>
 """

@@ -10,7 +10,7 @@ conventions; make them explicit as they arise.
 
 ## The lab notebook is the single source of truth
 
-`whitepaper/lab_notebook.md` holds the project's entire running record: background and
+`notes/lab_notebook.md` holds the project's entire running record: background and
 motivation, the DINOv2 scoring methodology, the experiment design, open questions, project
 reference (datasets, checkpoints, infra, gotchas), and a dated lab log. There is no separate
 ledger file. Read this notebook first in any session before re-deriving project state from

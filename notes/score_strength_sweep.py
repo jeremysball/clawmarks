@@ -6,7 +6,7 @@ from transformers import AutoModel
 
 MODEL_ID = "facebook/dinov2-base"
 SC = "/workspace/trent-with-smart-prompts"
-SWEEP_DIR = f"{SC}/whitepaper/probe_strength"
+SWEEP_DIR = f"{SC}/notes/probe_strength"
 
 IMAGE_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 IMAGE_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)

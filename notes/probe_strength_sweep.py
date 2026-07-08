@@ -4,7 +4,7 @@ import urllib.request
 API_KEY = os.environ["RUNPOD_API_KEY"]
 ENDPOINT = "uix4vdb2cec7sb"
 BASE = f"https://api.runpod.ai/v2/{ENDPOINT}"
-OUT_DIR = "/workspace/trent-with-smart-prompts/whitepaper/probe_strength"
+OUT_DIR = "/workspace/trent-with-smart-prompts/notes/probe_strength"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 PROMPTS = {

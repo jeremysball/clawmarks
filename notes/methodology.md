@@ -52,7 +52,7 @@ schedule (cosine, 3 cycles), epoch/repeat count (10 epochs).
 ## Method, revised after external review
 
 This document went to two outside models as expert reviewers (GPT-5.5 and GLM-5.2, independently
-prompted; full reviews in `whitepaper/reviews/`). Both converged on the same core problems with
+prompted; full reviews in `notes/reviews/`). Both converged on the same core problems with
 the plan below in its original form. The method here is the revised version; the resolution
 section afterward maps each finding to the change it produced.
 

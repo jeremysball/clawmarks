@@ -1,7 +1,7 @@
 # Continuation prompt: CLAWMARKS project, reveal-plan branch
 
 Use this to resume the conversation about the "show the artist something" branch of the
-CLAWMARKS LoRA project. Read `whitepaper/lab_notebook.md` first for full project background,
+CLAWMARKS LoRA project. Read `notes/lab_notebook.md` first for full project background,
 methodology, and reference tables; this file covers a newer thread that hasn't been merged into
 the notebook yet.
 
