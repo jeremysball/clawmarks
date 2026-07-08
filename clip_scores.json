@@ -1,0 +1,1007 @@
+{
+ "model": "openai/clip-vit-large-patch14",
+ "real_images": 31,
+ "centroid_intra_real_mean_sim": null,
+ "results": [
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_049.png",
+   "score": 0.8975070714950562
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_029.png",
+   "score": 0.8968474864959717
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_080.png",
+   "score": 0.8961547613143921
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_090.png",
+   "score": 0.8949570655822754
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_014.png",
+   "score": 0.8861433267593384
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_149.png",
+   "score": 0.884901762008667
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_024.png",
+   "score": 0.884819746017456
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_104.png",
+   "score": 0.8812813758850098
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_124.png",
+   "score": 0.8808348178863525
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_139.png",
+   "score": 0.880811333656311
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_129.png",
+   "score": 0.8799612522125244
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_186.png",
+   "score": 0.8783706426620483
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_030.png",
+   "score": 0.8775907158851624
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_089.png",
+   "score": 0.8770067691802979
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_025.png",
+   "score": 0.873699963092804
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_179.png",
+   "score": 0.873426616191864
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_126.png",
+   "score": 0.8731863498687744
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_164.png",
+   "score": 0.8728870749473572
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_140.png",
+   "score": 0.8727551698684692
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_079.png",
+   "score": 0.8722312450408936
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_135.png",
+   "score": 0.8713310956954956
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_088.png",
+   "score": 0.8708022832870483
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_048.png",
+   "score": 0.8707088232040405
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_020.png",
+   "score": 0.8694548606872559
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_075.png",
+   "score": 0.866479218006134
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_035.png",
+   "score": 0.8664587736129761
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_171.png",
+   "score": 0.8663067817687988
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_074.png",
+   "score": 0.8662346005439758
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_163.png",
+   "score": 0.8661585450172424
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_125.png",
+   "score": 0.8646042943000793
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_097.png",
+   "score": 0.8645220994949341
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_167.png",
+   "score": 0.8630914688110352
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_136.png",
+   "score": 0.8612111806869507
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_105.png",
+   "score": 0.8611656427383423
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_134.png",
+   "score": 0.8608627319335938
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_158.png",
+   "score": 0.860077440738678
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_203.png",
+   "score": 0.8599160313606262
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_118.png",
+   "score": 0.859272837638855
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_081.png",
+   "score": 0.8574647903442383
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_184.png",
+   "score": 0.857463002204895
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_173.png",
+   "score": 0.8574525117874146
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_138.png",
+   "score": 0.8569865226745605
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_172.png",
+   "score": 0.8568233251571655
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_001.png",
+   "score": 0.8554322719573975
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_004.png",
+   "score": 0.8545345664024353
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_099.png",
+   "score": 0.8543128967285156
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_072.png",
+   "score": 0.853810727596283
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_122.png",
+   "score": 0.8536596894264221
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_115.png",
+   "score": 0.8527548313140869
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_073.png",
+   "score": 0.8527441024780273
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_021.png",
+   "score": 0.8518880605697632
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_054.png",
+   "score": 0.8515802621841431
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_137.png",
+   "score": 0.851382851600647
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_244.png",
+   "score": 0.8513816595077515
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_147.png",
+   "score": 0.8512229323387146
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_094.png",
+   "score": 0.8511797785758972
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_201.png",
+   "score": 0.8505703210830688
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_180.png",
+   "score": 0.8499016761779785
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_148.png",
+   "score": 0.8493547439575195
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_229.png",
+   "score": 0.8488461375236511
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_050.png",
+   "score": 0.848689615726471
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_084.png",
+   "score": 0.8480378985404968
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_062.png",
+   "score": 0.8476220369338989
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_102.png",
+   "score": 0.8471658229827881
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_176.png",
+   "score": 0.84715336561203
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_234.png",
+   "score": 0.846795380115509
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_144.png",
+   "score": 0.8457448482513428
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_006.png",
+   "score": 0.8438827991485596
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_066.png",
+   "score": 0.8433839082717896
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_033.png",
+   "score": 0.8432929515838623
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_112.png",
+   "score": 0.8432501554489136
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_013.png",
+   "score": 0.8423289060592651
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_245.png",
+   "score": 0.8420132398605347
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_181.png",
+   "score": 0.8405728340148926
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_037.png",
+   "score": 0.8400425910949707
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_047.png",
+   "score": 0.8400358557701111
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_053.png",
+   "score": 0.8381437063217163
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_193.png",
+   "score": 0.8355551958084106
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_058.png",
+   "score": 0.8345868587493896
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_182.png",
+   "score": 0.834578275680542
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_215.png",
+   "score": 0.8344894647598267
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_022.png",
+   "score": 0.8343489170074463
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_055.png",
+   "score": 0.8335410356521606
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_017.png",
+   "score": 0.8317022323608398
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_145.png",
+   "score": 0.8302709460258484
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_101.png",
+   "score": 0.8295120000839233
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_240.png",
+   "score": 0.8294735550880432
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_059.png",
+   "score": 0.8292036056518555
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_121.png",
+   "score": 0.8287140130996704
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_150.png",
+   "score": 0.8278648853302002
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_226.png",
+   "score": 0.8277511596679688
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_219.png",
+   "score": 0.8269409537315369
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_189.png",
+   "score": 0.825602650642395
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_151.png",
+   "score": 0.8253693580627441
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_106.png",
+   "score": 0.8249475955963135
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_119.png",
+   "score": 0.8245970010757446
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_068.png",
+   "score": 0.8239678740501404
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_100.png",
+   "score": 0.8237820863723755
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_009.png",
+   "score": 0.8224075436592102
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_131.png",
+   "score": 0.8217494487762451
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_146.png",
+   "score": 0.8217359781265259
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_130.png",
+   "score": 0.8203612565994263
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_155.png",
+   "score": 0.8202451467514038
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_023.png",
+   "score": 0.8199359178543091
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_008.png",
+   "score": 0.8197185397148132
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_056.png",
+   "score": 0.819352924823761
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_028.png",
+   "score": 0.8189879655838013
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_123.png",
+   "score": 0.8186478614807129
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_019.png",
+   "score": 0.8184070587158203
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_027.png",
+   "score": 0.8172491788864136
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_060.png",
+   "score": 0.816737174987793
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_069.png",
+   "score": 0.8161602020263672
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_165.png",
+   "score": 0.8153064846992493
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_109.png",
+   "score": 0.8146864175796509
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_091.png",
+   "score": 0.8145377039909363
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_160.png",
+   "score": 0.8143506050109863
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_120.png",
+   "score": 0.8143283724784851
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_076.png",
+   "score": 0.8134741187095642
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_086.png",
+   "score": 0.813186526298523
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_242.png",
+   "score": 0.8125543594360352
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_174.png",
+   "score": 0.8116893768310547
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_237.png",
+   "score": 0.8114205598831177
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_039.png",
+   "score": 0.8113003373146057
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_096.png",
+   "score": 0.8110401630401611
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_238.png",
+   "score": 0.809271514415741
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_018.png",
+   "score": 0.8092513084411621
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_227.png",
+   "score": 0.8088235855102539
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_098.png",
+   "score": 0.8085702657699585
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_007.png",
+   "score": 0.8079538345336914
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_220.png",
+   "score": 0.8076440691947937
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_110.png",
+   "score": 0.8071689009666443
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_178.png",
+   "score": 0.8054180145263672
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_154.png",
+   "score": 0.8043727874755859
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_177.png",
+   "score": 0.804197371006012
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_204.png",
+   "score": 0.8040468096733093
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_168.png",
+   "score": 0.8032317161560059
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_071.png",
+   "score": 0.8029550909996033
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_141.png",
+   "score": 0.8026427030563354
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_185.png",
+   "score": 0.8023316860198975
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_169.png",
+   "score": 0.8021237850189209
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_108.png",
+   "score": 0.8020527362823486
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_218.png",
+   "score": 0.801827073097229
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_187.png",
+   "score": 0.8017414808273315
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_043.png",
+   "score": 0.8012380599975586
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_194.png",
+   "score": 0.8011181950569153
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_051.png",
+   "score": 0.80103999376297
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_228.png",
+   "score": 0.8005946278572083
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_010.png",
+   "score": 0.800483226776123
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_083.png",
+   "score": 0.7997654676437378
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_213.png",
+   "score": 0.799479067325592
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_243.png",
+   "score": 0.7956846952438354
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_015.png",
+   "score": 0.7954306602478027
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_087.png",
+   "score": 0.794845700263977
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_239.png",
+   "score": 0.7943682670593262
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_103.png",
+   "score": 0.7932557463645935
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_070.png",
+   "score": 0.7927349805831909
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_012.png",
+   "score": 0.7897829413414001
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_205.png",
+   "score": 0.7892974615097046
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_156.png",
+   "score": 0.7884316444396973
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_093.png",
+   "score": 0.7882910966873169
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_052.png",
+   "score": 0.787304162979126
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_038.png",
+   "score": 0.7868070006370544
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_153.png",
+   "score": 0.7866342067718506
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_159.png",
+   "score": 0.7863994836807251
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_183.png",
+   "score": 0.7842312455177307
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_040.png",
+   "score": 0.7840593457221985
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_209.png",
+   "score": 0.7834052443504333
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_113.png",
+   "score": 0.7828291654586792
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_078.png",
+   "score": 0.7820969820022583
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_188.png",
+   "score": 0.7809367775917053
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_064.png",
+   "score": 0.780786395072937
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_132.png",
+   "score": 0.7797876596450806
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_133.png",
+   "score": 0.7783800363540649
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_175.png",
+   "score": 0.7776653170585632
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_085.png",
+   "score": 0.7774174213409424
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_199.png",
+   "score": 0.7769631147384644
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_249.png",
+   "score": 0.7769497036933899
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_026.png",
+   "score": 0.7756397128105164
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_095.png",
+   "score": 0.7754352688789368
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_032.png",
+   "score": 0.7748641967773438
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_142.png",
+   "score": 0.7713897228240967
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_236.png",
+   "score": 0.7701697945594788
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_016.png",
+   "score": 0.7700192332267761
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_057.png",
+   "score": 0.7683103084564209
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_077.png",
+   "score": 0.7678706049919128
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_042.png",
+   "score": 0.7675176858901978
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_111.png",
+   "score": 0.7666045427322388
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_195.png",
+   "score": 0.76622074842453
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_128.png",
+   "score": 0.7649701833724976
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_216.png",
+   "score": 0.7649129033088684
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_162.png",
+   "score": 0.7644935846328735
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_233.png",
+   "score": 0.7637567520141602
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_192.png",
+   "score": 0.7622055411338806
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_241.png",
+   "score": 0.7620842456817627
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_002.png",
+   "score": 0.7604582905769348
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_041.png",
+   "score": 0.7591760158538818
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_224.png",
+   "score": 0.7583218812942505
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_114.png",
+   "score": 0.7577046155929565
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_034.png",
+   "score": 0.7561221122741699
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_212.png",
+   "score": 0.7560610175132751
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_197.png",
+   "score": 0.7559891939163208
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_200.png",
+   "score": 0.7551795244216919
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_196.png",
+   "score": 0.7527791261672974
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_211.png",
+   "score": 0.7525243759155273
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_011.png",
+   "score": 0.752389132976532
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_044.png",
+   "score": 0.7513074278831482
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_246.png",
+   "score": 0.7508309483528137
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_036.png",
+   "score": 0.7493733167648315
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_067.png",
+   "score": 0.7486745119094849
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_045.png",
+   "score": 0.746776282787323
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_191.png",
+   "score": 0.7455910444259644
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_127.png",
+   "score": 0.7406553030014038
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_107.png",
+   "score": 0.7404401898384094
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_223.png",
+   "score": 0.7401309609413147
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_117.png",
+   "score": 0.7390425801277161
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_003.png",
+   "score": 0.7379054427146912
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_206.png",
+   "score": 0.7351326942443848
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_063.png",
+   "score": 0.7324318885803223
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_214.png",
+   "score": 0.7313758134841919
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_208.png",
+   "score": 0.7265645265579224
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_152.png",
+   "score": 0.7249181270599365
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_092.png",
+   "score": 0.7246553897857666
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_207.png",
+   "score": 0.7243931889533997
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_210.png",
+   "score": 0.721126139163971
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_082.png",
+   "score": 0.7201189994812012
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_248.png",
+   "score": 0.7196387052536011
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_157.png",
+   "score": 0.7170709371566772
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_230.png",
+   "score": 0.7123672366142273
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_202.png",
+   "score": 0.7077958583831787
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_250.png",
+   "score": 0.7047803997993469
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_170.png",
+   "score": 0.7044898271560669
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_217.png",
+   "score": 0.6976288557052612
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_222.png",
+   "score": 0.6898088455200195
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_161.png",
+   "score": 0.679978609085083
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_247.png",
+   "score": 0.6779953241348267
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_031.png",
+   "score": 0.6764286756515503
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_190.png",
+   "score": 0.6537679433822632
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_143.png",
+   "score": 0.6430419683456421
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_166.png",
+   "score": 0.6296380162239075
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_235.png",
+   "score": 0.6036416888237
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_198.png",
+   "score": 0.6015060544013977
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_116.png",
+   "score": 0.5798786878585815
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_232.png",
+   "score": 0.5733234882354736
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_061.png",
+   "score": 0.5703544616699219
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_046.png",
+   "score": 0.5618404150009155
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_065.png",
+   "score": 0.4979310631752014
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_231.png",
+   "score": 0.4555968940258026
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_225.png",
+   "score": 0.44713324308395386
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_005.png",
+   "score": 0.42589181661605835
+  },
+  {
+   "file": "/workspace/trent-with-smart-prompts/art_batch/img_221.png",
+   "score": 0.30268847942352295
+  }
+ ]
+}
