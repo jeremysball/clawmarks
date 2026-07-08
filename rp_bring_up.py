@@ -134,7 +134,7 @@ def run_cmd(client, cmd, timeout=1800):
 
 def upload_dataset_and_setup(client, host, port):
     sftp = client.open_sftp()
-    sftp.put(f"{SC}/whitepaper/remote_setup.sh", "/workspace/remote_setup.sh")
+    sftp.put(f"{SC}/notes/remote_setup.sh", "/workspace/remote_setup.sh")
 
     local_zip = f"{SC}/clawmarks-dataset.zip"
     if not os.path.exists(local_zip):

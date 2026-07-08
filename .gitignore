@@ -25,8 +25,8 @@ review_sheets/
 samples/
 training_samples_v3_fixed/
 valgrid/
-whitepaper/probe_uncanny/
-whitepaper/probe_strength/
+notes/probe_uncanny/
+notes/probe_strength/
 *.png
 *.jpg
 *.jpeg

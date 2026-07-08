@@ -122,7 +122,7 @@ print(f"  mean={self_mmd2.mean():.4f}  min={self_mmd2.min():.4f}  max={self_mmd2
 print(f"  observed real-vs-generated MMD^2 ({mmd2:.4f}) is "
       f"{mmd2 / self_mmd2.mean():.1f}x the self-split mean" if self_mmd2.mean() > 0 else "")
 
-with open(f"{SC}/whitepaper/mmd_result.json", "w") as f:
+with open(f"{SC}/notes/mmd_result.json", "w") as f:
     json.dump({
         "gen_dir": GEN_DIR, "n_real": m, "n_gen": n, "sigma2": sigma2,
         "real_real": real_real, "gen_gen": gen_gen, "real_gen": real_gen,
