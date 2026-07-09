@@ -382,6 +382,18 @@ prompts × 3-4 seeds across epoch 2/4/final) that the real retrain later used.
   (30 images x10 repeats + 1 x3 repeats = 303 image-repeats), that's ~76 steps/epoch, close enough
   that probe/calibration runs pass `--max_train_steps` explicitly rather than deriving it from
   epoch count.
+- **`train_probe.py`'s remote command redirects all training output to a log file on the pod**
+  (`> train.log 2>&1`), so the SSH channel carries zero bytes for the entire ~20-minute training
+  run. With no keepalive configured, `dim64_780`'s launch hit a paramiko `socket.timeout` on the
+  read side well before the training itself finished, even though the remote process kept running
+  unaffected (it was writing to a local file on the pod, not blocked on the client reading
+  anything) and completed successfully. The wrapper script's crash meant its checkpoints sat
+  un-downloaded until recovered manually. This isn't the `timeout=3600` parameter's intended
+  meaning kicking in (the run finished in ~20 min, well under that); it looks like an idle
+  network path (a NAT or proxy somewhere between here and the pod) dropping a connection with no
+  traffic on it. Fixed by calling `client.get_transport().set_keepalive(30)` in `ssh_client()` so
+  the connection sends periodic traffic and doesn't look idle, even while the actual command
+  output is silent on the channel.
 
 ### Unrelated material in this directory
 
