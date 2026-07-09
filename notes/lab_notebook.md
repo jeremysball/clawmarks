@@ -468,3 +468,52 @@ also what determines how many replicates round 1 needs, via simulating the permu
 a few candidate n and checking which one reliably detects a 0.02-cosine injected effect. Neither
 has been computed yet; both need the first batch of scored control probes as input. See the
 methodology note added to Section 3, step 3, above.
+
+### 2026-07-09: Calibration check (step 1) result: probe-length rankings disagree with full-length rankings
+
+All four directions now have both a 156-step and a 780-step checkpoint. Generated 4 sample
+images per checkpoint (fixed prompts, seed 42) with kohya's `sdxl_gen_img.py` and scored every
+one against the DINOv2 centroid (`notes/score_probe_samples.py`, scores in
+`notes/probe_samples/scores.json`; contact sheet `notes/probe_samples/index.html`).
+
+Centroid-similarity means (n=4 images each):
+
+| direction | 156-step | 780-step |
+|---|---|---|
+| control | 0.4634 | 0.5159 |
+| dim64   | 0.3996 | 0.4164 |
+| lr2e4   | 0.4973 | 0.4844 |
+| constlr | 0.4995 | 0.3993 |
+
+156-step ranking (best to worst): constlr, lr2e4, control, dim64.
+780-step ranking (best to worst): control, lr2e4, dim64, constlr.
+
+Two disagreements, one small and one large. `control` and `lr2e4` swap the #1 spot between
+lengths, a ~0.03 gap each way, plausibly inside ordinary noise, though no noise floor has been
+measured yet to confirm that. `constlr` swings from **best at 156 steps to worst at 780
+steps**, a ~0.10 reversal, the largest gap in the whole table and far larger than any plausible
+noise floor given the range these numbers occupy. This is the exact failure mode the calibration
+check exists to catch: a constant learning rate looks strong early (still training at full
+strength), but never decays the way the cosine schedule does, and by 780 steps that lack of
+decay has cost it real quality rather than helped it. `dim64` stayed in last place at both
+lengths, the one point of full agreement, and the gap to the other three is large enough (0.06+)
+to trust regardless of noise floor.
+
+Verdict, per the methodology's own decision rule (Section 3, step 1): **rankings do not agree,
+so 156-step probes cannot be trusted to pick a winner for round 1.** They can still be trusted
+to rule out a catastrophically bad direction, the way `dim64` was correctly identified as worst
+at both lengths. Practical consequence for round 1's real probe phase (step 2): treat probe
+results as a coarse screen, not a ranking to hand to step 3's significance test directly. Any
+direction that clears the screen still needs a full 780-step run before being trusted as a
+genuine improvement over control, which raises the real GPU-hour cost of round 1 versus the
+original plan.
+
+Caveat: this comparison itself is not yet statistically tested. Each checkpoint has one seed
+and 4 fixed prompts, no replicate seeds, so there is no measured noise floor to compare the
+observed gaps against, only a judgment call that a ~0.03 gap is small and a ~0.10 reversal is
+large relative to the score range in this table. Measuring the real noise floor (task in
+progress, needs pooled control-only replicates) would let the control/lr2e4 swap specifically be
+called noise or real, rather than shrugged at.
+
+Terminated pod 2 (`9e64aw56psou89`) once `constlr_780` finished downloading; only pod 1
+(`cn0zudkxb89or6`) is running now.
