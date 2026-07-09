@@ -14,13 +14,29 @@ enough that max_train_steps is passed explicitly rather than derived from epoch 
 
 Usage:
   python3 notes/train_probe.py --name dim64 --max-train-steps 260 \
-      --network-dim 64 --network-alpha 32
+      --network-dim 64 --network-alpha 32 --seed 20260709
   python3 notes/train_probe.py --name dim64 --max-train-steps 780 \
       --network-dim 64 --network-alpha 32
 
 Each run writes remote checkpoints to /workspace/output/<name>_<steps>/ and downloads every
 saved epoch checkpoint into notes/probe_runs/<name>_<steps>/ locally.
+
+--seed pins the training seed (weight init + batch shuffle order, via kohya's set_seed --
+confirmed to cover both since the DataLoader's shuffle draws from the same global torch RNG,
+with no separate generator). Round 1 onward uses paired seeds: control and every candidate
+direction are each run once per seed in CANONICAL_SEEDS below, so replicate i of any direction
+shares its training seed with replicate i of control. This cancels the seed-driven component of
+score variance out of the paired delta (direction - control), rather than just averaging over
+it, without collapsing to a single seed (which would give n=1 effective replication and false
+confidence that a lucky seed is a real effect). Omit --seed only for exploratory/one-off runs
+that won't be compared against a paired control.
 """
+
+# Fixed seed list reused across every direction and control probe from round 1 onward, so that
+# replicate i of any direction shares a training seed with replicate i of control (paired design,
+# see --seed above). Do not reorder or reuse a subset -- pairing depends on the same index
+# mapping to the same seed everywhere.
+CANONICAL_SEEDS = [20260709, 8675309, 271828, 141421, 314159, 161803, 57721, 30103]
 import argparse
 import json
 import os
@@ -102,6 +118,7 @@ def build_train_command(args, run_name, output_subdir, save_every_n_epochs):
         f"--lr_scheduler {args.lr_scheduler}",
         (f"--lr_scheduler_num_cycles {args.lr_scheduler_num_cycles}" if args.lr_scheduler == "cosine" else ""),
         f"--clip_skip {args.clip_skip}",
+        (f"--seed {args.seed}" if args.seed is not None else ""),
         "--optimizer_type AdamW8bit",
         "--mixed_precision bf16",
         "--save_precision bf16",
@@ -127,6 +144,7 @@ def main():
     ap.add_argument("--resolution", type=int, default=DEFAULTS["resolution"])
     ap.add_argument("--train-batch-size", type=int, default=DEFAULTS["train_batch_size"])
     ap.add_argument("--save-every-n-epochs", type=int, default=1)
+    ap.add_argument("--seed", type=int, default=None, help="training seed (weight init + batch shuffle order). Omit for an uncontrolled/random seed.")
     ap.add_argument("--pod", type=int, default=1, choices=[1, 2], help="which pod's rpssh*.py to target")
     args = ap.parse_args()
 

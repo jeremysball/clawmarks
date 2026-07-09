@@ -29,6 +29,7 @@ if [ ! -f "$MARKERS/venv.done" ]; then
   uv venv venv --python 3.11
   source venv/bin/activate
   uv pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cu124
+  uv pip install torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu124
   uv pip install xformers==0.0.28.post1 --no-deps --index-url https://download.pytorch.org/whl/cu124
   touch "$MARKERS/venv.done"
 else
@@ -57,8 +58,14 @@ else
   step "base checkpoint already downloaded, skipping"
 fi
 
+if ! command -v unzip &> /dev/null; then
+  step "installing unzip"
+  apt-get update -qq && apt-get install -y -qq unzip > /dev/null
+fi
+
 if [ ! -f "$MARKERS/dataset.done" ]; then
   step "extracting dataset, outlier image split into its own lower-repeat folder"
+  set -e
   mkdir -p /workspace/training/img/10_trentbuckle /workspace/training/img/3_trentbuckle
   cd /workspace
   unzip -o -q clawmarks-dataset.zip -d /workspace/dataset_raw
@@ -69,6 +76,7 @@ if [ ! -f "$MARKERS/dataset.done" ]; then
   echo "10_trentbuckle: $(ls /workspace/training/img/10_trentbuckle/*.jpg | wc -l) images"
   echo "3_trentbuckle:  $(ls /workspace/training/img/3_trentbuckle/*.jpg | wc -l) images"
   touch "$MARKERS/dataset.done"
+  set +e
 else
   step "dataset already extracted, skipping"
 fi

@@ -1,7 +1,7 @@
 import sys, paramiko
 
-HOST = "213.173.98.39"
-PORT = 16775
+HOST = "103.196.86.102"
+PORT = 11314
 KEY = "/workspace/trent-with-smart-prompts/runpod-ssh/id_ed25519"
 
 local_path, remote_path = sys.argv[1], sys.argv[2]
