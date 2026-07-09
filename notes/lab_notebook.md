@@ -129,6 +129,24 @@ step exists because of that review, it says so.
    bar. Taking the first direction that clears a loose bar, with this many tested per round,
    guarantees some spurious wins by chance alone.
 
+   **Note on step 3 in practice: the noise floor has to be measured before it can be used.**
+   "Beats the noise floor" only means something once the floor itself is a real number, not an
+   assumption. The floor comes from the pooled control-only probes: score each one, take
+   pairwise deltas between them (same fixed prompt/seed slots as everything else), and the
+   spread of those deltas, which should average to zero since they're all the same config, is
+   the noise floor's empirical standard deviation. Every direction's delta against control has
+   to clear this floor, both statistically (permutation test or bootstrap CI, above) and in
+   practical size (>0.02 cosine).
+
+   This same number also decides how many replicates (n) round 1 actually needs, which the
+   "3-4 replicates" starting assumption above is a guess at, not a derived figure. Once the
+   noise floor's spread is measured from real control probes, simulate: generate synthetic
+   paired deltas with that measured spread plus an injected 0.02-cosine effect, run the same
+   permutation test at a few candidate n values (3, 4, 6, 8), and see which n detects the
+   injected effect at least 80% of the time. That n, not the guess, is what round 1 should use.
+   This has not been run yet as of the 2026-07-08 log entry below; it needs the first batch of
+   scored control probes as input.
+
 4. **Commit phase.** The single best-ranked direction from step 3 gets one full 780-step
    retrain.
 
@@ -330,6 +348,40 @@ prompts × 3-4 seeds across epoch 2/4/final) that the real retrain later used.
   `clawmarks-illustrious-dataset-v2.zip`. Always diff a dataset's actual caption content against
   `caption_check_result.log`'s `MISMATCH:` entries, or rerun the consistency check, before reusing
   a cached dataset folder for training. Never trust the folder name alone.
+- **`api.runpod.io/graphql` 403s bare `urllib` requests.** Python's `urllib.request` with no
+  explicit `User-Agent` gets a Cloudflare block (`403`, body `error code: 1010`) on this host, even
+  though the identical query succeeds via `curl`. The serverless REST host (`api.runpod.ai`)
+  hasn't shown this. Fix: always set `User-Agent` (e.g. `"curl/8.0"`) on GraphQL requests.
+- **`runpod/pytorch` dropped its old version-numbered image tags.** `2.4.1-py3.11-cuda12.4.1-...`
+  (used in `rp_bring_up.py`'s first draft) no longer resolves; Docker Hub now serves mostly
+  `1.0.7-rc.*` tags, though some old-style tags (e.g. `2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`)
+  still exist. Check `https://hub.docker.com/v2/repositories/runpod/pytorch/tags/<tag>` for a 200
+  before trusting an image tag in a pod-creation script; the base image's preinstalled torch
+  version doesn't matter anyway since `remote_setup.sh` installs its own pinned venv.
+- **kohya's default `caption_extension` is `.caption`, not `.txt`.** This dataset's captions are
+  `.txt` files; without `--caption_extension .txt` explicitly, training would silently run with
+  empty captions (no error, just an unconditioned LoRA) rather than failing loudly.
+- **kohya_ss (`sd-scripts`) imports `torchvision` at module load time**
+  (`library/utils.py` -> `library/original_unet.py`), even though this project's own DINOv2
+  scoring scripts deliberately avoid it. `remote_setup.sh`'s pinned venv step only installed
+  `torch`/`xformers`, so the first real training run failed immediately with
+  `ModuleNotFoundError: No module named 'torchvision'`. Fixed by pinning
+  `torchvision==0.19.1` (the release matched to `torch==2.4.1`) alongside the other two.
+- **`rpssh.py` runs a non-login, non-interactive shell**, so `~/.local/bin` (where `uv` installs)
+  isn't on `PATH` even though it's in `.bashrc`. Any one-off remote command that calls `uv`
+  directly (outside `remote_setup.sh`, which exports `PATH` itself) needs
+  `export PATH=$HOME/.local/bin:$PATH` prepended explicitly.
+- **The RunPod `runpod/pytorch` base image has no `unzip`, and `remote_setup.sh`'s dataset step
+  ran without `set -e`.** The `unzip` call failed silently, every subsequent `mv`/`rmdir` in that
+  step failed too, but the script still reached `touch dataset.done` at the end, marking a failed
+  extraction as complete. Fixed by installing `unzip` first and wrapping the extraction step in
+  `set -e`/`set +e` so a real failure stops the script before the marker is written, rather than
+  silently leaving `/workspace/training/img/` empty on a "successfully" set-up pod.
+- **The 780-step full-length figure assumes `train_batch_size 4`, not 1.** 31 images x 10 repeats
+  / batch 4 = ceil(310/4) = 78 steps/epoch x 10 epochs = 780. With the outlier now down-weighted
+  (30 images x10 repeats + 1 x3 repeats = 303 image-repeats), that's ~76 steps/epoch, close enough
+  that probe/calibration runs pass `--max_train_steps` explicitly rather than deriving it from
+  epoch count.
 
 ### Unrelated material in this directory
 
@@ -376,3 +428,31 @@ instructions in `reviews/review_prompt.md`. The review flags weak uncertainty es
 2 replicates, possible 2-epoch to 10-epoch reversal, centroid-metric compression, early commit
 risk in sequential search, and the need for holdout prompts plus immediate inspection of the
 0.22-similarity training-image outlier.
+
+### 2026-07-08: Probe-length calibration check underway, real training pipeline validated
+Brought up the RTX 4090 training pod (`rp_bring_up.py`) and ran the four 156-step probes for
+step 1's calibration check: `control` (baseline config), `dim64` (network dim 64 / alpha 32),
+`lr2e4` (unet_lr 2e-4), and `constlr` (constant schedule instead of cosine, chosen because a
+156-step probe finishes under one of the full run's 780-step / 3-cycle cosine schedule, the
+gap this calibration check exists to catch). `control_156`'s final loss (0.109) closely matched
+the historical epoch-4 winning run's final loss (0.106), which is real confidence the pipeline
+(dataset, checkpoint, hyperparameters) is faithfully reproducing the known-good baseline before
+trusting any of the three candidate directions' results. Generated 4 sample images per probe
+checkpoint (same 4 prompts, same seed 42, same 28-step DDIM settings) with kohya's own
+`sdxl_gen_img.py` directly on the pod, as a visual sanity check before scoring; contact sheet at
+`notes/probe_samples/index.html`. No DINOv2/MMD scoring run yet on any checkpoint.
+
+Brought up a second pod (`rp_bring_up2.py`, helper scripts `rpssh2.py`/`rpget2.py`/`rpsftp2.py`,
+kept separate from the first pod's `rpssh.py` etc. so both stay independently reachable) to run
+the three remaining 780-step full-length runs two at a time instead of serially. `dim64_780`
+finished on pod 1 (final loss 0.110). `control_780` (so the baseline has a full-length twin too,
+not just the three candidates) and `lr2e4_780` are running now, one per pod; `constlr_780` queued
+next on whichever pod frees first.
+
+Clarified the actual plan for step 3's statistical test before running it for real: the noise
+floor isn't an assumption, it has to be measured from the pooled control probes' pairwise score
+deltas (same fixed prompt/seed slots as every other comparison), and that measured spread is
+also what determines how many replicates round 1 needs, via simulating the permutation test at
+a few candidate n and checking which one reliably detects a 0.02-cosine injected effect. Neither
+has been computed yet; both need the first batch of scored control probes as input. See the
+methodology note added to Section 3, step 3, above.
