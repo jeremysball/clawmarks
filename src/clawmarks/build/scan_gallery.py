@@ -26,7 +26,7 @@ def generation_of(tag):
     return int(m.group(1)) if m else 0
 
 
-def main():
+def main(argv=None):
     with open(f"{SWEEP_DIR}/scored_manifest.json") as f:
         manifest = json.load(f)
 

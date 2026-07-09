@@ -24,7 +24,7 @@ from clawmarks.shared_ui import (
 )
 
 
-def main():
+def main(argv=None):
     write_lightbox_asset(SWEEP_DIR)
     write_scrollnav_asset(SWEEP_DIR)
     write_infotip_asset(SWEEP_DIR)

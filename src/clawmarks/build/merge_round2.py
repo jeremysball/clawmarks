@@ -29,7 +29,7 @@ EMBS_FILE = f"{SWEEP_DIR}/solution_map_final_embs.pt"
 MANIFEST_FILE = f"{SWEEP_DIR}/scored_manifest.json"
 
 
-def main():
+def main(argv=None):
     with open(MANIFEST_FILE) as f:
         manifest1 = json.load(f)
 

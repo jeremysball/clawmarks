@@ -35,7 +35,7 @@ CHECKPOINT_EVERY = 10
 FINAL_EMBS_FILE = f"{SWEEP_DIR}/solution_map_final_embs.pt"
 
 
-def main():
+def main(argv=None):
     with open(f"{SWEEP_DIR}/scored_manifest.json") as f:
         manifest = json.load(f)
 

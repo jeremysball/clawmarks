@@ -79,8 +79,10 @@ def _default_manifest():
     raise FileNotFoundError("neither manifest.json nor manifest_partial.json exists yet")
 
 
-def main():
-    manifest_path = sys.argv[1] if len(sys.argv) > 1 else _default_manifest()
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+    manifest_path = argv[0] if argv else _default_manifest()
     print("loading DINOv2...", flush=True)
     model = AutoModel.from_pretrained(MODEL_ID)
     model.eval()

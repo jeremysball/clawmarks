@@ -14,7 +14,7 @@ from clawmarks.config import SWEEP_DIR
 from clawmarks.shared_ui import nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, write_lightbox_asset, write_scrollnav_asset
 
 
-def main():
+def main(argv=None):
     write_lightbox_asset(SWEEP_DIR)
     write_scrollnav_asset(SWEEP_DIR)
 

@@ -20,7 +20,7 @@ CHECKPOINT_FILE = f"{SWEEP_DIR}/similarity_embed_checkpoint.pt"
 CHECKPOINT_EVERY = 10  # batches
 
 
-def main():
+def main(argv=None):
     with open(f"{SWEEP_DIR}/scored_manifest.json") as f:
         manifest = json.load(f)
 
