@@ -1,7 +1,9 @@
 """
 Launch one kohya_ss (sd-scripts) SDXL LoRA training run on the remote pod, parameterized for
-the probe-then-commit search: one hyperparameter direction, at either probe length (~156 steps)
-or full length (780 steps), then pulls the resulting checkpoint(s) back to the local scratch dir.
+the probe-then-commit search: one hyperparameter direction, at either probe length (260 steps,
+one full cosine cycle -- revised 2026-07-09 from the calibration check's 156 steps, which cut a
+probe off mid-cycle) or full length (780 steps), then pulls the resulting checkpoint(s) back to
+the local scratch dir.
 
 Baseline (current-best, epoch 4) config being varied from: network_dim 32, network_alpha 16,
 unet_lr 1e-4, text_encoder_lr 5e-5, min_snr_gamma 5, lr_scheduler cosine (3 cycles), clip_skip 2,
@@ -11,7 +13,7 @@ splits into 30 images at 10 repeats + 1 down-weighted outlier at 3 repeats, ~76 
 enough that max_train_steps is passed explicitly rather than derived from epoch count).
 
 Usage:
-  python3 notes/train_probe.py --name dim64 --max-train-steps 156 \
+  python3 notes/train_probe.py --name dim64 --max-train-steps 260 \
       --network-dim 64 --network-alpha 32
   python3 notes/train_probe.py --name dim64 --max-train-steps 780 \
       --network-dim 64 --network-alpha 32
@@ -113,7 +115,7 @@ def build_train_command(args, run_name, output_subdir, save_every_n_epochs):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", required=True, help="direction label, e.g. dim64, lr2e4, constlr")
-    ap.add_argument("--max-train-steps", type=int, required=True, help="156 for probe length, 780 for full length")
+    ap.add_argument("--max-train-steps", type=int, required=True, help="260 for probe length (one cosine cycle), 780 for full length")
     ap.add_argument("--network-dim", type=int, default=DEFAULTS["network_dim"])
     ap.add_argument("--network-alpha", type=int, default=DEFAULTS["network_alpha"])
     ap.add_argument("--unet-lr", type=float, default=DEFAULTS["unet_lr"])

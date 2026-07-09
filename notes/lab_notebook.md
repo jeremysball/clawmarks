@@ -111,12 +111,25 @@ step exists because of that review, it says so.
    full-length rankings agree, probes are trustworthy for screening. If they don't, probes can
    only be trusted to catch catastrophically bad directions, not to pick a winner.
 
-2. **Probe phase.** Short probes, about 2 epochs (~156 steps, 6-10 minutes), each testing one
-   hyperparameter change from the current-best config. Each direction gets **8 replicates**
-   (different seeds) -- not the earlier 3-4 guess, see the derivation below -- since fewer
-   can't reliably separate a real effect from noise at the effect size actually worth acting on.
-   Control probes (current-best config, seeds only) get pooled across rounds rather than
-   re-measured each time, since the pooled estimate only improves as more accumulate.
+2. **Probe phase.** Probe length is **260 steps, one full cosine cycle** (780 steps / 3
+   cycles), not the calibration check's 156 steps, revised 2026-07-09. 156 steps cuts a probe
+   off 60% of the way through the first cycle, before the learning rate has decayed back down
+   near zero, so the probe never sees the part of training the cosine schedule is named for.
+   260 steps lets the LR complete one full ramp-down, a much closer match to what happens by
+   the end of any single cycle in the real 780-step run, at roughly 12-16 minutes per probe
+   instead of 6-10. Each direction gets **8 replicates** (different seeds) -- not the earlier
+   3-4 guess, see the derivation below -- since fewer can't reliably separate a real effect
+   from noise at the effect size actually worth acting on. Control probes (current-best
+   config, seeds only) get pooled across rounds rather than re-measured each time, since the
+   pooled estimate only improves as more accumulate.
+
+   **Note:** the noise floor and n=8 derivation below were measured at the old 156-step probe
+   length (`control_156`/`controlB_156`.../`controlH_156`, 8 replicates). That data stays as a
+   permanent record of the calibration finding, but it does not carry over to 260-step probes
+   -- noise floor is a property of probe length, since a longer probe gives the model more
+   steps to converge and likely changes how much seed-to-seed variance remains. Round 1's real
+   noise floor needs a fresh batch of 260-step control replicates before probing starts for
+   real.
 
 3. **Selection rule: a real statistical test, not "beats the floor."** Score every probe on the
    same fixed prompt/seed slots so each direction's replicates and the pooled controls can be
