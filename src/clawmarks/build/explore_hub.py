@@ -24,7 +24,7 @@ TOOLS = [
 ]
 
 
-def main():
+def main(argv=None):
     write_infotip_asset(SWEEP_DIR)
 
     process_tip = info_btn(

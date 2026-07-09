@@ -94,7 +94,7 @@ def score_bar(score):
     """
 
 
-def main():
+def main(argv=None):
     cards = []
     all_scores = []
     for subj in SUBJECTS:
