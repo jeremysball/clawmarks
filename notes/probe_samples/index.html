@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CLAWMARKS probe samples (calibration check)</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; margin: 2em; }
+  h1 { font-size: 1.2em; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 2em; }
+  th, td { border: 1px solid #444; padding: 6px; text-align: center; vertical-align: top; }
+  th { background: #222; font-weight: normal; font-size: 0.85em; }
+  img { max-width: 240px; width: 100%; height: auto; display: block; margin: 0 auto; }
+  td.label { font-weight: bold; background: #1a1a1a; text-align: left; padding-left: 10px; }
+  td.pending { color: #777; font-style: italic; }
+  caption { caption-side: top; text-align: left; font-size: 0.85em; color: #aaa; margin-bottom: 1em; }
+  h2 { font-size: 1em; color: #ccc; margin-top: 0; }
+</style>
+</head>
+<body>
+<h1>CLAWMARKS: calibration-check sample generations</h1>
+<p>Same 4 prompts, same seed (42), same 28-step DDIM settings, across all four candidate
+directions at both probe length (156 steps) and full length (780 steps). Base checkpoint:
+illustrious_v0.1. No DINOv2/MMD scoring folded into this page yet, visual check only.</p>
+
+<h2>control (baseline config)</h2>
+<table>
+<tr><th style="width:100px">length</th><th>cat</th><th>horse</th><th>tiger</th><th>wolf-cat</th></tr>
+<tr>
+  <td class="label">156</td>
+  <td><img src="control_156/im_000001.png"></td>
+  <td><img src="control_156/im_000002.png"></td>
+  <td><img src="control_156/im_000003.png"></td>
+  <td><img src="control_156/im_000004.png"></td>
+</tr>
+<tr>
+  <td class="label">780</td>
+  <td><img src="control_780/im_000001.png"></td>
+  <td><img src="control_780/im_000002.png"></td>
+  <td><img src="control_780/im_000003.png"></td>
+  <td><img src="control_780/im_000004.png"></td>
+</tr>
+</table>
+
+<h2>dim64 (network dim 64 / alpha 32)</h2>
+<table>
+<tr><th style="width:100px">length</th><th>cat</th><th>horse</th><th>tiger</th><th>wolf-cat</th></tr>
+<tr>
+  <td class="label">156</td>
+  <td><img src="dim64_156/im_000001.png"></td>
+  <td><img src="dim64_156/im_000002.png"></td>
+  <td><img src="dim64_156/im_000003.png"></td>
+  <td><img src="dim64_156/im_000004.png"></td>
+</tr>
+<tr>
+  <td class="label">780</td>
+  <td><img src="dim64_780/im_000001.png"></td>
+  <td><img src="dim64_780/im_000002.png"></td>
+  <td><img src="dim64_780/im_000003.png"></td>
+  <td><img src="dim64_780/im_000004.png"></td>
+</tr>
+</table>
+
+<h2>lr2e4 (unet_lr 2e-4)</h2>
+<table>
+<tr><th style="width:100px">length</th><th>cat</th><th>horse</th><th>tiger</th><th>wolf-cat</th></tr>
+<tr>
+  <td class="label">156</td>
+  <td><img src="lr2e4_156/im_000001.png"></td>
+  <td><img src="lr2e4_156/im_000002.png"></td>
+  <td><img src="lr2e4_156/im_000003.png"></td>
+  <td><img src="lr2e4_156/im_000004.png"></td>
+</tr>
+<tr>
+  <td class="label">780</td>
+  <td><img src="lr2e4_780/im_000001.png"></td>
+  <td><img src="lr2e4_780/im_000002.png"></td>
+  <td><img src="lr2e4_780/im_000003.png"></td>
+  <td><img src="lr2e4_780/im_000004.png"></td>
+</tr>
+</table>
+
+<h2>constlr (constant LR schedule instead of cosine)</h2>
+<table>
+<tr><th style="width:100px">length</th><th>cat</th><th>horse</th><th>tiger</th><th>wolf-cat</th></tr>
+<tr>
+  <td class="label">156</td>
+  <td><img src="constlr_156/im_000001.png"></td>
+  <td><img src="constlr_156/im_000002.png"></td>
+  <td><img src="constlr_156/im_000003.png"></td>
+  <td><img src="constlr_156/im_000004.png"></td>
+</tr>
+<tr>
+  <td class="label">780</td>
+  <td><img src="constlr_780/im_000001.png"></td>
+  <td><img src="constlr_780/im_000002.png"></td>
+  <td><img src="constlr_780/im_000003.png"></td>
+  <td><img src="constlr_780/im_000004.png"></td>
+</tr>
+</table>
+
+</body>
+</html>

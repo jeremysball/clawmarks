@@ -52,6 +52,18 @@ notebook's job).
   record, then delete the section from TODO.txt) rather than letting it grow indefinitely.
 - Never commit this file and never remove it from `.gitignore`.
 
+## RunPod pods cost money while idle
+
+Invoke the `runpod-status` skill any time a pod's state is even tangentially relevant, not just
+when the user explicitly asks for a status update: after a training/probe batch should have
+finished, at the start of a session if a pod was left up last time, or any time you're about to
+check on or reason about pod state. On-demand pods bill by the hour whether or not anything is
+running on them, and this project has already lost money to a pod sitting idle after its batch
+finished before anyone noticed. Don't wait to be asked "is it done." **Default to pausing an idle
+pod, not terminating it** (pause keeps the disk and drops to storage-only billing; terminate is
+only for a pod that's fully done and won't be reused), and never let a finished pod sit running
+for long.
+
 ## Secrets
 
 Never hardcode API keys or tokens in a script. All of them (`RUNPOD_API_KEY`, `CIVITAI_TOKEN`,
@@ -64,5 +76,6 @@ that first needed it.
 ## Writing style
 
 Apply the `writing-clearly-and-concisely` skill to everything you write here: chat replies, the
-notebook, commit messages. No em dashes, ever: grep the finished text for `—` before calling
-anything done. Active voice, concrete numbers over vague qualifiers, no throat-clearing.
+notebook, commit messages. No em dashes, ever, and no `--` standing in as one either: grep the
+finished text for `—` and for ` -- ` before calling anything done. Active voice, concrete numbers
+over vague qualifiers, no throat-clearing.

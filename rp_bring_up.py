@@ -19,14 +19,14 @@ KEY_PATH = f"{SC}/runpod-ssh/id_ed25519"
 PUBLIC_KEY = open(f"{SC}/runpod-ssh/id_ed25519.pub").read().strip()
 
 GPU_PRIORITY = ["NVIDIA GeForce RTX 4090", "NVIDIA GeForce RTX 3090", "NVIDIA RTX A5000"]
-IMAGE = "runpod/pytorch:2.4.1-py3.11-cuda12.4.1-devel-ubuntu22.04"
+IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
 POD_NAME = "clawmarks-training"
 
 
 def gql(query):
     req = urllib.request.Request(
         GRAPHQL, data=json.dumps({"query": query}).encode(),
-        headers={"Content-Type": "application/json"}, method="POST",
+        headers={"Content-Type": "application/json", "User-Agent": "curl/8.0"}, method="POST",
     )
     with urllib.request.urlopen(req, timeout=30) as r:
         res = json.loads(r.read())
