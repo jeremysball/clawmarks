@@ -1,7 +1,7 @@
 import sys, paramiko
 
-HOST = "103.196.86.102"
-PORT = 11314
+HOST = "47.47.180.44"
+PORT = 17882
 KEY = "/workspace/trent-with-smart-prompts/runpod-ssh/id_ed25519"
 
 def run(cmd, timeout=None):

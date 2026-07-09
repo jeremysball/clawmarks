@@ -1,11 +1,8 @@
 """
-Bring up a fresh RunPod training pod and leave it ready for kohya_ss LoRA training.
-
-Single entry point: creates the pod via the RunPod API, waits for SSH, points
-rpssh.py/rpget.py/rpsftp.py at it, uploads the dataset + setup script, and runs
-setup remotely (installs uv-pinned torch/xformers, clones kohya_ss, downloads the
-base checkpoint). Re-running against an already-set-up pod is fast: each setup
-step checks for its own completion marker and skips if already done.
+Bring up a second RunPod training pod, in parallel with the first, so two 780-step
+full-length calibration runs can train concurrently instead of queuing on one GPU.
+Identical to rp_bring_up.py except it targets rpssh2.py/rpget2.py/rpsftp2.py and a
+distinctly named pod, leaving the first pod's helper scripts untouched.
 """
 import json, os, re, sys, time
 import urllib.request
@@ -20,7 +17,7 @@ PUBLIC_KEY = open(f"{SC}/runpod-ssh/id_ed25519.pub").read().strip()
 
 GPU_PRIORITY = ["NVIDIA GeForce RTX 4090", "NVIDIA GeForce RTX 3090", "NVIDIA RTX A5000"]
 IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
-POD_NAME = "clawmarks-training"
+POD_NAME = "clawmarks-training-2"
 
 
 def gql(query):
@@ -98,13 +95,13 @@ def wait_for_ssh(pod_id, timeout=600):
 
 
 def update_helper_scripts(host, port):
-    for fname in ("rpssh.py", "rpget.py", "rpsftp.py"):
+    for fname in ("rpssh2.py", "rpget2.py", "rpsftp2.py"):
         path = f"{SC}/{fname}"
         text = open(path).read()
         text = re.sub(r'HOST = ".*"', f'HOST = "{host}"', text)
         text = re.sub(r'PORT = \d+', f'PORT = {port}', text)
         open(path, "w").write(text)
-    print(f"updated rpssh.py / rpget.py / rpsftp.py -> {host}:{port}")
+    print(f"updated rpssh2.py / rpget2.py / rpsftp2.py -> {host}:{port}")
 
 
 def ssh_client(host, port):
@@ -163,7 +160,7 @@ def main():
     upload_dataset_and_setup(client, host, port)
     client.close()
     print(f"\nDONE. Pod {pod_id} at {host}:{port} ready for training.")
-    print(f"rpssh.py / rpget.py / rpsftp.py now point at this pod.")
+    print(f"rpssh2.py / rpget2.py / rpsftp2.py now point at this pod.")
 
 
 if __name__ == "__main__":
