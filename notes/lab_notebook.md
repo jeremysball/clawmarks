@@ -111,12 +111,12 @@ step exists because of that review, it says so.
    full-length rankings agree, probes are trustworthy for screening. If they don't, probes can
    only be trusted to catch catastrophically bad directions, not to pick a winner.
 
-2. **Probe phase.** Short probes, about 2 epochs (~156 steps, 7-9 minutes), each testing one
-   hyperparameter change from the current-best config. Each direction gets **3-4 replicates**
-   (different seeds), not 2, since 2 replicates can't separate "the direction is better" from
-   "two seeds happened to land high." 2-3 control probes (current-best config, seeds only) get
-   pooled across rounds rather than re-measured each time, since the pooled estimate only
-   improves as more accumulate.
+2. **Probe phase.** Short probes, about 2 epochs (~156 steps, 6-10 minutes), each testing one
+   hyperparameter change from the current-best config. Each direction gets **8 replicates**
+   (different seeds) -- not the earlier 3-4 guess, see the derivation below -- since fewer
+   can't reliably separate a real effect from noise at the effect size actually worth acting on.
+   Control probes (current-best config, seeds only) get pooled across rounds rather than
+   re-measured each time, since the pooled estimate only improves as more accumulate.
 
 3. **Selection rule: a real statistical test, not "beats the floor."** Score every probe on the
    same fixed prompt/seed slots so each direction's replicates and the pooled controls can be
@@ -139,13 +139,20 @@ step exists because of that review, it says so.
    practical size (>0.02 cosine).
 
    This same number also decides how many replicates (n) round 1 actually needs, which the
-   "3-4 replicates" starting assumption above is a guess at, not a derived figure. Once the
+   "3-4 replicates" starting assumption above was a guess at, not a derived figure. Once the
    noise floor's spread is measured from real control probes, simulate: generate synthetic
-   paired deltas with that measured spread plus an injected 0.02-cosine effect, run the same
-   permutation test at a few candidate n values (3, 4, 6, 8), and see which n detects the
-   injected effect at least 80% of the time. That n, not the guess, is what round 1 should use.
-   This has not been run yet as of the 2026-07-08 log entry below; it needs the first batch of
-   scored control probes as input.
+   paired deltas with that measured spread plus an injected effect, run the same permutation
+   test at a few candidate n values (3, 4, 6, 8), and see which n detects the injected effect
+   at least 80% of the time. That n, not the guess, is what round 1 should use.
+
+   **Done, 2026-07-09** (see the lab log entry below for the full numbers): the noise floor
+   measured from 3 control_156 replicates turned out bigger than the original 0.02-cosine
+   effect floor could ever clear -- at n=8 replicates, a true 0.02 effect is only detected 24%
+   of the time, no matter how many more replicates get added within a practical budget. The
+   effect-size floor that step 3 actually enforces is revised to **0.05 cosine, not 0.02**,
+   and round 1's replicate count is set to **n=8** (84% power at 0.05, 98%+ at 0.08 -- the
+   scale of gaps actually seen in the calibration table, e.g. dim64's ~0.06 gap from the other
+   three directions, constlr's ~0.10 probe-to-full swing).
 
 4. **Commit phase.** The single best-ranked direction from step 3 gets one full 780-step
    retrain.
@@ -200,10 +207,16 @@ DINOv2 score. Then, per Section 1's lesson (and per both external reviews), have
 panel review the top few**, not DINOv2 alone. The metric has already been shown to disagree with
 human preference (Section 2), so the final call belongs to human eyes.
 
-**Budget:** roughly 15-18 probes per round now (3-4 replicates × several directions, 80-110
-minutes) plus one 34-minute commit run scored at 5 checkpoints, about 2.2-2.5 hours per round.
-Five rounds plus the one-time calibration check: **11-13 hours of GPU time**, run sequentially
-on one pod.
+**Budget, revised 2026-07-09 after the noise-floor derivation:** with n=8 replicates (up from
+the earlier 3-4 guess) across roughly 10 directions per round, that's ~80 probes per round at
+6-10 minutes each, 8-13 hours of probing alone, plus one 34-minute commit run scored at 5
+checkpoints. Call it **9-14 hours per round**, not 2.2-2.5. Five rounds plus the one-time
+calibration check: **45-70 hours of GPU time**, a large jump from the original 11-13 hour
+estimate, and worth running two pods in parallel (as calibration already did) rather than
+serially. This is the direct, unavoidable cost of the effect-size floor moving from 0.02 to
+0.05 cosine: a smaller detectable effect needs proportionally more replicates to see reliably,
+and 0.02 was never achievable at any practical n given the measured noise (see step 3's note
+above and the 2026-07-09 log entry).
 
 ---
 
@@ -514,6 +527,62 @@ observed gaps against, only a judgment call that a ~0.03 gap is small and a ~0.1
 large relative to the score range in this table. Measuring the real noise floor (task in
 progress, needs pooled control-only replicates) would let the control/lr2e4 swap specifically be
 called noise or real, rather than shrugged at.
+
+### 2026-07-09: Noise floor measured, replicate count (n) derived -- effect-size floor revised from 0.02 to 0.05
+
+Trained two more `control_156` replicates (`controlB_156`, `controlC_156`), identical config to
+`control_156`, different random seed only (`train_probe.py` never pins a training seed, so
+re-running the same config naturally gives an independent replicate). Generated the same 4
+fixed-prompt samples for both (`notes/gen_samples.py`, a new reusable script -- reconstructs the
+exact `sdxl_gen_img.py` invocation used for every other checkpoint this round: seed 42, 28-step
+DDIM, scale 7.5, 1024x1024, same 4 prompt lines from `/tmp/art_prompts_base_v2.txt`) and scored
+all three against the centroid.
+
+Per-image centroid similarity, same config, 3 independent seeds:
+
+| prompt | control | controlB | controlC | range | stdev |
+|---|---|---|---|---|---|
+| cat | 0.4995 | 0.3797 | 0.4310 | 0.1197 | 0.0601 |
+| horse | 0.3023 | 0.2243 | 0.0982 | 0.2041 | 0.1030 |
+| tiger | 0.5370 | 0.5264 | 0.6141 | 0.0877 | 0.0479 |
+| wolf-cat | 0.5146 | 0.4817 | 0.4615 | 0.0531 | 0.0268 |
+
+Checkpoint-mean spread across the 3 replicates: 0.4634, 0.4030, 0.4012 (stdev 0.0354, max
+pairwise diff 0.0621).
+
+Two things stand out. First, the **horse prompt is dramatically noisier than the other three**
+(stdev 0.103, more than double cat's 0.060 and nearly 4x wolf-cat's 0.027) -- likely because
+"galloping horse" is further from the training distribution (all 31 real images are cats) than
+the other three prompts, so its generations land less predictably seed to seed. Second, and
+more consequential: **the checkpoint-mean noise floor (stdev ~0.035, max observed swing 0.062)
+is bigger than the 0.02-cosine effect-size floor the methodology had assumed** -- meaning that
+threshold was never something a real probe-phase comparison could reliably clear, at any
+practical replicate count.
+
+Derived the actual replicate count via simulation (sign-flip permutation test, 4000 simulated
+trials x 2000 permutations each, per-prompt noise variance from the table above, delta variance
+= 2x single-run variance since a direction-vs-control delta carries noise from both sides):
+
+| true effect (cosine) | n=3 | n=4 | n=6 | n=8 |
+|---|---|---|---|---|
+| 0.02 | 11% | 15% | 19% | 24% |
+| 0.05 | 44% | 54% | 74% | 84% |
+| 0.08 | 78% | 89% | 98% | 100% |
+
+0.02 is undetectable at any practical n (24% power even at n=8 -- adding more replicates helps
+only slowly). **Decision: raise the effect-size floor from 0.02 to 0.05 cosine, and set round
+1's replicate count to n=8** (84% power at 0.05, 98%+ at the scale of gaps actually seen in the
+calibration table -- dim64's ~0.06 gap, constlr's ~0.10 swing). Updated Section 3 steps 2-3 and
+the budget estimate accordingly: n=8 x ~10 directions per round raises probing alone to 8-13
+GPU-hours per round, not the earlier 80-110 minutes, so total budget across 5 rounds plus
+calibration moves from an estimated 11-13 hours to **45-70 hours**, worth running on two pods in
+parallel as calibration already did.
+
+Also worth flagging for later interpretation: this noise-floor estimate itself comes from only
+3 replicates (2 degrees of freedom), so it is a rough estimate with real uncertainty of its
+own, not a precise population parameter. Revisit it once round 1's pooled control probes (8 more
+replicates) accumulate -- the true floor could turn out somewhat higher or lower once more data
+exists.
 
 Terminated pod 2 (`9e64aw56psou89`) once `constlr_780` finished downloading; only pod 1
 (`cn0zudkxb89or6`) is running now.
