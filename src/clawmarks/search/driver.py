@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from clawmarks.config import SEEDS_FILE, SWEEP2_DIR, SWEEP_DIR
 from clawmarks.search.scoring import bin_edges, bin_of, novelty_from_similarity
 from clawmarks.search.seed_pool import merge as seed_pool_merge, load as seed_pool_load, save as seed_pool_save
+from clawmarks.search.manifest_index import index_by_tag
 
 TRIGGER = "trentbuckle style, "
 NEG_DEFAULT = "low quality, blurry, watermark"
@@ -264,19 +265,24 @@ def request_gpt55_subjects(cfg, existing_subjects, n=30):
     return []
 
 
-def _load_user_picks():
-    """Human-in-the-loop MAP-Elites: this project has no automated coherence/quality scorer,
-    so per lab_notebook.md Section 3b there's no way for an image to automatically 'win' a
-    bin. A person reviewing notes/uncanny_sweep/scan.html (served by
-    notes/curation_server.py, which is what actually persists picks) can mark specific images
-    as winners instead. When present, those picks anchor the exploit step's mutations in
-    place of the raw novelty ranking, which is only ever a proxy for 'interesting,' not a
-    verdict on it."""
-    if SWEEP_DIR.joinpath("user_picks.json").exists():
-        with open(SWEEP_DIR / "user_picks.json") as f:
-            picks = json.load(f)
-        return list(picks.values())
-    return []
+def _load_yes_rated_images():
+    """Ratings supersede picks: a human's yes/no judgment on an image, not raw novelty, decides
+    what the exploit step mutates near. user_ratings.json stores only {label, rated_at} per tag
+    (the image metadata already lives in scored_manifest.json), so yes-rated tags are joined
+    against that manifest to recover prompt/strength/cfg for mutation."""
+    ratings_path = SWEEP_DIR / "user_ratings.json"
+    manifest_path = SWEEP_DIR / "scored_manifest.json"
+    if not ratings_path.exists() or not manifest_path.exists():
+        return []
+    with open(ratings_path) as f:
+        ratings = json.load(f)
+    yes_tags = {tag for tag, r in ratings.items() if r.get("label") == "yes"}
+    if not yes_tags:
+        return []
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    by_tag = index_by_tag(manifest)
+    return [by_tag[t] for t in yes_tags if t in by_tag]
 
 
 def _load_prev_round_state(cfg):
@@ -552,7 +558,7 @@ def main(argv=None):
         elites = sorted(liminal_band_all, key=lambda m: -m["novelty"])[:15]
         if not elites and cfg.round == 1:
             elites = manifest[-30:] if manifest else []
-        user_picks = _load_user_picks() if cfg.seed_from_start else []
+        user_picks = _load_yes_rated_images() if cfg.seed_from_start else []
 
         print(f"\n=== generation {gen} | elapsed {elapsed_h:.2f}h | spend ${abs(spent):.3f} | "
               f"stage {state['stage']} | plateau_count {state['plateau_count']} ===", flush=True)
