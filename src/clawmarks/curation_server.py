@@ -71,6 +71,7 @@ from clawmarks.build import (
     novelty_decay, lineage_view, elite_archive, preference_rank, uncanny_gallery, explore_hub,
     seed_browser, rate_page,
 )
+from clawmarks.build.thumbnails import generate_thumbnail
 
 _live_cache = LiveCache()
 
@@ -393,6 +394,19 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+
+        if self.path.startswith("/thumbs/") and self.path.endswith(".jpg"):
+            thumb_path = f"{SWEEP_DIR}{self.path}"
+            if not os.path.exists(thumb_path):
+                tag = os.path.basename(self.path)[: -len(".jpg")]
+                manifest = load_manifest()
+                match = next((m for m in manifest if m["tag"] == tag), None)
+                if match is None:
+                    self.send_error(404, "no manifest entry for this tag")
+                    return
+                os.makedirs(os.path.dirname(thumb_path), exist_ok=True)
+                generate_thumbnail(match["file"], thumb_path)
+            # fall through to super().do_GET() below, which now finds the file on disk
 
         super().do_GET()
 
