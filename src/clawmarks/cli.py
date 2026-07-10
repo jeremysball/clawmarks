@@ -45,6 +45,11 @@ def build_parser():
                  "lineage", "solution-map", "similarity", "thumbnails", "explore-hub", "seeds",
                  "probe-report", "uncanny-gallery", "rate", "preference-rank"],
     )
+    build_p.add_argument(
+        "--use-predicted-preference", action="store_true", default=False,
+        help="Stage 5b, archive target only: rank each cell's fallback by predicted preference "
+             "instead of novelty. Defaults off; requires a trained preference model.",
+    )
 
     run_p = sub.add_parser("run")
     run_sub = run_p.add_subparsers(dest="run_target", required=True)
@@ -74,11 +79,12 @@ def main(argv=None):
 
     if args.command == "build":
         targets = _build_targets()
+        extra_argv = ["--use-predicted-preference"] if args.use_predicted_preference else []
         if args.target == "all":
             for fn in targets.values():
                 fn([])
         else:
-            targets[args.target]([])
+            targets[args.target](extra_argv)
         return 0
 
     if args.command == "run":
