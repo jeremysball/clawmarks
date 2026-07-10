@@ -5,8 +5,8 @@ whitepaper-ready artifact, and clicking through the archive to override an elite
 the existing pick API) is a faster human-curation loop than scrolling all 3392 images in
 scan.html.
 
-Elite selection per cell: a human pick (notes/uncanny_sweep/user_picks.json) wins if one exists
-in that cell, since a person's judgment substitutes for the coherence/quality scorer this
+Elite selection per cell: a yes-rated image (notes/uncanny_sweep/user_ratings.json) wins if one
+exists in that cell, since a person's judgment substitutes for the coherence/quality scorer this
 project doesn't have (lab_notebook.md Section 3b). Otherwise falls back to highest novelty in
 the cell, matching the ranking the search itself uses to build its automated "elites" list.
 
@@ -15,6 +15,7 @@ Run after scored_manifest.json exists: python3 -m clawmarks.build.elite_archive
 import json, os, sys
 
 from clawmarks.config import SWEEP_DIR
+from clawmarks.search.manifest_index import item_summary
 from clawmarks.shared_ui import (
     nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, write_lightbox_asset, write_scrollnav_asset,
     write_infotip_asset, INFOTIP_CSS, info_btn,
@@ -38,11 +39,12 @@ def main(argv=None):
     with open(f"{SWEEP_DIR}/scored_manifest.json") as f:
         manifest = json.load(f)
 
-    picks = {}
-    picks_path = f"{SWEEP_DIR}/user_picks.json"
-    if os.path.exists(picks_path):
-        with open(picks_path) as f:
-            picks = json.load(f)
+    ratings = {}
+    ratings_path = f"{SWEEP_DIR}/user_ratings.json"
+    if os.path.exists(ratings_path):
+        with open(ratings_path) as f:
+            ratings = json.load(f)
+    picks = {tag: r for tag, r in ratings.items() if r.get("label") == "yes"}
 
     faith_vals = sorted(m["centroid_sim"] for m in manifest)
     novelty_vals = sorted(m["novelty"] for m in manifest)
@@ -65,16 +67,6 @@ def main(argv=None):
         nb = bin_of(m["novelty"], novelty_edges)
         grid.setdefault((fb, nb), []).append(m)
 
-    def item_summary(m):
-        return {
-            "tag": m["tag"], "prompt_name": m["prompt_name"], "prompt_type": m["prompt_type"],
-            "faith": round(m["centroid_sim"], 4), "novelty": round(m["novelty"], 4),
-            "strength": m["strength"], "cfg": m["cfg"],
-            "thumb": (f"thumbs/{m['tag']}.jpg" if os.path.exists(f"{SWEEP_DIR}/thumbs/{m['tag']}.jpg")
-                      else os.path.basename(m["file"])),
-            "file": os.path.basename(m["file"]),
-        }
-
     cells = []
     n_human = 0
     for fb in range(N_BINS):
@@ -87,7 +79,7 @@ def main(argv=None):
                 n_human += 1
             cells.append({
                 "fb": fb, "nb": nb, "n": len(items),
-                "items": [item_summary(m) for m in sorted(items, key=lambda m: -m["novelty"])],
+                "items": [item_summary(m, SWEEP_DIR) for m in sorted(items, key=lambda m: -m["novelty"])],
             })
 
     cells.sort(key=lambda c: (c["fb"], c["nb"]))
@@ -145,7 +137,7 @@ a.navlink {{ color:#7c9eff; font-size:12.5px; text-decoration:none; }}
 {nav_bar_html('archive.html')}
 <h1>Elite archive{elite_tip}</h1>
 <p class="sub">One image per occupied cell of the faithfulness x novelty grid: the actual
-MAP-Elites archive, not the full population. Gold-bordered cells are human-picked winners;
+MAP-Elites archive, not the full population. Gold-bordered cells are yes-rated winners;
 others fall back to the highest-novelty image the automated search found in that cell. The
 DINOv2 scorer only ranks faithfulness and novelty, not aesthetic quality, so it can't tell which
 image in a cell is the better picture: click "view all" to browse every candidate in a cell and
@@ -170,7 +162,7 @@ CELLS.sort((a, b) => a.fb - b.fb || b.nb - a.nb);
 
 function eliteFor(c) {{
   const pickedHere = c.items.filter(it => picks[it.tag]);
-  if (pickedHere.length) return {{ item: pickedHere[0], source: 'human pick' }};
+  if (pickedHere.length) return {{ item: pickedHere[0], source: 'yes-rated' }};
   return {{ item: c.items[0], source: 'highest novelty' }};  // items pre-sorted by -novelty
 }}
 
@@ -178,7 +170,7 @@ function render() {{
   const grid = document.getElementById('grid');
   grid.innerHTML = CELLS.map((c, i) => {{
     const {{ item: elite, source }} = eliteFor(c);
-    const human = source === 'human pick';
+    const human = source === 'yes-rated';
     return `
     <div class="cell ${{human ? 'human' : ''}}">
       <img src="${{elite.thumb}}" loading="lazy" data-tag="${{elite.tag}}" onclick="Lightbox.open('${{elite.tag}}')">
@@ -209,17 +201,11 @@ document.addEventListener('keydown', e => {{
   if (e.key === 'Escape') closeModal();
 }});
 
-document.addEventListener('lightbox:pick', e => {{
-  if (e.detail.picked) picks[e.detail.tag] = true; else delete picks[e.detail.tag];
+fetch('/api/ratings').then(r => r.json()).then(ratings => {{
+  picks = {{}};
+  Object.entries(ratings).forEach(([tag, r]) => {{ if (r.label === 'yes') picks[tag] = true; }});
   render();
-  if (document.getElementById('modal').classList.contains('open')) {{
-    document.querySelectorAll('#modalGrid .item').forEach(el => {{
-      el.classList.toggle('human', !!picks[el.title]);
-    }});
-  }}
-}});
-
-fetch('/api/picks').then(r => r.json()).then(p => {{ picks = p; render(); }}).catch(() => {{ render(); }});
+}}).catch(() => {{ render(); }});
 </script>
 <script src="scrollnav.js"></script>
 <script src="lightbox.js"></script>
