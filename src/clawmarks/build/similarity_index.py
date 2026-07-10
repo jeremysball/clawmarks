@@ -12,7 +12,7 @@ import torch
 from transformers import AutoModel
 
 from clawmarks.config import SWEEP_DIR
-from clawmarks.build.uncanny_gallery import preprocess, MODEL_ID
+from clawmarks.search.score_manifest import preprocess, MODEL_ID
 
 TOP_K = 16
 BATCH_SIZE = 16
