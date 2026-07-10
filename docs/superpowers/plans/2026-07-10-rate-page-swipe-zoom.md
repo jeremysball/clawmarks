@@ -23,10 +23,12 @@ for string-membership tests on the generated HTML (existing pattern in `tests/te
   `Lightbox` in `shared_ui.py`, changes.
 - No new server routes or API endpoints. Reuse `GET /api/rate/next` and `POST /api/rate` exactly
   as they exist today.
-- Swipe-to-vote is touch-only. Desktop keeps voting via arrow keys / `y` / `n`; mouse drag never
-  votes.
-- Zoom triggers on `dblclick` (mouse double-click or touch double-tap), not single click/tap.
-  Panning while zoomed works with both touch drag and mouse drag.
+- **Superseded by Task 5 below** (post-review revision, see the spec's 2026-07-10 revision
+  note): ~~Swipe-to-vote is touch-only. Desktop keeps voting via arrow keys / `y` / `n`; mouse
+  drag never votes.~~ Mouse drag now votes too, same as touch. ~~Zoom triggers on `dblclick`
+  (mouse double-click or touch double-tap), not single click/tap.~~ Zoom now triggers on a
+  single tap/click (no movement past the deadzone), not double. Panning while zoomed still works
+  with both touch drag and mouse drag.
 - Swipe commit threshold: 25% of the image's rendered width.
 - Drag classification (swipe vs pan vs ignore) happens once per touch, after a ~10px deadzone,
   and is decided by direction (horizontal-dominant) when not zoomed, or always "pan" when zoomed.
@@ -584,6 +586,278 @@ pkill -f "clawmarks.cli serve" 2>/dev/null; true
 
 (Only kill this if it's the instance started in Step 1 of this task, not any other server the
 user is relying on.)
+
+---
+
+## Task 5: Single-tap zoom, mouse drag-to-vote, rotation and thumbs overlay
+
+Revises Tasks 1-3's gesture code per the spec's 2026-07-10 revision: zoom trigger changes from
+`dblclick` to a single tap/click (classified by the same deadzone already used for drag
+classification, so no new timing logic), mouse drag now votes the same way touch drag does
+(rotate + colored thumbs overlay), and the swipe overlay shows a thumbs up/down icon instead of
+plain color with no icon. Touch and mouse now share one classification and visual-update code
+path instead of two separate implementations.
+
+**Files:**
+- Modify: `src/clawmarks/build/rate_page.py` (the `<script>` block from `// --- zoom ---` through
+  the final `loadNext();` call, and the `#swipe-overlay` CSS rule's `font-size`)
+- Test: `tests/test_rate_page.py`
+
+**Interfaces:**
+- Consumes: `#imgwrap`, `#img`, `#swipe-overlay`, `rate(label)`, `loadNext()`, `current` (all
+  unchanged from Tasks 1-3).
+- Produces: `toggleZoom(clientX, clientY)`, `classifyDrag(dx, dy)`, `updateSwipeVisual(dx)`,
+  `updatePanVisual(dx, dy)`, `finishSwipe(dx)`, `finishPan(dx, dy)`, `MAX_TILT_DEG`. Removes:
+  the `dblclick` listener, the separate `touchActive`/`touchClassified`/`touchStartX`/
+  `touchStartY`/`touchDX`/`touchDY` and `mouseDown`/`mouseStartX`/`mouseStartY` variable sets
+  (replaced by one shared `dragActive`/`dragClassified`/`dragStartX`/`dragStartY`/`dragDX`/
+  `dragDY`). `clampOffset(offset, wrapSize, imgSize)`, `resetZoom()`, `zoomIn(clientX, clientY)`,
+  `zoomed`, `panOffsetX`, `panOffsetY` are unchanged from Task 2 and reused as-is.
+
+- [ ] **Step 1: Write the failing tests**
+
+Add to `tests/test_rate_page.py`:
+
+```python
+def test_render_html_has_tap_to_zoom_and_no_dblclick():
+    html = rate_page.render_html()
+    assert "dblclick" not in html
+    assert "function toggleZoom(" in html
+
+
+def test_render_html_has_rotation_and_thumbs_overlay():
+    html = rate_page.render_html()
+    assert "MAX_TILT_DEG" in html
+    assert "rotate(" in html
+    assert "\U0001F44D" in html
+    assert "\U0001F44E" in html
+
+
+def test_render_html_mouse_drag_votes():
+    html = rate_page.render_html()
+    assert "function classifyDrag(" in html
+    assert "function finishSwipe(" in html
+    assert "imgwrapEl.addEventListener('mousedown'" in html
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd /workspace/trent-with-smart-prompts && PYTHONPATH=src uv run pytest tests/test_rate_page.py -v`
+Expected: the three new tests FAIL (`dblclick` is present today; `toggleZoom`, `MAX_TILT_DEG`,
+the thumbs characters, `classifyDrag`, and a `mousedown` listener on `imgwrapEl` used for voting
+don't exist yet). The five tests from Tasks 1-3 still PASS.
+
+- [ ] **Step 3: Replace the gesture script and overlay CSS**
+
+In `src/clawmarks/build/rate_page.py`, change the `#swipe-overlay` CSS rule's `font-size` from
+`48px` to `40px` (better fit for the thumbs emoji than the old text stamp):
+
+```css
+#swipe-overlay {{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:40px; font-weight:800; letter-spacing:0.08em; opacity:0; pointer-events:none; border-radius:10px; }}
+```
+
+In `loadNext()`, change the transform reset line so it also resets rotation:
+
+```js
+    img.style.transform = 'translateX(0px) rotate(0deg)';
+```
+
+Replace everything from the `// --- zoom ---` comment through the final `loadNext();` call
+(i.e. all of Task 2's and Task 3's gesture code) with:
+
+```js
+// --- zoom ---
+
+function clampOffset(offset, wrapSize, imgSize) {{
+  if (imgSize <= wrapSize) return (wrapSize - imgSize) / 2;
+  return Math.min(0, Math.max(wrapSize - imgSize, offset));
+}}
+
+function resetZoom() {{
+  zoomed = false;
+  panOffsetX = 0;
+  panOffsetY = 0;
+  document.getElementById('imgwrap').classList.remove('zoomed');
+  document.getElementById('img').style.transform = 'translate(0px, 0px)';
+}}
+
+function zoomIn(clientX, clientY) {{
+  const img = document.getElementById('img');
+  const wrap = document.getElementById('imgwrap');
+  const rect = img.getBoundingClientRect();
+  const fracX = (clientX - rect.left) / rect.width;
+  const fracY = (clientY - rect.top) / rect.height;
+  wrap.classList.add('zoomed');
+  zoomed = true;
+  const targetX = fracX * img.naturalWidth;
+  const targetY = fracY * img.naturalHeight;
+  panOffsetX = clampOffset(wrap.clientWidth / 2 - targetX, wrap.clientWidth, img.naturalWidth);
+  panOffsetY = clampOffset(wrap.clientHeight / 2 - targetY, wrap.clientHeight, img.naturalHeight);
+  img.style.transform = `translate(${{panOffsetX}}px, ${{panOffsetY}}px)`;
+}}
+
+function toggleZoom(clientX, clientY) {{
+  if (!current) return;
+  if (zoomed) {{
+    resetZoom();
+  }} else {{
+    zoomIn(clientX, clientY);
+  }}
+}}
+
+const imgwrapEl = document.getElementById('imgwrap');
+
+// --- unified drag: swipe-to-vote when not zoomed, pan when zoomed, tap toggles zoom ---
+
+const DEADZONE_PX = 10;
+const SWIPE_THRESHOLD_FRACTION = 0.25;
+const MAX_TILT_DEG = 15;
+
+let dragActive = false, dragClassified = null; // null | 'swipe' | 'pan' | 'ignore'
+let dragStartX = 0, dragStartY = 0, dragDX = 0, dragDY = 0;
+
+function classifyDrag(dx, dy) {{
+  if (Math.abs(dx) < DEADZONE_PX && Math.abs(dy) < DEADZONE_PX) return null;
+  if (zoomed) return 'pan';
+  if (Math.abs(dx) > Math.abs(dy)) return 'swipe';
+  return 'ignore';
+}}
+
+function updateSwipeVisual(dx) {{
+  const img = document.getElementById('img');
+  const overlay = document.getElementById('swipe-overlay');
+  const width = img.getBoundingClientRect().width || 1;
+  const frac = Math.min(1, Math.abs(dx) / (width * SWIPE_THRESHOLD_FRACTION));
+  const deg = (dx > 0 ? 1 : -1) * frac * MAX_TILT_DEG;
+  img.style.transition = '';
+  img.style.transform = `translateX(${{dx}}px) rotate(${{deg}}deg)`;
+  overlay.className = dx > 0 ? 'yes' : 'no';
+  overlay.textContent = dx > 0 ? '\U0001F44D' : '\U0001F44E';
+  overlay.style.opacity = frac;
+}}
+
+function updatePanVisual(dx, dy) {{
+  const img = document.getElementById('img');
+  const wrap = document.getElementById('imgwrap');
+  const newX = clampOffset(panOffsetX + dx, wrap.clientWidth, img.naturalWidth);
+  const newY = clampOffset(panOffsetY + dy, wrap.clientHeight, img.naturalHeight);
+  img.style.transform = `translate(${{newX}}px, ${{newY}}px)`;
+}}
+
+function finishSwipe(dx) {{
+  const img = document.getElementById('img');
+  const overlay = document.getElementById('swipe-overlay');
+  const width = img.getBoundingClientRect().width || 1;
+  const threshold = width * SWIPE_THRESHOLD_FRACTION;
+  if (Math.abs(dx) >= threshold) {{
+    const label = dx > 0 ? 'yes' : 'no';
+    const deg = (dx > 0 ? 1 : -1) * MAX_TILT_DEG;
+    img.style.transition = 'transform 0.2s ease';
+    img.style.transform = `translateX(${{dx > 0 ? width * 1.2 : -width * 1.2}}px) rotate(${{deg}}deg)`;
+    overlay.style.opacity = 0;
+    setTimeout(() => rate(label), 180);
+  }} else {{
+    img.style.transition = 'transform 0.2s ease';
+    img.style.transform = 'translateX(0px) rotate(0deg)';
+    overlay.style.opacity = 0;
+  }}
+}}
+
+function finishPan(dx, dy) {{
+  const img = document.getElementById('img');
+  const wrap = document.getElementById('imgwrap');
+  panOffsetX = clampOffset(panOffsetX + dx, wrap.clientWidth, img.naturalWidth);
+  panOffsetY = clampOffset(panOffsetY + dy, wrap.clientHeight, img.naturalHeight);
+}}
+
+imgwrapEl.addEventListener('touchstart', e => {{
+  if (!current || e.touches.length !== 1) return;
+  dragActive = true;
+  dragClassified = null;
+  dragStartX = e.touches[0].clientX;
+  dragStartY = e.touches[0].clientY;
+  dragDX = 0;
+  dragDY = 0;
+}});
+
+imgwrapEl.addEventListener('touchmove', e => {{
+  if (!dragActive) return;
+  const t = e.touches[0];
+  dragDX = t.clientX - dragStartX;
+  dragDY = t.clientY - dragStartY;
+  if (dragClassified === null) dragClassified = classifyDrag(dragDX, dragDY);
+  if (dragClassified === null || dragClassified === 'ignore') return;
+  e.preventDefault();
+  if (dragClassified === 'swipe') updateSwipeVisual(dragDX);
+  else if (dragClassified === 'pan') updatePanVisual(dragDX, dragDY);
+}}, {{passive: false}});
+
+imgwrapEl.addEventListener('touchend', () => {{
+  if (!dragActive) return;
+  dragActive = false;
+  if (dragClassified === null) {{
+    toggleZoom(dragStartX, dragStartY);
+  }} else if (dragClassified === 'swipe') {{
+    finishSwipe(dragDX);
+  }} else if (dragClassified === 'pan') {{
+    finishPan(dragDX, dragDY);
+  }}
+  dragClassified = null;
+}});
+
+imgwrapEl.addEventListener('mousedown', e => {{
+  if (!current) return;
+  dragActive = true;
+  dragClassified = null;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  dragDX = 0;
+  dragDY = 0;
+}});
+
+document.addEventListener('mousemove', e => {{
+  if (!dragActive) return;
+  dragDX = e.clientX - dragStartX;
+  dragDY = e.clientY - dragStartY;
+  if (dragClassified === null) dragClassified = classifyDrag(dragDX, dragDY);
+  if (dragClassified === null || dragClassified === 'ignore') return;
+  if (dragClassified === 'swipe') updateSwipeVisual(dragDX);
+  else if (dragClassified === 'pan') updatePanVisual(dragDX, dragDY);
+}});
+
+document.addEventListener('mouseup', e => {{
+  if (!dragActive) return;
+  dragActive = false;
+  if (dragClassified === null) {{
+    toggleZoom(e.clientX, e.clientY);
+  }} else if (dragClassified === 'swipe') {{
+    finishSwipe(dragDX);
+  }} else if (dragClassified === 'pan') {{
+    finishPan(dragDX, dragDY);
+  }}
+  dragClassified = null;
+}});
+
+loadNext();
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd /workspace/trent-with-smart-prompts && PYTHONPATH=src uv run pytest tests/test_rate_page.py -v`
+Expected: all 8 tests PASS (5 from Tasks 1-3 + 3 new).
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /workspace/trent-with-smart-prompts
+git add src/clawmarks/build/rate_page.py tests/test_rate_page.py
+git commit -m "$(cat <<'EOF'
+feat(clawmarks): single-tap zoom, mouse drag-to-vote, rotation and thumbs overlay
+
+EOF
+)"
+```
 
 ---
 
