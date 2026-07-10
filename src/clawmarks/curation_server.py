@@ -105,6 +105,22 @@ def _get_solution_map_data():
         watched_files=_solution_map_watched_files(), sweep_dir=str(SWEEP_DIR),
     )
 
+
+def _get_map_data():
+    _get_solution_map_data()
+    return _live_cache.get(
+        "map", map_view.compute_data,
+        watched_files=[], depends_on=["solution-map"], sweep_dir=str(SWEEP_DIR),
+    )
+
+
+def _get_redundancy_data():
+    _get_solution_map_data()
+    return _live_cache.get(
+        "redundancy", redundancy_view.compute_data,
+        watched_files=[], depends_on=["solution-map"], sweep_dir=str(SWEEP_DIR),
+    )
+
 FAVORITES_FILE = f"{SWEEP_DIR}/user_favorites.json"
 RATINGS_FILE = f"{SWEEP_DIR}/user_ratings.json"
 COUNTERFACTUALS_DIR = f"{SWEEP_DIR}/counterfactuals"
@@ -291,8 +307,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         if self.path == "/map.html":
-            data = map_view.compute_data(str(SWEEP_DIR), {"solution-map": _get_solution_map_data()})
-            html = map_view.render_html(data)
+            html = map_view.render_html(_get_map_data())
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -302,8 +317,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
 
         if self.path == "/redundancy.html":
-            data = redundancy_view.compute_data(str(SWEEP_DIR), {"solution-map": _get_solution_map_data()})
-            html = redundancy_view.render_html(data)
+            html = redundancy_view.render_html(_get_redundancy_data())
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
