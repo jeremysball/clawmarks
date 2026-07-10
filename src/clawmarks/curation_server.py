@@ -65,6 +65,25 @@ from clawmarks.search.seed_pool import merge as seed_pool_merge
 from clawmarks.search import rating_sampler
 from clawmarks.search.manifest_index import item_summary
 from clawmarks.shared_ui import _LIGHTBOX_JS, SCROLLNAV_JS, INFOTIP_JS
+from clawmarks.live_cache import LiveCache
+from clawmarks.build import scan_gallery, similarity_index
+
+_live_cache = LiveCache()
+
+
+def _manifest_path():
+    return f"{SWEEP_DIR}/scored_manifest.json"
+
+
+def _get_scan_items():
+    _live_cache.get(
+        "similarity", similarity_index.compute_data,
+        watched_files=[_manifest_path()], sweep_dir=str(SWEEP_DIR),
+    )
+    return _live_cache.get(
+        "scan", scan_gallery.compute_data,
+        watched_files=[_manifest_path()], depends_on=["similarity"], sweep_dir=str(SWEEP_DIR),
+    )
 
 FAVORITES_FILE = f"{SWEEP_DIR}/user_favorites.json"
 RATINGS_FILE = f"{SWEEP_DIR}/user_ratings.json"
@@ -236,6 +255,19 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        if self.path == "/scan.html":
+            html = scan_gallery.render_html(_get_scan_items())
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if self.path == "/scan_data.json":
+            self._json_response(200, _get_scan_items())
             return
 
         super().do_GET()
