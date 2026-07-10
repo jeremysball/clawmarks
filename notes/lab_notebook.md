@@ -1085,3 +1085,57 @@ The wiring is bidirectional: whenever the run's own plateau-triggered GPT-5.5 es
 produces new subjects, those get written back into `candidate_seeds.json` too (tagged
 `source: "gpt5.5-round2"`), so a live run enriches the shared pool the same way the browser
 does, instead of the two staying separate lists that happen to read the same fallback subjects.
+
+### 2026-07-09: Preference classifier designed, replaces picking; full implementation plan written
+
+The round-2 pick analysis above (picks skew toward higher faithfulness/lower novelty than the
+population, and the automated per-bin fallback selects against what humans actually prefer) was
+the trigger for a bigger decision: pause the round-1 hyperparameter sweep and shift effort to
+inference-time exploration tooling instead, specifically closing the gap the pick analysis
+surfaced. Brainstormed and wrote a design spec
+(`docs/superpowers/specs/2026-07-09-preference-classifier-design.md`) for a preference
+classifier: a model that predicts how much the user will like an image, trained on the user's own
+yes/no ratings of generated images rather than on the DINOv2 faithfulness/novelty scores, which
+have no aesthetic opinion.
+
+Mid-design, scope grew: the new rating system supersedes "pick as winner" entirely (button,
+badge, `/api/pick`/`/api/unpick` endpoints all removed), while favoriting (a pure bookmark with
+zero search effect) stays exactly as it is. The 40 existing picks migrate into the new
+`user_ratings.json` as yes-ratings via a one-time script, so no prior judgment is lost.
+
+Design settled on, in order: (1) an embedding cache (`search/embed_cache.py`) that runs DINOv2
+once per image and persists the vector, so training doesn't need to re-run the model; (2) a fast
+yes/no rating page (`rate.html`) sampling unreviewed images stratified across the existing
+faithfulness x novelty bins, so an early rating session doesn't over-sample whichever region
+happens to dominate the pool; (3) a logistic regression trained on the frozen embeddings alone
+(no generation metadata, and deliberately not a transformer or deeper model: with realistically
+dozens-to-low-hundreds of labels, a higher-capacity model would memorize the label set instead of
+generalizing: the standard "linear probe" approach exists specifically for this label-scarce
+regime); (4) a pool re-ranking view (`preference_rank.html`) as the human validation gate, sorted
+by predicted P(yes), sanity-checked against the 40 migrated picks scoring highly; (5) a two-stage
+handoff for what actually steers the search: Stage 5a (immediate, no model needed) has
+`elite_archive.py`'s per-bin fallback and `driver.py`'s exploit pool read yes-ratings exactly
+where picks were read before; Stage 5b (opt-in, gated on Component 4 passing) swaps the *fitness*
+function inside each MAP-Elites bin from "highest novelty" to "highest predicted-preference,"
+while leaving the faith x novelty bin grid itself untouched, since collapsing the bins in favor of
+pure top-K-by-preference selection would defeat the point of quality-diversity search and risk
+collapsing the search onto one narrow mode. Both stages default off until the project owner
+validates the model by eye.
+
+Wrote the full implementation plan
+(`docs/superpowers/plans/2026-07-09-preference-classifier.md`): 13 TDD tasks covering the
+embedding cache, rating sampler, migration script, `curation_server.py`'s new ratings endpoints,
+`rate.html`, the lightbox's pick-removal, `elite_archive.py` and `driver.py`'s Stage 5a rewiring,
+`preference_model.py` (new `scikit-learn` dependency), `preference_rank.py`, and both files'
+opt-in Stage 5b wiring. Per the user's direction, this hands off to unattended execution via
+opencode/minimax rather than being implemented in this session.
+
+Also found and fixed two small repo-hygiene issues while cleaning up this session: two stray
+`.bak` files in `notes/uncanny_sweep/` (`scored_manifest.CORRUPTED_*.json.bak`,
+`scored_manifest.GARBAGE_*.json.bak`, 732 and 452 stale manifest entries respectively, both
+superseded long ago by the current 3672-entry `scored_manifest.json`) were confirmed as dead
+snapshots and deleted; and `notes/probe_uncanny_report.html`, a tracked file, had been silently
+truncated to 0 bytes by some earlier process (no current build script even references that
+filename, so it's likely dead output from a script removed in the `whitepaper/` -> `notes/`
+rename) and was restored from git rather than left corrupted or deleted outright, pending a
+decision on whether the file is worth keeping at all.
