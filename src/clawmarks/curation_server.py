@@ -66,7 +66,7 @@ from clawmarks.search import rating_sampler
 from clawmarks.search.manifest_index import item_summary
 from clawmarks.shared_ui import _LIGHTBOX_JS, SCROLLNAV_JS, INFOTIP_JS
 from clawmarks.live_cache import LiveCache
-from clawmarks.build import scan_gallery, similarity_index
+from clawmarks.build import scan_gallery, similarity_index, solution_map
 
 _live_cache = LiveCache()
 
@@ -83,6 +83,13 @@ def _get_scan_items():
     return _live_cache.get(
         "scan", scan_gallery.compute_data,
         watched_files=[_manifest_path()], depends_on=["similarity"], sweep_dir=str(SWEEP_DIR),
+    )
+
+
+def _get_solution_map_data():
+    return _live_cache.get(
+        "solution-map", solution_map.compute_data,
+        watched_files=[_manifest_path()], sweep_dir=str(SWEEP_DIR),
     )
 
 FAVORITES_FILE = f"{SWEEP_DIR}/user_favorites.json"
