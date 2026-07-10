@@ -109,7 +109,11 @@ def main(argv=None):
     by_tag = {m["tag"]: m for m in manifest}
 
     def image_path_for(tag):
-        return str(SWEEP_DIR / by_tag[tag]["file"])
+        # Falls back to the thumbnail when the full-res file is missing.
+        full_res = str(SWEEP_DIR / by_tag[tag]["file"])
+        if os.path.exists(full_res):
+            return full_res
+        return str(SWEEP_DIR / "thumbs" / f"{tag}.jpg")
 
     print("loading DINOv2 model...", flush=True)
     model = AutoModel.from_pretrained(MODEL_ID)
