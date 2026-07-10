@@ -32,6 +32,8 @@ p.sub {{ color:var(--text-dim); max-width:640px; font-size:13px; line-height:1.6
 #stage {{ margin-top:20px; width:100%; max-width:640px; display:flex; flex-direction:column; align-items:center; }}
 #imgwrap {{ position:relative; max-width:100%; max-height:78vh; overflow:hidden; touch-action:none;
   display:flex; align-items:center; justify-content:center; }}
+#imgwrap.zoomed {{ height:78vh; width:100%; cursor:grab; }}
+#imgwrap.zoomed #img {{ max-width:none; max-height:none; border-radius:0; box-shadow:none; }}
 #img {{ max-width:100%; max-height:78vh; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,0.6);
   user-select:none; -webkit-user-drag:none; }}
 #swipe-overlay {{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
@@ -62,6 +64,8 @@ or double-tap an image to zoom to full resolution; drag to look around while zoo
 <script>
 let current = null;
 let ratedThisSession = 0;
+let zoomed = false;
+let panOffsetX = 0, panOffsetY = 0;
 
 function loadNext() {{
   fetch('/api/rate/next').then(r => r.json()).then(d => {{
@@ -72,7 +76,9 @@ function loadNext() {{
       return;
     }}
     current = d;
+    resetZoom();
     const img = document.getElementById('img');
+    img.style.transition = '';
     img.style.transform = 'translateX(0px)';
     img.src = d.file;
     img.style.display = 'block';
@@ -98,6 +104,73 @@ function rate(label) {{
 document.addEventListener('keydown', e => {{
   if (e.key === 'ArrowLeft' || e.key === 'n' || e.key === 'N') rate('no');
   if (e.key === 'ArrowRight' || e.key === 'y' || e.key === 'Y') rate('yes');
+}});
+
+// --- zoom ---
+
+function clampOffset(offset, wrapSize, imgSize) {{
+  if (imgSize <= wrapSize) return (wrapSize - imgSize) / 2;
+  return Math.min(0, Math.max(wrapSize - imgSize, offset));
+}}
+
+function resetZoom() {{
+  zoomed = false;
+  panOffsetX = 0;
+  panOffsetY = 0;
+  document.getElementById('imgwrap').classList.remove('zoomed');
+  document.getElementById('img').style.transform = 'translate(0px, 0px)';
+}}
+
+function zoomIn(clientX, clientY) {{
+  const img = document.getElementById('img');
+  const wrap = document.getElementById('imgwrap');
+  const rect = img.getBoundingClientRect();
+  const fracX = (clientX - rect.left) / rect.width;
+  const fracY = (clientY - rect.top) / rect.height;
+  wrap.classList.add('zoomed');
+  zoomed = true;
+  const targetX = fracX * img.naturalWidth;
+  const targetY = fracY * img.naturalHeight;
+  panOffsetX = clampOffset(wrap.clientWidth / 2 - targetX, wrap.clientWidth, img.naturalWidth);
+  panOffsetY = clampOffset(wrap.clientHeight / 2 - targetY, wrap.clientHeight, img.naturalHeight);
+  img.style.transform = `translate(${{panOffsetX}}px, ${{panOffsetY}}px)`;
+}}
+
+const imgwrapEl = document.getElementById('imgwrap');
+
+imgwrapEl.addEventListener('dblclick', e => {{
+  if (!current) return;
+  if (zoomed) {{
+    resetZoom();
+  }} else {{
+    zoomIn(e.clientX, e.clientY);
+  }}
+}});
+
+// mouse panning while zoomed (desktop)
+let mouseDown = false, mouseStartX = 0, mouseStartY = 0;
+imgwrapEl.addEventListener('mousedown', e => {{
+  if (!zoomed) return;
+  mouseDown = true;
+  mouseStartX = e.clientX;
+  mouseStartY = e.clientY;
+}});
+document.addEventListener('mousemove', e => {{
+  if (!mouseDown || !zoomed) return;
+  const img = document.getElementById('img');
+  const wrap = document.getElementById('imgwrap');
+  const newX = clampOffset(panOffsetX + (e.clientX - mouseStartX), wrap.clientWidth, img.naturalWidth);
+  const newY = clampOffset(panOffsetY + (e.clientY - mouseStartY), wrap.clientHeight, img.naturalHeight);
+  img.style.transform = `translate(${{newX}}px, ${{newY}}px)`;
+}});
+document.addEventListener('mouseup', e => {{
+  if (!mouseDown) return;
+  mouseDown = false;
+  if (!zoomed) return;
+  const img = document.getElementById('img');
+  const wrap = document.getElementById('imgwrap');
+  panOffsetX = clampOffset(panOffsetX + (e.clientX - mouseStartX), wrap.clientWidth, img.naturalWidth);
+  panOffsetY = clampOffset(panOffsetY + (e.clientY - mouseStartY), wrap.clientHeight, img.naturalHeight);
 }});
 
 loadNext();
