@@ -12,8 +12,6 @@ import base64
 import json
 import os
 
-from clawmarks.search.score_manifest import MODEL_ID
-
 N_BINS = 4
 
 TYPE_COLOR = {"style": "#5ec98a", "conflict": "#e0a25e"}
