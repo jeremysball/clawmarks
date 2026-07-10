@@ -18,3 +18,12 @@ def test_render_html_has_imgwrap_and_overlay():
     html = rate_page.render_html()
     assert 'id="imgwrap"' in html
     assert 'id="swipe-overlay"' in html
+
+
+def test_render_html_has_zoom_machinery():
+    html = rate_page.render_html()
+    assert "function zoomIn(" in html
+    assert "function resetZoom(" in html
+    assert "function clampOffset(" in html
+    assert "dblclick" in html
+    assert "classList.add('zoomed')" in html
