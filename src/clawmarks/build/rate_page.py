@@ -37,7 +37,7 @@ p.sub {{ color:var(--text-dim); max-width:640px; font-size:13px; line-height:1.6
 #img {{ max-width:100%; max-height:78vh; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,0.6);
   user-select:none; -webkit-user-drag:none; }}
 #swipe-overlay {{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  font-size:48px; font-weight:800; letter-spacing:0.08em; opacity:0; pointer-events:none; border-radius:10px; }}
+  font-size:40px; font-weight:800; letter-spacing:0.08em; opacity:0; pointer-events:none; border-radius:10px; }}
 #swipe-overlay.yes {{ color:var(--yes); background:rgba(94,201,138,0.12); }}
 #swipe-overlay.no {{ color:var(--no); background:rgba(224,96,94,0.12); }}
 #meta {{ color:var(--text-dim); font-size:12.5px; margin-top:10px; text-align:center; }}
@@ -79,7 +79,7 @@ function loadNext() {{
     resetZoom();
     const img = document.getElementById('img');
     img.style.transition = '';
-    img.style.transform = 'translateX(0px)';
+    img.style.transform = 'translateX(0px) rotate(0deg)';
     img.src = d.file;
     img.style.display = 'block';
     document.getElementById('swipe-overlay').style.opacity = 0;
@@ -136,59 +136,52 @@ function zoomIn(clientX, clientY) {{
   img.style.transform = `translate(${{panOffsetX}}px, ${{panOffsetY}}px)`;
 }}
 
-const imgwrapEl = document.getElementById('imgwrap');
-
-imgwrapEl.addEventListener('dblclick', e => {{
+function toggleZoom(clientX, clientY) {{
   if (!current) return;
   if (zoomed) {{
     resetZoom();
   }} else {{
-    zoomIn(e.clientX, e.clientY);
+    zoomIn(clientX, clientY);
   }}
-}});
+}}
 
-// mouse panning while zoomed (desktop)
-let mouseDown = false, mouseStartX = 0, mouseStartY = 0;
-imgwrapEl.addEventListener('mousedown', e => {{
-  if (!zoomed) return;
-  mouseDown = true;
-  mouseStartX = e.clientX;
-  mouseStartY = e.clientY;
-}});
-document.addEventListener('mousemove', e => {{
-  if (!mouseDown || !zoomed) return;
-  const img = document.getElementById('img');
-  const wrap = document.getElementById('imgwrap');
-  const newX = clampOffset(panOffsetX + (e.clientX - mouseStartX), wrap.clientWidth, img.naturalWidth);
-  const newY = clampOffset(panOffsetY + (e.clientY - mouseStartY), wrap.clientHeight, img.naturalHeight);
-  img.style.transform = `translate(${{newX}}px, ${{newY}}px)`;
-}});
-document.addEventListener('mouseup', e => {{
-  if (!mouseDown) return;
-  mouseDown = false;
-  if (!zoomed) return;
-  const img = document.getElementById('img');
-  const wrap = document.getElementById('imgwrap');
-  panOffsetX = clampOffset(panOffsetX + (e.clientX - mouseStartX), wrap.clientWidth, img.naturalWidth);
-  panOffsetY = clampOffset(panOffsetY + (e.clientY - mouseStartY), wrap.clientHeight, img.naturalHeight);
-}});
+const imgwrapEl = document.getElementById('imgwrap');
 
-// --- touch: swipe-to-vote when not zoomed, pan when zoomed ---
+// --- unified drag: swipe-to-vote when not zoomed, pan when zoomed, tap toggles zoom ---
 
 const DEADZONE_PX = 10;
 const SWIPE_THRESHOLD_FRACTION = 0.25;
-let touchActive = false, touchClassified = null; // null | 'swipe' | 'pan' | 'ignore'
-let touchStartX = 0, touchStartY = 0, touchDX = 0, touchDY = 0;
+const MAX_TILT_DEG = 15;
+
+let dragActive = false, dragClassified = null; // null | 'swipe' | 'pan' | 'ignore'
+let dragStartX = 0, dragStartY = 0, dragDX = 0, dragDY = 0;
+
+function classifyDrag(dx, dy) {{
+  if (Math.abs(dx) < DEADZONE_PX && Math.abs(dy) < DEADZONE_PX) return null;
+  if (zoomed) return 'pan';
+  if (Math.abs(dx) > Math.abs(dy)) return 'swipe';
+  return 'ignore';
+}}
 
 function updateSwipeVisual(dx) {{
   const img = document.getElementById('img');
   const overlay = document.getElementById('swipe-overlay');
-  img.style.transition = '';
-  img.style.transform = `translateX(${{dx}}px)`;
   const width = img.getBoundingClientRect().width || 1;
   const frac = Math.min(1, Math.abs(dx) / (width * SWIPE_THRESHOLD_FRACTION));
+  const deg = (dx > 0 ? 1 : -1) * frac * MAX_TILT_DEG;
+  img.style.transition = '';
+  img.style.transform = `translateX(${{dx}}px) rotate(${{deg}}deg)`;
   overlay.className = dx > 0 ? 'yes' : 'no';
+  overlay.textContent = dx > 0 ? '\U0001F44D' : '\U0001F44E';
   overlay.style.opacity = frac;
+}}
+
+function updatePanVisual(dx, dy) {{
+  const img = document.getElementById('img');
+  const wrap = document.getElementById('imgwrap');
+  const newX = clampOffset(panOffsetX + dx, wrap.clientWidth, img.naturalWidth);
+  const newY = clampOffset(panOffsetY + dy, wrap.clientHeight, img.naturalHeight);
+  img.style.transform = `translate(${{newX}}px, ${{newY}}px)`;
 }}
 
 function finishSwipe(dx) {{
@@ -198,70 +191,91 @@ function finishSwipe(dx) {{
   const threshold = width * SWIPE_THRESHOLD_FRACTION;
   if (Math.abs(dx) >= threshold) {{
     const label = dx > 0 ? 'yes' : 'no';
+    const deg = (dx > 0 ? 1 : -1) * MAX_TILT_DEG;
     img.style.transition = 'transform 0.2s ease';
-    img.style.transform = `translateX(${{dx > 0 ? width * 1.2 : -width * 1.2}}px)`;
+    img.style.transform = `translateX(${{dx > 0 ? width * 1.2 : -width * 1.2}}px) rotate(${{deg}}deg)`;
     overlay.style.opacity = 0;
     setTimeout(() => rate(label), 180);
   }} else {{
     img.style.transition = 'transform 0.2s ease';
-    img.style.transform = 'translateX(0px)';
+    img.style.transform = 'translateX(0px) rotate(0deg)';
     overlay.style.opacity = 0;
   }}
 }}
 
+function finishPan(dx, dy) {{
+  const img = document.getElementById('img');
+  const wrap = document.getElementById('imgwrap');
+  panOffsetX = clampOffset(panOffsetX + dx, wrap.clientWidth, img.naturalWidth);
+  panOffsetY = clampOffset(panOffsetY + dy, wrap.clientHeight, img.naturalHeight);
+}}
+
 imgwrapEl.addEventListener('touchstart', e => {{
   if (!current || e.touches.length !== 1) return;
-  touchActive = true;
-  touchClassified = null;
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
-  touchDX = 0;
-  touchDY = 0;
+  dragActive = true;
+  dragClassified = null;
+  dragStartX = e.touches[0].clientX;
+  dragStartY = e.touches[0].clientY;
+  dragDX = 0;
+  dragDY = 0;
 }});
 
 imgwrapEl.addEventListener('touchmove', e => {{
-  if (!touchActive) return;
+  if (!dragActive) return;
   const t = e.touches[0];
-  touchDX = t.clientX - touchStartX;
-  touchDY = t.clientY - touchStartY;
-
-  if (touchClassified === null) {{
-    if (Math.abs(touchDX) < DEADZONE_PX && Math.abs(touchDY) < DEADZONE_PX) return;
-    if (zoomed) {{
-      touchClassified = 'pan';
-    }} else if (Math.abs(touchDX) > Math.abs(touchDY)) {{
-      touchClassified = 'swipe';
-    }} else {{
-      touchClassified = 'ignore';
-    }}
-  }}
-
-  if (touchClassified === 'ignore') return;
+  dragDX = t.clientX - dragStartX;
+  dragDY = t.clientY - dragStartY;
+  if (dragClassified === null) dragClassified = classifyDrag(dragDX, dragDY);
+  if (dragClassified === null || dragClassified === 'ignore') return;
   e.preventDefault();
-
-  if (touchClassified === 'swipe') {{
-    updateSwipeVisual(touchDX);
-  }} else if (touchClassified === 'pan') {{
-    const img = document.getElementById('img');
-    const wrap = document.getElementById('imgwrap');
-    const newX = clampOffset(panOffsetX + touchDX, wrap.clientWidth, img.naturalWidth);
-    const newY = clampOffset(panOffsetY + touchDY, wrap.clientHeight, img.naturalHeight);
-    img.style.transform = `translate(${{newX}}px, ${{newY}}px)`;
-  }}
+  if (dragClassified === 'swipe') updateSwipeVisual(dragDX);
+  else if (dragClassified === 'pan') updatePanVisual(dragDX, dragDY);
 }}, {{passive: false}});
 
 imgwrapEl.addEventListener('touchend', () => {{
-  if (!touchActive) return;
-  touchActive = false;
-  if (touchClassified === 'swipe') {{
-    finishSwipe(touchDX);
-  }} else if (touchClassified === 'pan') {{
-    const img = document.getElementById('img');
-    const wrap = document.getElementById('imgwrap');
-    panOffsetX = clampOffset(panOffsetX + touchDX, wrap.clientWidth, img.naturalWidth);
-    panOffsetY = clampOffset(panOffsetY + touchDY, wrap.clientHeight, img.naturalHeight);
+  if (!dragActive) return;
+  dragActive = false;
+  if (dragClassified === null) {{
+    toggleZoom(dragStartX, dragStartY);
+  }} else if (dragClassified === 'swipe') {{
+    finishSwipe(dragDX);
+  }} else if (dragClassified === 'pan') {{
+    finishPan(dragDX, dragDY);
   }}
-  touchClassified = null;
+  dragClassified = null;
+}});
+
+imgwrapEl.addEventListener('mousedown', e => {{
+  if (!current) return;
+  dragActive = true;
+  dragClassified = null;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  dragDX = 0;
+  dragDY = 0;
+}});
+
+document.addEventListener('mousemove', e => {{
+  if (!dragActive) return;
+  dragDX = e.clientX - dragStartX;
+  dragDY = e.clientY - dragStartY;
+  if (dragClassified === null) dragClassified = classifyDrag(dragDX, dragDY);
+  if (dragClassified === null || dragClassified === 'ignore') return;
+  if (dragClassified === 'swipe') updateSwipeVisual(dragDX);
+  else if (dragClassified === 'pan') updatePanVisual(dragDX, dragDY);
+}});
+
+document.addEventListener('mouseup', e => {{
+  if (!dragActive) return;
+  dragActive = false;
+  if (dragClassified === null) {{
+    toggleZoom(e.clientX, e.clientY);
+  }} else if (dragClassified === 'swipe') {{
+    finishSwipe(dragDX);
+  }} else if (dragClassified === 'pan') {{
+    finishPan(dragDX, dragDY);
+  }}
+  dragClassified = null;
 }});
 
 loadNext();
