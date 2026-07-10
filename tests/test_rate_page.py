@@ -25,7 +25,6 @@ def test_render_html_has_zoom_machinery():
     assert "function zoomIn(" in html
     assert "function resetZoom(" in html
     assert "function clampOffset(" in html
-    assert "dblclick" in html
     assert "classList.add('zoomed')" in html
 
 
@@ -36,3 +35,24 @@ def test_render_html_has_touch_swipe_machinery():
     assert "addEventListener('touchend'" in html
     assert "SWIPE_THRESHOLD_FRACTION" in html
     assert "function finishSwipe(" in html
+
+
+def test_render_html_has_tap_to_zoom_and_no_dblclick():
+    html = rate_page.render_html()
+    assert "dblclick" not in html
+    assert "function toggleZoom(" in html
+
+
+def test_render_html_has_rotation_and_thumbs_overlay():
+    html = rate_page.render_html()
+    assert "MAX_TILT_DEG" in html
+    assert "rotate(" in html
+    assert "\U0001F44D" in html
+    assert "\U0001F44E" in html
+
+
+def test_render_html_mouse_drag_votes():
+    html = rate_page.render_html()
+    assert "function classifyDrag(" in html
+    assert "function finishSwipe(" in html
+    assert "imgwrapEl.addEventListener('mousedown'" in html
