@@ -64,6 +64,7 @@ from clawmarks.config import ROOT, SEEDS_FILE, SWEEP_DIR
 from clawmarks.search.seed_pool import merge as seed_pool_merge
 from clawmarks.search import rating_sampler
 from clawmarks.search.manifest_index import item_summary
+from clawmarks.shared_ui import _LIGHTBOX_JS, SCROLLNAV_JS, INFOTIP_JS
 
 FAVORITES_FILE = f"{SWEEP_DIR}/user_favorites.json"
 RATINGS_FILE = f"{SWEEP_DIR}/user_ratings.json"
@@ -226,6 +227,17 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Location", "/scan.html")
             self.end_headers()
             return
+
+        _JS_ASSETS = {"/lightbox.js": _LIGHTBOX_JS, "/scrollnav.js": SCROLLNAV_JS, "/infotip.js": INFOTIP_JS}
+        if self.path in _JS_ASSETS:
+            body = _JS_ASSETS[self.path].encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         super().do_GET()
 
     def do_POST(self):
