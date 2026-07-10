@@ -182,8 +182,17 @@ _LIGHTBOX_JS = r"""(function(){
 #lb-overlay .lb-imgwrap.loading .lb-spinner { display:block; }
 @keyframes lb-spin { to { transform:rotate(360deg); } }
 #lb-overlay .lb-info { color:#9a9aa4; font-size:12.5px; max-width:92vw; text-align:center; line-height:1.6; }
-#lb-overlay .lb-nav { position:absolute; top:0; bottom:0; width:16%; cursor:pointer; z-index:1; }
-#lb-overlay .lb-prev { left:0; } #lb-overlay .lb-next { right:0; }
+#lb-overlay .lb-nav { position:absolute; top:0; bottom:0; width:16%; cursor:pointer; z-index:1;
+  display:flex; align-items:center; }
+#lb-overlay .lb-nav::before { content:''; width:44px; height:44px; border-radius:50%;
+  background:rgba(20,20,24,0.55); border:1px solid rgba(255,255,255,0.14); color:#eaeaee;
+  display:flex; align-items:center; justify-content:center; font-size:22px; line-height:1;
+  opacity:0.5; transition:opacity .15s ease, background .15s ease; }
+#lb-overlay .lb-nav:hover::before { opacity:1; background:rgba(34,34,40,0.85); }
+#lb-overlay .lb-prev { left:0; justify-content:flex-start; padding-left:14px; }
+#lb-overlay .lb-prev::before { content:'\2039'; }
+#lb-overlay .lb-next { right:0; justify-content:flex-end; padding-right:14px; }
+#lb-overlay .lb-next::before { content:'\203A'; }
 #lb-overlay .lb-close { position:absolute; top:16px; right:22px; font-size:28px; cursor:pointer; color:#9a9aa4;
   width:40px; height:40px; display:flex; align-items:center; justify-content:center; z-index:2; }
 #lb-overlay .lb-close:hover { color:#eaeaee; }
