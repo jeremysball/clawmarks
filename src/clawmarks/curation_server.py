@@ -66,7 +66,7 @@ from clawmarks.search import rating_sampler
 from clawmarks.search.manifest_index import item_summary
 from clawmarks.shared_ui import _LIGHTBOX_JS, SCROLLNAV_JS, INFOTIP_JS
 from clawmarks.live_cache import LiveCache
-from clawmarks.build import scan_gallery, similarity_index, solution_map
+from clawmarks.build import scan_gallery, similarity_index, solution_map, map_view
 
 _live_cache = LiveCache()
 
@@ -275,6 +275,17 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if self.path == "/scan_data.json":
             self._json_response(200, _get_scan_items())
+            return
+
+        if self.path == "/map.html":
+            data = map_view.compute_data(str(SWEEP_DIR), {"solution-map": _get_solution_map_data()})
+            html = map_view.render_html(data)
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
 
         super().do_GET()
