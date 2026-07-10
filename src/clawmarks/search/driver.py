@@ -285,6 +285,35 @@ def _load_yes_rated_images():
     return [by_tag[t] for t in yes_tags if t in by_tag]
 
 
+def _predicted_preference_pool(manifest, model_path, embed_model, top_n=15):
+    """Stage 5b (opt-in via --use-predicted-preference): ranks this round's own generated
+    images by the trained preference model's P(yes) instead of yes-rating membership. Extends
+    the shared embedding cache with any new images first, so an image is never re-embedded
+    across generations. Returns [] (callers fall back to Stage 5a's yes-rated pool) if no model
+    has been trained yet or the manifest is empty."""
+    if not manifest or not os.path.exists(model_path):
+        return []
+
+    import joblib
+
+    from clawmarks.search import embed_cache
+    from clawmarks.search.preference_model import predict_proba
+
+    by_tag = {m["tag"]: m for m in manifest}
+
+    def image_path_for(tag):
+        return by_tag[tag]["file"]
+
+    tags, embeddings = embed_cache.sync(manifest, embed_cache.EMBEDDINGS_FILE, embed_model, image_path_for)
+    model = joblib.load(model_path)
+    scores = predict_proba(model, embeddings)
+    ranked = sorted(
+        ((by_tag[t], s) for t, s in zip(tags, scores) if t in by_tag),
+        key=lambda pair: -pair[1],
+    )
+    return [m for m, _ in ranked[:top_n]]
+
+
 def _load_prev_round_state(cfg):
     """Round 1's body still reads its own state file (allnight_state.json) and the
     first-run fixed-sweep manifest. Round 2 reads round 1's manifest as the exclusion set.
@@ -452,6 +481,13 @@ body {{ background:#111; color:#eee; font-family: -apple-system, sans-serif; mar
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--round", type=int, choices=list(ROUND_CONFIGS.keys()), required=True)
+    parser.add_argument(
+        "--use-predicted-preference", action="store_true", default=False,
+        help="Stage 5b (opt-in, requires notes/uncanny_sweep/preference_model.joblib and "
+             "human validation via preference_rank.html first): rank the exploit pool by the "
+             "trained model's predicted preference instead of yes-rated images. Defaults off; "
+             "do not enable without having browsed preference_rank.html first.",
+    )
     args = parser.parse_args(argv)
     cfg = ROUND_CONFIGS[args.round]
 
@@ -559,6 +595,16 @@ def main(argv=None):
         if not elites and cfg.round == 1:
             elites = manifest[-30:] if manifest else []
         user_picks = _load_yes_rated_images() if cfg.seed_from_start else []
+        if args.use_predicted_preference:
+            predicted_pool = _predicted_preference_pool(
+                manifest, SWEEP_DIR / "preference_model.joblib", model,
+            )
+            if predicted_pool:
+                user_picks = predicted_pool
+            else:
+                print("--use-predicted-preference set but no trained model found yet "
+                      "(or nothing generated so far this round); using yes-rated images "
+                      "instead", flush=True)
 
         print(f"\n=== generation {gen} | elapsed {elapsed_h:.2f}h | spend ${abs(spent):.3f} | "
               f"stage {state['stage']} | plateau_count {state['plateau_count']} ===", flush=True)
