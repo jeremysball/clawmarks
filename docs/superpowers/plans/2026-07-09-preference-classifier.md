@@ -1470,7 +1470,8 @@ def load_cache(path):
 
 def save_cache(path, tags, embeddings):
     tmp = str(path) + ".tmp"
-    np.savez(tmp, tags=np.array(tags), embeddings=np.asarray(embeddings, dtype=np.float32))
+    with open(tmp, "wb") as f:
+        np.savez(f, tags=np.array(tags), embeddings=np.asarray(embeddings, dtype=np.float32))
     os.replace(tmp, path)
 
 
