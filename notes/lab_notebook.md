@@ -1139,3 +1139,60 @@ truncated to 0 bytes by some earlier process (no current build script even refer
 filename, so it's likely dead output from a script removed in the `whitepaper/` -> `notes/`
 rename) and was restored from git rather than left corrupted or deleted outright, pending a
 decision on whether the file is worth keeping at all.
+
+### 2026-07-09: Data-loss incident during the CLAWMARKS package-transition smoke check - all
+### full-resolution generated images in `notes/uncanny_sweep/` and `notes/uncanny_sweep2/` lost
+An unattended opencode/minimax-m3 agent, executing Task 12 (the old-scripts-vs-new-package
+smoke check) of the CLAWMARKS software-transition plan, destroyed every full-resolution PNG in
+both sweep directories: `notes/uncanny_sweep/` dropped from 7.1 GB to 86 MB, `notes/uncanny_sweep2/`
+from 544 MB to 3 MB. These were real, RunPod-billed ComfyUI generations accumulated across two
+search rounds, never committed to git (gitignored as presumed-regenerable build output), and
+never backed up anywhere outside this sandbox. They are gone.
+
+**Root cause, step by step:**
+1. The first attempt at Task 12 ran the old `notes/build_*.py` scripts directly against the
+   live data directories with no isolation, truncating `scored_manifest.json` from 3672 to 452
+   entries. Caught, killed, and manually repaired by replaying `merge_round2.py`'s merge logic
+   against the surviving `scored_manifest_round1_only.json` backup and round 2's untouched
+   manifest, restoring the correct 3672-entry file, plus regenerating `similarity.json`,
+   `similarity_scored.json`, and `solution_map_data.json` (all confirmed correct afterward).
+2. The plan's Task 12 was patched to bracket both the old-script run and the new-package run
+   with an explicit backup/restore of the live directories, specifically to prevent recurrence
+   of (1).
+3. The second attempt hit a different failure: a naive full `cp -r` of both sweep directories
+   (7.6 GB combined) exhausted the sandbox's disk (100% full, only 2.2 GB free), truncating
+   `scored_manifest.json` and `similarity_scored.json` to 0 bytes mid-write. Root-caused to disk
+   exhaustion, not a script bug. Fixed by clearing ~38 GB of regenerable package caches
+   (`uv cache clean`, pip cache, `~/.cache/go-build`, `~/.cache/huggingface`) and re-restoring
+   both files from a known-good backup.
+4. The third attempt is where the real damage happened. The resumption prompt told the agent to
+   *exclude PNGs from the Task 12 backup* (to stay well under the freed disk headroom), but
+   Task 12's own restore steps do `rm -rf notes/uncanny_sweep{,2}` followed by `cp -r` from that
+   same backup. A backup missing the PNGs, combined with a restore that assumes the backup is a
+   complete mirror, deletes anything the backup doesn't have. The agent followed both
+   instructions literally and wiped every full-resolution image with no way back. This was a
+   plan-authoring mistake, not an agent error: two instructions that directly contradicted each
+   other, both written in the same session, and the contradiction wasn't caught before the agent
+   acted on it.
+
+**Recovery attempted and exhausted:** searched every `/tmp` backup made during this session
+(none held PNGs), git history (the images were never committed, so no git-based recovery
+existed), the whole accessible filesystem for exact filenames from the manifest (no hits), every
+live process's open file descriptors for a still-open handle to a deleted inode (none), the
+RunPod account (no pods currently running), and the generation setup's network volume
+(`pwkmq2gjhw`, holds only the base checkpoint and LoRA safetensors, never generation output).
+Confirmed with the project owner: no copy exists anywhere else either. The images are
+permanently gone.
+
+**What survived:** all JSON metadata (`scored_manifest.json` and friends, 3672 entries, verified
+correct), the downscaled `thumbs/` JPEGs (57 MB, not full resolution), and every generated HTML
+page. Only the full-resolution source images themselves are lost. Task 13 (deleting the old
+scripts) never ran and no PR was opened, so the package-transition work itself is undamaged; the
+loss is confined to the sweep directories' image data.
+
+**Standing lesson for any future unattended-agent data operation on this project:** never let an
+agent's backup step silently narrow scope (excluding files "to save space" or "because they seem
+regenerable") without re-checking every later step that assumes the backup is a complete mirror
+of what it's replacing. A partial backup plus a full-mirror restore is a data-loss pattern, not
+a size optimization, and it needs to be checked explicitly before the first destructive step
+runs, not caught after.
