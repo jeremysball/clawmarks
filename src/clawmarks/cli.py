@@ -4,15 +4,22 @@ import importlib
 # name -> "module.path:function" for each build target. Resolved lazily per-target so
 # e.g. `clawmarks build thumbnails` only imports PIL, not every build module's dependencies
 # (uncanny_gallery alone pulls in torch/numpy/transformers).
+#
+# Dict order is also `build all`'s run order, and it's load-bearing: "map" reads
+# solution_map_data.json and "redundancy" reads similarity_scored.json, both written only by
+# "solution-map". On a sweep directory that has never been built before (no leftover files from
+# an earlier run), running "all" out of dependency order crashes with FileNotFoundError.
+# "solution-map" must come before "map" and "redundancy"; every other target only reads
+# scored_manifest.json (already present) or writes its own independent output.
 _BUILD_MODULES = {
     "scan": "clawmarks.build.scan_gallery",
     "archive": "clawmarks.build.elite_archive",
+    "solution-map": "clawmarks.build.solution_map",
     "coverage": "clawmarks.build.coverage_map",
     "map": "clawmarks.build.map_view",
     "redundancy": "clawmarks.build.redundancy_view",
     "novelty-decay": "clawmarks.build.novelty_decay",
     "lineage": "clawmarks.build.lineage_view",
-    "solution-map": "clawmarks.build.solution_map",
     "similarity": "clawmarks.build.similarity_index",
     "thumbnails": "clawmarks.build.thumbnails",
     "explore-hub": "clawmarks.build.explore_hub",
@@ -22,6 +29,14 @@ _BUILD_MODULES = {
     "preference-rank": "clawmarks.build.preference_rank",
     "rate": "clawmarks.build.rate_page",
 }
+
+# "build all" only runs targets that actually read SWEEP_DIR (this is what makes them
+# per-sweep-directory artifacts). "probe-report" is a fixed report over one specific historical
+# probe-calibration run (notes/probe_uncanny, hardcoded subjects/scores/files) -- it doesn't
+# read SWEEP_DIR or respond to CLAWMARKS_SWEEP_DIR, so running it against an arbitrary sweep
+# directory always fails with FileNotFoundError; it isn't a bug to route around, it's just not a
+# sweep-scoped target. Still buildable directly via `clawmarks build probe-report`.
+_ALL_TARGETS = tuple(name for name in _BUILD_MODULES if name != "probe-report")
 
 
 def _build_target_main(name):
@@ -86,7 +101,7 @@ def main(argv=None):
 
     if args.command == "serve":
         from clawmarks.curation_server import main as serve_main
-        return serve_main()
+        return serve_main([])
 
     if args.command == "build":
         # Only the archive target understands --use-predicted-preference; forwarding it to
@@ -94,7 +109,7 @@ def main(argv=None):
         # argv (e.g. thumbnails).
         archive_argv = ["--use-predicted-preference"] if args.use_predicted_preference else []
         if args.target == "all":
-            for name in _BUILD_MODULES:
+            for name in _ALL_TARGETS:
                 _build_target_main(name)(archive_argv if name == "archive" else [])
         else:
             fn_argv = archive_argv if args.target == "archive" else []

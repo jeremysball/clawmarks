@@ -37,7 +37,7 @@ body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-
 h1 {{ font-size:18px; margin:0 0 4px; align-self:flex-start; }}
 p.sub {{ color:var(--text-dim); max-width:640px; font-size:13px; line-height:1.6; align-self:flex-start; }}
 #stage {{ margin-top:20px; width:100%; max-width:640px; display:flex; flex-direction:column; align-items:center; }}
-#img {{ max-width:100%; max-height:60vh; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,0.6); }}
+#img {{ max-width:100%; max-height:78vh; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,0.6); }}
 #meta {{ color:var(--text-dim); font-size:12.5px; margin-top:10px; text-align:center; }}
 #buttons {{ display:flex; gap:16px; margin-top:18px; }}
 #buttons button {{ font-size:16px; padding:14px 34px; border-radius:10px; cursor:pointer; border:1px solid var(--border); background:var(--panel); color:var(--text); }}
@@ -78,7 +78,7 @@ function loadNext() {{
     }}
     current = d;
     const img = document.getElementById('img');
-    img.src = d.thumb;
+    img.src = d.file;
     img.style.display = 'block';
     document.getElementById('meta').textContent =
       `${{d.prompt_name}} | faith=${{d.faith}} novelty=${{d.novelty}}`;
