@@ -129,8 +129,7 @@ INFOTIP_JS = """
 
 
 def write_infotip_asset(sweep_dir):
-    with open(os.path.join(sweep_dir, "infotip.js"), "w") as f:
-        f.write(INFOTIP_JS)
+    pass  # served directly by curation_server.py's /infotip.js route; no on-disk copy anymore
 
 
 MOBILE_BASE_CSS = """
@@ -580,10 +579,8 @@ _LIGHTBOX_JS = r"""(function(){
 
 
 def write_lightbox_asset(sweep_dir):
-    with open(os.path.join(sweep_dir, "lightbox.js"), "w") as f:
-        f.write(_LIGHTBOX_JS)
+    pass  # served directly by curation_server.py's /lightbox.js route; no on-disk copy anymore
 
 
 def write_scrollnav_asset(sweep_dir):
-    with open(os.path.join(sweep_dir, "scrollnav.js"), "w") as f:
-        f.write(SCROLLNAV_JS)
+    pass  # served directly by curation_server.py's /scrollnav.js route
