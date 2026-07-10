@@ -69,7 +69,7 @@ from clawmarks.live_cache import LiveCache
 from clawmarks.build import (
     scan_gallery, similarity_index, solution_map, map_view, redundancy_view, coverage_map,
     novelty_decay, lineage_view, elite_archive, preference_rank, uncanny_gallery, explore_hub,
-    seed_browser,
+    seed_browser, rate_page,
 )
 
 _live_cache = LiveCache()
@@ -378,6 +378,15 @@ class Handler(SimpleHTTPRequestHandler):
 
         if self.path == "/seeds.html":
             body = seed_browser.render_html().encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if self.path == "/rate.html":
+            body = rate_page.render_html().encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))
