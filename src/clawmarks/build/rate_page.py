@@ -48,8 +48,8 @@ p.sub {{ color:var(--text-dim); max-width:640px; font-size:13px; line-height:1.6
 
 {nav_bar_html('rate.html')}
 <h1>Rate{rate_tip}</h1>
-<p class="sub">Swipe left for no, right for yes (or &larr;/&rarr;, n/y on a keyboard). Double-click
-or double-tap an image to zoom to full resolution; drag to look around while zoomed.</p>
+<p class="sub">Drag left for no, right for yes (or &larr;/&rarr;, n/y on a keyboard). Tap or click
+an image to zoom to full resolution; drag to look around while zoomed.</p>
 
 <div id="stage">
   <div id="imgwrap">
