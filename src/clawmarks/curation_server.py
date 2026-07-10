@@ -66,7 +66,9 @@ from clawmarks.search import rating_sampler
 from clawmarks.search.manifest_index import item_summary
 from clawmarks.shared_ui import _LIGHTBOX_JS, SCROLLNAV_JS, INFOTIP_JS
 from clawmarks.live_cache import LiveCache
-from clawmarks.build import scan_gallery, similarity_index, solution_map, map_view, redundancy_view
+from clawmarks.build import (
+    scan_gallery, similarity_index, solution_map, map_view, redundancy_view, coverage_map,
+)
 
 _live_cache = LiveCache()
 
@@ -291,6 +293,16 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/redundancy.html":
             data = redundancy_view.compute_data(str(SWEEP_DIR), {"solution-map": _get_solution_map_data()})
             html = redundancy_view.render_html(data)
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if self.path == "/coverage.html":
+            html = coverage_map.render_html(coverage_map.compute_data(str(SWEEP_DIR)))
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
