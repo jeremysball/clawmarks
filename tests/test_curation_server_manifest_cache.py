@@ -54,3 +54,29 @@ def test_load_manifest_parses_only_once_under_concurrent_access(tmp_path, monkey
         t.join(timeout=2)
 
     assert len(parse_calls) == 1
+
+
+def test_manifest_entry_by_tag_finds_existing_and_missing_tags(tmp_path, monkeypatch):
+    monkeypatch.setattr(cs, "SWEEP_DIR", tmp_path)
+    monkeypatch.setattr(cs, "_manifest_cache", {"manifest": None, "mtime": None, "by_tag": None})
+
+    manifest = [{"tag": f"t{i}", "file": f"f{i}.png"} for i in range(50)]
+    (tmp_path / "scored_manifest.json").write_text(json.dumps(manifest))
+
+    assert cs.manifest_entry_by_tag("t25") == {"tag": "t25", "file": "f25.png"}
+    assert cs.manifest_entry_by_tag("missing") is None
+
+
+def test_manifest_entry_by_tag_index_rebuilds_on_manifest_change(tmp_path, monkeypatch):
+    monkeypatch.setattr(cs, "SWEEP_DIR", tmp_path)
+    monkeypatch.setattr(cs, "_manifest_cache", {"manifest": None, "mtime": None, "by_tag": None})
+
+    path = tmp_path / "scored_manifest.json"
+    path.write_text(json.dumps([{"tag": "a", "file": "a.png"}]))
+    assert cs.manifest_entry_by_tag("b") is None
+
+    new_mtime = os.path.getmtime(path) + 5
+    path.write_text(json.dumps([{"tag": "a", "file": "a.png"}, {"tag": "b", "file": "b.png"}]))
+    os.utime(path, (new_mtime, new_mtime))
+
+    assert cs.manifest_entry_by_tag("b") == {"tag": "b", "file": "b.png"}

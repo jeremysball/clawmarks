@@ -224,7 +224,7 @@ def record_rating(ratings, tag, label, now):
     return updated
 
 
-_manifest_cache = {"manifest": None, "mtime": None}
+_manifest_cache = {"manifest": None, "mtime": None, "by_tag": None}
 _manifest_cache_lock = threading.Lock()
 
 
@@ -234,9 +234,16 @@ def load_manifest():
         mtime = os.path.getmtime(path)
         if _manifest_cache["manifest"] is None or _manifest_cache["mtime"] != mtime:
             with open(path) as f:
-                _manifest_cache["manifest"] = json.load(f)
+                manifest = json.load(f)
+            _manifest_cache["manifest"] = manifest
+            _manifest_cache["by_tag"] = {m["tag"]: m for m in manifest}
             _manifest_cache["mtime"] = mtime
         return _manifest_cache["manifest"]
+
+
+def manifest_entry_by_tag(tag):
+    load_manifest()
+    return _manifest_cache["by_tag"].get(tag)
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -434,8 +441,7 @@ class Handler(SimpleHTTPRequestHandler):
             thumb_path = f"{SWEEP_DIR}{self.path}"
             if not os.path.exists(thumb_path):
                 tag = os.path.basename(self.path)[: -len(".jpg")]
-                manifest = load_manifest()
-                match = next((m for m in manifest if m["tag"] == tag), None)
+                match = manifest_entry_by_tag(tag)
                 if match is None:
                     self.send_error(404, "no manifest entry for this tag")
                     return
