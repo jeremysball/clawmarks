@@ -432,10 +432,10 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main(argv=None):
     port = DEFAULT_PORT
-    if argv is not None and len(argv) > 0:
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv:
         port = int(argv[0])
-    elif len(sys.argv) > 1:
-        port = int(sys.argv[1])
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"serving {SWEEP_DIR} + ratings API on 0.0.0.0:{port}", flush=True)
     server.serve_forever()
