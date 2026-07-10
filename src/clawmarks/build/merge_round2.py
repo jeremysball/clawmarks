@@ -23,7 +23,7 @@ import torch
 from transformers import AutoModel
 
 from clawmarks.config import SWEEP_DIR, SWEEP2_DIR
-from clawmarks.build.uncanny_gallery import preprocess, MODEL_ID
+from clawmarks.search.score_manifest import preprocess, MODEL_ID
 
 EMBS_FILE = f"{SWEEP_DIR}/solution_map_final_embs.pt"
 MANIFEST_FILE = f"{SWEEP_DIR}/scored_manifest.json"
