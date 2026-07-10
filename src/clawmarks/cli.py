@@ -7,7 +7,7 @@ def _build_targets():
     from clawmarks.build import (
         scan_gallery, elite_archive, coverage_map, map_view, redundancy_view,
         novelty_decay, lineage_view, solution_map, similarity_index, thumbnails,
-        explore_hub, seed_browser, probe_report, uncanny_gallery,
+        explore_hub, seed_browser, probe_report, uncanny_gallery, rate_page,
     )
     return {
         "scan": scan_gallery.main,
@@ -24,6 +24,7 @@ def _build_targets():
         "seeds": seed_browser.main,
         "probe-report": probe_report.main,
         "uncanny-gallery": uncanny_gallery.main,
+        "rate": rate_page.main,
     }
 
 
@@ -41,7 +42,7 @@ def build_parser():
         "target",
         choices=["all", "scan", "archive", "coverage", "map", "redundancy", "novelty-decay",
                  "lineage", "solution-map", "similarity", "thumbnails", "explore-hub", "seeds",
-                 "probe-report", "uncanny-gallery"],
+                 "probe-report", "uncanny-gallery", "rate"],
     )
 
     run_p = sub.add_parser("run")

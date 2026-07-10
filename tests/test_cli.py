@@ -20,3 +20,10 @@ def test_serve_subcommand_parses():
     parser = build_parser()
     args = parser.parse_args(["serve"])
     assert args.command == "serve"
+
+
+def test_build_rate_subcommand_parses():
+    parser = build_parser()
+    args = parser.parse_args(["build", "rate"])
+    assert args.command == "build"
+    assert args.target == "rate"
