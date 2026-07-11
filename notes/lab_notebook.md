@@ -1308,3 +1308,9 @@ That verification used mouse `.click()`, and a subsequent independent code revie
 The review also caught that the revised spec/plan commits existed in the repository but weren't ancestors of the feature branch's own history, so the branch's committed docs still described the superseded double-click design even though its code implemented the revised one. Fixed by cherry-picking both doc commits onto the feature branch before merge, so the docs and code agree at every point in the branch's own history, not just after merging into the parent branch.
 
 All 8 tests pass. Merged into `feat/preference-toggle` (`bcbc3ff`), verified the merge commit landed before removing the worktree, then removed both the worktree and the now-merged local branch.
+
+### 2026-07-11: Pairwise head-to-head preference model implemented
+
+Added `search/preference_pairwise_model.py` on the isolated `head-to-head-compare` branch. The model turns each stored winner and loser pair into an embedding difference and its negation, producing balanced positive and negative training rows for logistic regression. It refuses to train below 50 comparisons, cross-validates with leave-one-out for smaller row sets and five stratified folds otherwise, and writes the model plus timestamped metadata only after training succeeds. The model scores individual embeddings with logistic regression's decision function, which orders images by predicted preference.
+
+The new focused test module covers mirrored rows, unknown tags, multiple comparisons, scoring order, cross-validation, the comparison floor, persisted model metadata, and the missing-comparisons CLI path. `uv run pytest tests/test_preference_pairwise_model.py -v` passed all 8 tests. Scikit-learn emitted 17 `OptimizeWarning` messages from logistic regression under Python 3.14; they did not affect the assertions.
