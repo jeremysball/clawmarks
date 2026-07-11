@@ -1349,3 +1349,11 @@ preference model and uses its `score` function. The generated archive also fetch
 `/api/favorites` and labels human-selected winners as "favorited." Focused archive and
 predicted-preference tests passed 9 of 9. `uv run` emitted the known environment-path warning
 because `VIRTUAL_ENV` points to the parent workspace, but pytest used this worktree's `.venv`.
+
+### 2026-07-11: Search driver now uses favorites and pairwise preference scoring
+
+Updated `search/driver.py` so round 2's exploit pool reads complete item records from
+`user_favorites.json` instead of joining legacy yes/no ratings to `scored_manifest.json`. Stage
+5b now loads `preference_pairwise_model.joblib` and ranks embeddings with the pairwise model's
+`score` function. Added focused favorite-loader coverage and removed the retired rating-loader
+tests. Verification and commit details follow in the implementation record for this task.
