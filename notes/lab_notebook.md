@@ -1357,3 +1357,12 @@ Updated `search/driver.py` so round 2's exploit pool reads complete item records
 5b now loads `preference_pairwise_model.joblib` and ranks embeddings with the pairwise model's
 `score` function. Added focused favorite-loader coverage and removed the retired rating-loader
 tests. Verification and commit details follow in the implementation record for this task.
+
+### 2026-07-11: Preference rank page now uses pairwise preference scoring
+
+Updated `build/preference_rank.py` to load `preference_pairwise_model.joblib` and rank embedded
+images through the pairwise model's `score` function. The page now describes predicted preference
+scores learned from head-to-head comparisons, rather than probabilities from yes/no ratings. The
+focused preference-rank suite passed 4 of 4 tests before and after the change. `uv run` emitted the
+known environment-path warning because `VIRTUAL_ENV` points to the parent workspace, but pytest
+used this worktree's `.venv`.
