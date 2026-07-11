@@ -5,17 +5,21 @@ whitepaper-ready artifact, and clicking through the archive to override an elite
 the existing pick API) is a faster human-curation loop than scrolling all 3392 images in
 scan.html.
 
-Elite selection per cell: a yes-rated image (notes/uncanny_sweep/user_ratings.json) wins if one
-exists in that cell, since a person's judgment substitutes for the coherence/quality scorer this
-project doesn't have (lab_notebook.md Section 3b). Otherwise falls back to highest novelty in
-the cell, matching the ranking the search itself uses to build its automated "elites" list.
+Elite selection per cell: a favorited image (notes/uncanny_sweep/user_favorites.json) wins if
+one exists in that cell, since a person's judgment substitutes for the coherence/quality scorer
+this project doesn't have (lab_notebook.md Section 3b). This used to be driven by binary image
+ratings, but yes/no ratings were replaced by head-to-head comparisons (see
+docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md), which have no per-image
+manual-override signal of their own, so favoriting fills that role instead. Otherwise falls back
+to highest novelty in the cell, matching the ranking the search itself uses to build its
+automated "elites" list.
 
 Run after scored_manifest.json exists: python3 -m clawmarks.build.elite_archive
 """
 import json, os
 
 from clawmarks.search.manifest_index import item_summary
-from clawmarks.search.preference_model import MODEL_FILE as PREFERENCE_MODEL_FILE
+from clawmarks.search.preference_pairwise_model import MODEL_FILE as PREFERENCE_MODEL_FILE
 from clawmarks.shared_ui import nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, INFOTIP_CSS, info_btn
 
 N_BINS = 4  # matches gallery.html's display grid
@@ -43,23 +47,22 @@ def compute_data(sweep_dir, use_predicted_preference=False):
     with open(f"{sweep_dir}/scored_manifest.json") as f:
         manifest = json.load(f)
 
-    ratings = {}
-    ratings_path = f"{sweep_dir}/user_ratings.json"
-    if os.path.exists(ratings_path):
-        with open(ratings_path) as f:
-            ratings = json.load(f)
-    picks = {tag: r for tag, r in ratings.items() if r.get("label") == "yes"}
+    picks = {}
+    favorites_path = f"{sweep_dir}/user_favorites.json"
+    if os.path.exists(favorites_path):
+        with open(favorites_path) as f:
+            picks = json.load(f)
 
     predicted_scores = {}
     if use_predicted_preference and os.path.exists(PREFERENCE_MODEL_FILE):
         import joblib
 
         from clawmarks.search import embed_cache
-        from clawmarks.search.preference_model import predict_proba
+        from clawmarks.search.preference_pairwise_model import score as pairwise_score
 
         tags, embeddings = embed_cache.load_cache(embed_cache.EMBEDDINGS_FILE)
         model = joblib.load(PREFERENCE_MODEL_FILE)
-        scores = predict_proba(model, embeddings)
+        scores = pairwise_score(model, embeddings)
         predicted_scores = dict(zip(tags, scores))
 
     faith_vals = sorted(m["centroid_sim"] for m in manifest)
@@ -168,7 +171,7 @@ a.navlink {{ color:#7c9eff; font-size:12.5px; text-decoration:none; }}
 {nav_bar_html('archive.html')}
 <h1>Elite archive{elite_tip}</h1>
 <p class="sub">One image per occupied cell of the faithfulness x novelty grid: the actual
-MAP-Elites archive, not the full population. Gold-bordered cells are yes-rated winners;
+MAP-Elites archive, not the full population. Gold-bordered cells are favorited winners;
 blue-bordered cells (only when this page is built with --use-predicted-preference) are the
 trained model's top pick for that cell; others fall back to the highest-novelty image the
 automated search found. The DINOv2 scorer only ranks faithfulness and novelty, not aesthetic
@@ -194,7 +197,7 @@ CELLS.sort((a, b) => a.fb - b.fb || b.nb - a.nb);
 
 function eliteFor(c) {{
   const pickedHere = c.items.filter(it => picks[it.tag]);
-  if (pickedHere.length) return {{ item: pickedHere[0], source: 'yes-rated' }};
+  if (pickedHere.length) return {{ item: pickedHere[0], source: 'favorited' }};
   if (c.items[0].predicted_preference !== undefined) return {{ item: c.items[0], source: 'predicted preference' }};
   return {{ item: c.items[0], source: 'highest novelty' }};  // items pre-sorted by elite_sort_key
 }}
@@ -203,7 +206,7 @@ function render() {{
   const grid = document.getElementById('grid');
   grid.innerHTML = CELLS.map((c, i) => {{
     const {{ item: elite, source }} = eliteFor(c);
-    const human = source === 'yes-rated';
+    const human = source === 'favorited';
     const predicted = source === 'predicted preference';
     const badgeClass = human ? 'human' : (predicted ? 'predicted' : 'auto');
     const cellClass = human ? 'human' : (predicted ? 'predicted' : '');
@@ -237,9 +240,9 @@ document.addEventListener('keydown', e => {{
   if (e.key === 'Escape') closeModal();
 }});
 
-fetch('/api/ratings').then(r => r.json()).then(ratings => {{
+fetch('/api/favorites').then(r => r.json()).then(favorites => {{
   picks = {{}};
-  Object.entries(ratings).forEach(([tag, r]) => {{ if (r.label === 'yes') picks[tag] = true; }});
+  Object.keys(favorites).forEach(tag => {{ picks[tag] = true; }});
   render();
 }}).catch(() => {{ render(); }});
 </script>

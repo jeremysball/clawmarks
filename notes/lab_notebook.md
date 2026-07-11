@@ -1338,3 +1338,14 @@ The server now imports `comparison_sampler`, `preference_pairwise_model`, and `c
 ### 2026-07-11: Navigation moved from legacy rating to head-to-head comparison
 
 Replaced the shared navigation entry for the deleted `rate.html` page with `compare.html`, labeled "compare images (head-to-head)." Added a regression test that requires `compare.html` and forbids `rate.html` in `NAV_OPTIONS`. The test failed before the change because only the legacy URL was present, then passed afterward: 2 passed, 1 deselected. `uv run` reported an environment-path warning because the active `VIRTUAL_ENV` points at the parent workspace rather than this worktree's `.venv`; pytest still used the worktree environment.
+
+### 2026-07-11: Elite archive now uses favorites and the pairwise preference model
+
+Updated `build/elite_archive.py` so a favorited image from `user_favorites.json` supplies the
+per-cell human override. The retired yes/no rating store no longer exists after the head-to-head
+comparison migration, while favorites retain full item records keyed by tag and remain suitable
+for this independent bookmark role. The optional Stage 5b ordering now imports the pairwise
+preference model and uses its `score` function. The generated archive also fetches
+`/api/favorites` and labels human-selected winners as "favorited." Focused archive and
+predicted-preference tests passed 9 of 9. `uv run` emitted the known environment-path warning
+because `VIRTUAL_ENV` points to the parent workspace, but pytest used this worktree's `.venv`.
