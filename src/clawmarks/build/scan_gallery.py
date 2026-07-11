@@ -288,7 +288,7 @@ function applyFilters() {{
       case 'prompt_desc': return b.prompt_name.localeCompare(a.prompt_name);
     }}
   }});
-  render();
+  withViewTransition(render);
 }}
 
 // Rendering all matching thumbnails in one innerHTML write is what made the page lag on every
@@ -300,6 +300,14 @@ const PAGE_SIZE = 150;
 let shown = 0;
 let sentinelObserver = null;
 
+// Wraps a full-grid rebuild so the browser animates matching thumbnails (by
+// view-transition-name) sliding from their old position to their new one, instead of snapping
+// instantly. Falls back to calling fn() directly on browsers without View Transitions support.
+function withViewTransition(fn) {{
+  if (document.startViewTransition) document.startViewTransition(fn);
+  else fn();
+}}
+
 function render() {{
   shown = 0;
   const grid = document.getElementById('grid');
@@ -310,6 +318,10 @@ function render() {{
   renderMore();
 }}
 
+function vtName(tag) {{
+  return 'vt-' + tag.replace(/[^a-zA-Z0-9_-]/g, '_');
+}}
+
 function thumbHtml(d, i) {{
   const cls = [
     d.prompt_type + '-b',
@@ -317,7 +329,8 @@ function thumbHtml(d, i) {{
     favorites[d.tag] ? 'favorited' : '',
   ].join(' ');
   return `
-    <div class="thumb ${{cls}}" onclick="Lightbox.open('${{d.tag}}', view.map(v=>v.tag))" data-i="${{i}}">
+    <div class="thumb ${{cls}}" style="view-transition-name: ${{vtName(d.tag)}}"
+         onclick="Lightbox.open('${{d.tag}}', view.map(v=>v.tag))" data-i="${{i}}">
       <img loading="lazy" decoding="async" src="${{d.thumb}}" data-tag="${{d.tag}}">
       ${{picks[d.tag] ? '<div class="pickbadge">&#9733;</div>' : ''}}
       ${{favorites[d.tag] ? '<div class="favbadge">&#9829;</div>' : ''}}
@@ -360,7 +373,7 @@ const debouncedApplyFilters = debounce(applyFilters, 250);
 
 document.addEventListener('lightbox:favorite', e => {{
   if (e.detail.favorited) favorites[e.detail.tag] = true; else delete favorites[e.detail.tag];
-  render();
+  withViewTransition(render);
 }});
 
 applyFilters();
