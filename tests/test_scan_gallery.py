@@ -26,3 +26,23 @@ def test_render_html_embeds_data_and_infobtn_tips():
     html = scan_gallery.render_html(items)
     assert '"tag": "a"' in html
     assert "infobtn" in html
+
+
+def test_render_html_includes_view_transition_helper():
+    items = [{"file": "a.png", "thumb": "thumbs/a.jpg", "tag": "a", "gen": 0, "category": "seedrun1",
+              "prompt_name": "fox", "prompt_type": "conflict", "prompt": "p", "strength": 1.0,
+              "cfg": 5.0, "seed": 1, "steps": 28, "sampler": "ddim", "negative": "n",
+              "faith": 0.5, "novelty": 0.5, "sim": []}]
+    html = scan_gallery.render_html(items)
+    assert "function withViewTransition(fn)" in html
+    assert "document.startViewTransition" in html
+    assert "withViewTransition(render)" in html
+
+
+def test_thumb_html_has_sanitized_view_transition_name():
+    items = [{"file": "a.png", "thumb": "thumbs/a.jpg", "tag": "gen3_r2/exploit#1", "gen": 3,
+              "category": "seedrun1", "prompt_name": "fox", "prompt_type": "conflict", "prompt": "p",
+              "strength": 1.0, "cfg": 5.0, "seed": 1, "steps": 28, "sampler": "ddim", "negative": "n",
+              "faith": 0.5, "novelty": 0.5, "sim": []}]
+    html = scan_gallery.render_html(items)
+    assert "view-transition-name" in html
