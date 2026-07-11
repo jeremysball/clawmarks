@@ -1318,3 +1318,9 @@ The new focused test module covers mirrored rows, unknown tags, multiple compari
 ### 2026-07-11: Comparison pair sampler implemented
 
 Added `search/comparison_sampler.py` for the head-to-head compare UI. Before 50 stored comparisons, it samples two distinct images from independently chosen occupied faithfulness x novelty bins, which spreads early labels across the available image space. Once a preference model exists at or above that floor, it scores a random pool of up to 200 images through injected scoring and embedding callbacks, then returns the two closest scores as the model's most uncertain comparison. The module stays independent of the pairwise model and embedding cache so the later server wiring supplies those dependencies. `uv run pytest tests/test_comparison_sampler.py -v` passed all 8 focused tests.
+
+### 2026-07-11: Compare page UI implemented
+
+Added `build/compare_page.py`, the static generator for the head-to-head preference interface. It fetches the next pair from `/api/compare/next`, sends the chosen winner and loser to `/api/compare`, displays two directly clickable image panes, accepts left and right arrow-key choices, tracks the session count, and shows a completion state. Each pane has a magnifier that opens a full-resolution overlay with mouse drag panning.
+
+The focused page tests passed: `uv run pytest tests/test_compare_page.py -v` reported 7 passed. The old yes/no rating page and its tests were removed. The full suite stops during collection in 10 curation-server test modules because `curation_server.py` still imports the deleted legacy page; Task 4 replaces that import and route. `rg -l "rate_page" src tests` now identifies only `src/clawmarks/curation_server.py`.
