@@ -41,9 +41,25 @@ p.sub {{ color:var(--text-dim); max-width:640px; font-size:13px; line-height:1.6
   background:rgba(20,20,24,0.7); border:1px solid rgba(255,255,255,0.2); color:#eaeaee;
   font-size:15px; display:flex; align-items:center; justify-content:center; cursor:zoom-in; z-index:2; }}
 .zoom-icon:hover {{ background:rgba(124,158,255,0.35); }}
-#meta {{ color:var(--text-dim); font-size:12.5px; margin-top:10px; text-align:center; display:flex; gap:24px; }}
+.cap {{ color:var(--text-dim); font-size:12.5px; margin-top:8px; text-align:center; padding:0 4px 2px;
+  line-height:1.5; }}
 #count {{ color:var(--text-dim); font-size:12px; margin-top:14px; }}
 #done {{ color:var(--text-dim); font-size:14px; margin-top:40px; text-align:center; }}
+#progress {{ width:100%; max-width:640px; align-self:flex-start; margin-top:14px; }}
+#prog-label {{ font-size:13.5px; color:var(--text); font-weight:600; margin-bottom:6px; }}
+#prog-track {{ height:10px; background:var(--panel); border:1px solid var(--border); border-radius:6px;
+  overflow:hidden; }}
+#prog-fill {{ height:100%; width:0%; border-radius:6px;
+  background:linear-gradient(90deg,#5b7cff,#8fb0ff); transition:width .5s cubic-bezier(.2,.7,.2,1),
+  box-shadow .3s ease; }}
+#prog-fill.bump {{ box-shadow:0 0 12px 2px rgba(124,158,255,0.75); }}
+#prog-sub {{ font-size:11.5px; color:var(--text-dim); margin-top:6px; }}
+@media (max-width: 640px) {{
+  #pair {{ flex-direction:column; align-items:center; }}
+  .pane {{ flex:1 1 auto; width:100%; max-width:none; }}
+  .pane img {{ max-height:48vh; }}
+  #progress {{ align-self:stretch; max-width:none; }}
+}}
 #zoom-overlay {{ position:fixed; inset:0; background:rgba(8,8,10,0.94); backdrop-filter:blur(6px);
   display:none; align-items:center; justify-content:center; z-index:1000; cursor:grab; overflow:hidden; }}
 #zoom-overlay.open {{ display:flex; }}
@@ -56,18 +72,25 @@ p.sub {{ color:var(--text-dim); max-width:640px; font-size:13px; line-height:1.6
 <p class="sub">Tap or click the image you prefer (or press &larr;/&rarr;). Tap the magnifier in
 a corner to inspect that image at full resolution; tap again to close.</p>
 
+<div id="progress">
+  <div id="prog-label">&nbsp;</div>
+  <div id="prog-track"><div id="prog-fill"></div></div>
+  <div id="prog-sub"></div>
+</div>
+
 <div id="stage">
   <div id="pair">
     <div class="pane" id="pane1" data-side="1">
       <img id="img1" style="display:none;">
       <div class="zoom-icon" id="zoom1">&#128269;</div>
+      <div class="cap" id="cap1"></div>
     </div>
     <div class="pane" id="pane2" data-side="2">
       <img id="img2" style="display:none;">
       <div class="zoom-icon" id="zoom2">&#128269;</div>
+      <div class="cap" id="cap2"></div>
     </div>
   </div>
-  <div id="meta"></div>
   <div id="done" style="display:none;">Nothing left to compare right now. The pool doesn't have enough images left to form a new pair.</div>
 </div>
 <div id="count"></div>
@@ -79,11 +102,57 @@ a corner to inspect that image at full resolution; tap again to close.</p>
 <script>
 let current = null;
 let comparedThisSession = 0;
+let totalCount = 0;
+let lastAccuracy = null;
 
-function esc(s) {{
-  const d = document.createElement('div');
-  d.textContent = s == null ? '' : String(s);
-  return d.innerHTML;
+const MIN_COMPARISONS = 50;
+const RETRAIN_EVERY = 10;
+
+function caption(img) {{
+  // textContent (set by the caller) keeps model-controlled prompt_name from being parsed as HTML.
+  return `${{img.prompt_name}} · faith ${{img.faith}} · novelty ${{img.novelty}}`;
+}}
+
+function bumpBar() {{
+  const fill = document.getElementById('prog-fill');
+  fill.classList.add('bump');
+  setTimeout(() => fill.classList.remove('bump'), 550);
+}}
+
+function renderProgress() {{
+  const label = document.getElementById('prog-label');
+  const fill = document.getElementById('prog-fill');
+  const sub = document.getElementById('prog-sub');
+  if (totalCount < MIN_COMPARISONS) {{
+    const left = MIN_COMPARISONS - totalCount;
+    label.textContent = `Model unlocks in ${{left}} vote${{left === 1 ? '' : 's'}}`;
+    fill.style.width = (totalCount / MIN_COMPARISONS * 100) + '%';
+    sub.textContent = `${{totalCount}} / ${{MIN_COMPARISONS}} comparisons`;
+  }} else if (lastAccuracy == null) {{
+    label.textContent = 'Model unlocked. Training on your picks…';
+    fill.style.width = '0%';
+    sub.textContent = `${{totalCount}} comparisons`;
+  }} else {{
+    const pct = Math.round(lastAccuracy * 100);
+    label.textContent = `Model reads your taste: ${{pct}}%`;
+    // Map cross-validated accuracy (0.5 = coin flip, 1.0 = perfect) onto the bar.
+    fill.style.width = Math.max(0, Math.min(100, (lastAccuracy - 0.5) / 0.5 * 100)) + '%';
+    const toRefresh = RETRAIN_EVERY - (totalCount % RETRAIN_EVERY);
+    const n = toRefresh === RETRAIN_EVERY ? 0 : toRefresh;
+    const refresh = n === 0 ? 'just refreshed' : `refreshes in ${{n}} vote${{n === 1 ? '' : 's'}}`;
+    sub.textContent = `${{refresh}} · coin-flip 50% → 100%`;
+  }}
+}}
+
+function fetchStatus(after) {{
+  fetch('/api/preference_status').then(r => r.ok ? r.json() : null).then(d => {{
+    if (d) {{
+      if (typeof d.n_comparisons === 'number') totalCount = d.n_comparisons;
+      if (d.model_meta && typeof d.model_meta.cv_accuracy === 'number') lastAccuracy = d.model_meta.cv_accuracy;
+    }}
+    renderProgress();
+    if (after) after();
+  }}).catch(() => {{ renderProgress(); if (after) after(); }});
 }}
 
 function loadNext() {{
@@ -104,9 +173,8 @@ function loadNext() {{
     const img2 = document.getElementById('img2');
     img1.src = d.img1.file; img1.style.display = 'block';
     img2.src = d.img2.file; img2.style.display = 'block';
-    document.getElementById('meta').innerHTML =
-      `<span>${{esc(d.img1.prompt_name)}} | faith=${{d.img1.faith}} novelty=${{d.img1.novelty}}</span>` +
-      `<span>${{esc(d.img2.prompt_name)}} | faith=${{d.img2.faith}} novelty=${{d.img2.novelty}}</span>`;
+    document.getElementById('cap1').textContent = caption(d.img1);
+    document.getElementById('cap2').textContent = caption(d.img2);
   }}).catch(() => {{
     document.getElementById('done').textContent =
       "Couldn't reach the server. Check your connection and try again.";
@@ -124,9 +192,19 @@ function choose(side) {{
       if (!r.ok) throw new Error('Could not save the comparison');
       return r.json();
     }})
-    .then(() => {{
+    .then((res) => {{
       comparedThisSession++;
       document.getElementById('count').textContent = `${{comparedThisSession}} compared this session`;
+      if (res && typeof res.count === 'number') totalCount = res.count;
+      // The server retrains on every RETRAIN_EVERY-th comparison past the floor, synchronously
+      // before this response returns, so fresh cv_accuracy is already on disk at a boundary.
+      const crossedRetrain = totalCount >= MIN_COMPARISONS && totalCount % RETRAIN_EVERY === 0;
+      if (crossedRetrain) {{
+        fetchStatus(bumpBar);
+      }} else {{
+        renderProgress();
+        if (totalCount < MIN_COMPARISONS) bumpBar();
+      }}
       loadNext();
     }}).catch(() => {{
       document.getElementById('done').textContent =
@@ -216,6 +294,7 @@ overlayEl.addEventListener('touchend', () => {{
   dragging = false;
 }});
 
+fetchStatus();
 loadNext();
 </script>
 <script src="scrollnav.js"></script>
