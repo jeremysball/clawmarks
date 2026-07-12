@@ -15,7 +15,7 @@ enough to threshold on). compute_data(sweep_dir, deps) takes solution_map's resu
 `deps["solution-map"]`, served live by curation_server.py through LiveCache's
 depends_on=["solution-map"] mechanism, not a standalone build step.
 """
-import json, os
+import json, math, os
 
 from clawmarks.shared_ui import nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, INFOTIP_CSS, info_btn
 
@@ -53,6 +53,22 @@ def render_html(data):
         "group of near-duplicates. Read a big cluster as 'this region is redundant,' not as 'every "
         "pair in it looks alike.'"
     )
+
+    # Size the slider to the data, not a fixed near-duplicate range. A diverse single-round seed
+    # run's closest pairs can sit near cosine 0.78, below the old hardcoded 0.80 minimum, so every
+    # slider position produced an empty graph and the page looked broken. Span the actual edge
+    # range (padded to a 0.05 grid) and default where only the tightest ~5% of edges survive, so
+    # the strongest clusters always show without merging the whole population.
+    all_scores = sorted(s for lst in sim_scored.values() for _, s in lst)
+    if all_scores:
+        slider_min = math.floor(all_scores[0] * 20) / 20
+        slider_max = math.ceil(all_scores[-1] * 20) / 20
+        if slider_max - slider_min < 0.1:
+            slider_max = slider_min + 0.1
+        default_thresh = round(all_scores[int(len(all_scores) * 0.95)], 3)
+        default_thresh = min(max(default_thresh, slider_min), slider_max)
+    else:
+        slider_min, slider_max, default_thresh = 0.80, 0.99, 0.93
 
     edges_json = json.dumps(sim_scored)
     thumbs_json = json.dumps(thumbs)
@@ -93,7 +109,7 @@ duplicate," lower threshold = looser "similar family." This tells you the effect
 of the population, not just its raw count.</p>
 
 <div id="bar">
-  <label>Similarity threshold &ge; <input type="range" id="thresh" min="0.80" max="0.99" step="0.005" value="0.93"></label>
+  <label>Similarity threshold &ge; <input type="range" id="thresh" min="{slider_min:.3f}" max="{slider_max:.3f}" step="0.005" value="{default_thresh:.3f}"></label>
   <span id="threshLabel"></span>
 </div>
 <div id="summary"></div>
