@@ -1,47 +1,44 @@
 """
-Shows whether the preference classifier (search/preference_model.py) is trained and ready, and
-exposes the single persisted toggle (search/preference_settings.py) that both archive.html and
-`clawmarks run allnight` read to decide whether to use its predictions. See
-docs/superpowers/specs/2026-07-10-preference-toggle-design.md.
+Shows whether the preference classifier (search/preference_pairwise_model.py) is trained and
+ready, and exposes the single persisted toggle (search/preference_settings.py) that both
+archive.html and `clawmarks run allnight` read to decide whether to use its predictions. See
+docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md.
 
 Served live at /preference_status.html by curation_server.py.
 """
 import json
 import os
 
-from clawmarks.search import preference_model, preference_settings
+from clawmarks.search import preference_pairwise_model, preference_settings
 from clawmarks.shared_ui import INFOTIP_CSS, MOBILE_BASE_CSS, TOPNAV_CSS, info_btn, nav_bar_html
 
 
 def compute_data(sweep_dir):
-    ratings_path = f"{sweep_dir}/user_ratings.json"
-    if os.path.exists(ratings_path):
-        with open(ratings_path) as f:
-            ratings = json.load(f)
+    comparisons_path = f"{sweep_dir}/user_comparisons.json"
+    if os.path.exists(comparisons_path):
+        with open(comparisons_path) as f:
+            comparisons = json.load(f)
     else:
-        ratings = {}
-    n_yes = sum(1 for r in ratings.values() if r.get("label") == "yes")
-    n_no = sum(1 for r in ratings.values() if r.get("label") == "no")
-    n_total = n_yes + n_no
+        comparisons = []
+    n_comparisons = len(comparisons)
 
-    if n_total < preference_model.MIN_LABELS:
-        gate_message = (f"only {n_total} labels (need {preference_model.MIN_LABELS}); "
-                         f"rate more images via rate.html.")
+    if n_comparisons < preference_pairwise_model.MIN_COMPARISONS:
+        gate_message = (f"only {n_comparisons} comparisons (need "
+                         f"{preference_pairwise_model.MIN_COMPARISONS}); compare more images "
+                         f"via compare.html.")
     else:
-        import numpy as np
-        y = np.array([1] * n_yes + [0] * n_no, dtype=np.int64)
-        gate_message = preference_model.class_balance_error(y)
+        gate_message = ""
 
-    has_model = os.path.exists(preference_model.MODEL_FILE)
+    has_model = os.path.exists(preference_pairwise_model.MODEL_FILE)
     model_meta = None
-    if has_model and os.path.exists(preference_model.MODEL_META_FILE):
-        with open(preference_model.MODEL_META_FILE) as f:
+    if has_model and os.path.exists(preference_pairwise_model.MODEL_META_FILE):
+        with open(preference_pairwise_model.MODEL_META_FILE) as f:
             model_meta = json.load(f)
 
     return {
-        "n_yes": n_yes, "n_no": n_no, "n_total": n_total,
-        "min_labels": preference_model.MIN_LABELS,
-        "labels_gate_message": gate_message,
+        "n_comparisons": n_comparisons,
+        "min_comparisons": preference_pairwise_model.MIN_COMPARISONS,
+        "comparisons_gate_message": gate_message,
         "has_model": has_model,
         "model_meta": model_meta,
         "use_predicted_preference": preference_settings.load()["use_predicted_preference"],
@@ -49,17 +46,17 @@ def compute_data(sweep_dir):
 
 
 def render_html(data):
-    gate_html = (f'<p class="gate">{data["labels_gate_message"]}</p>'
-                 if data["labels_gate_message"] else '<p class="gate ok">ready to train.</p>')
+    gate_html = (f'<p class="gate">{data["comparisons_gate_message"]}</p>'
+                 if data["comparisons_gate_message"] else '<p class="gate ok">ready to train.</p>')
 
     if data["model_meta"]:
         m = data["model_meta"]
         meta_html = (f'<table class="meta"><tr><td>trained</td><td>{m["trained_at"]}</td></tr>'
-                     f'<tr><td>labels used</td><td>{m["n_labels"]} ({m["n_yes"]} yes / {m["n_no"]} no)</td></tr>'
+                     f'<tr><td>comparisons used</td><td>{m["n_comparisons"]}</td></tr>'
                      f'<tr><td>cross-validated accuracy</td><td>{m["cv_accuracy"]}</td></tr></table>')
     else:
-        meta_html = (f'<p class="meta-empty">no model trained yet. Once enough labels exist, run '
-                     f'<code>python -m clawmarks.search.preference_model</code>.</p>')
+        meta_html = (f'<p class="meta-empty">no model trained yet. Once enough comparisons exist, run '
+                     f'<code>python -m clawmarks.search.preference_pairwise_model</code>.</p>')
 
     disabled_attr = "" if data["has_model"] else "disabled"
     checked_attr = "checked" if data["use_predicted_preference"] else ""
@@ -67,7 +64,7 @@ def render_html(data):
     toggle_tip = info_btn(
         "When on, archive.html's fallback champion per MAP-Elites cell and the next "
         "`clawmarks run allnight`'s exploit pool both use this trained model's predicted "
-        "preference instead of raw novelty / yes-rated images. Off by default; only turn this "
+        "preference instead of raw novelty / favorited images. Off by default; only turn this "
         "on after eyeballing preference_rank.html against your own taste."
     )
 
@@ -94,7 +91,7 @@ table.meta td:first-child {{ color:var(--text); }}
 
 {nav_bar_html('preference_status.html')}
 <h1>Preference classifier status</h1>
-<p class="sub">Labels: {data["n_yes"]} yes / {data["n_no"]} no ({data["n_total"]} total, needs {data["min_labels"]}).</p>
+<p class="sub">Comparisons: {data["n_comparisons"]} total (needs {data["min_comparisons"]}).</p>
 <div class="panel">
 {gate_html}
 {meta_html}
