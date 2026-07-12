@@ -5,7 +5,7 @@ import re
 from clawmarks.build import elite_archive
 
 
-def test_compute_data_uses_yes_rated_images_not_user_picks(tmp_path, monkeypatch):
+def test_compute_data_uses_favorited_images_not_user_picks(tmp_path, monkeypatch):
     # Force every image into a single cell, regardless of its faith/novelty values, so the test
     # doesn't depend on how a 2-item manifest happens to quantile-split across N_BINS x N_BINS
     # cells (bin_edges(vals, 1) always returns [], so bin_of always returns 0).
@@ -17,9 +17,9 @@ def test_compute_data_uses_yes_rated_images_not_user_picks(tmp_path, monkeypatch
          "novelty": 0.9, "strength": 1.0, "cfg": 7.0, "file": "b.png"},
     ]
     (tmp_path / "scored_manifest.json").write_text(json.dumps(manifest))
-    # "a" has lower novelty than "b" but is yes-rated: it should win the cell despite that,
-    # exactly the behavior user_picks.json used to provide.
-    (tmp_path / "user_ratings.json").write_text(json.dumps({"a": {"label": "yes", "rated_at": "t0"}}))
+    # "a" has lower novelty than "b" but is favorited: it should win the cell despite that,
+    # exactly the behavior user_picks.json used to provide before ratings existed.
+    (tmp_path / "user_favorites.json").write_text(json.dumps({"a": {"tag": "a", "favorited_at": "t0"}}))
     # a stale user_picks.json should be ignored entirely
     (tmp_path / "user_picks.json").write_text(json.dumps({"b": {"picked_at": "t0"}}))
 

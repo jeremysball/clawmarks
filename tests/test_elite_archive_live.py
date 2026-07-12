@@ -3,7 +3,7 @@ import json
 from clawmarks.build import elite_archive
 
 
-def test_compute_data_prefers_yes_rated_image_in_cell(tmp_path):
+def test_compute_data_prefers_favorited_image_in_cell(tmp_path):
     manifest = [
         {"file": "/x/a.png", "tag": "a", "prompt_name": "p", "centroid_sim": 0.5, "novelty": 0.9,
          "prompt_type": "conflict", "strength": 1.0, "cfg": 5.0},
@@ -11,13 +11,13 @@ def test_compute_data_prefers_yes_rated_image_in_cell(tmp_path):
          "prompt_type": "conflict", "strength": 1.0, "cfg": 5.0},
     ]
     (tmp_path / "scored_manifest.json").write_text(json.dumps(manifest))
-    (tmp_path / "user_ratings.json").write_text(json.dumps({"b": {"label": "yes", "rated_at": "x"}}))
+    (tmp_path / "user_favorites.json").write_text(json.dumps({"b": {"tag": "b", "favorited_at": "x"}}))
     data = elite_archive.compute_data(str(tmp_path))
     html = elite_archive.render_html(data)
     assert '"tag": "b"' in html
 
 
-def test_compute_data_falls_back_to_novelty_without_ratings(tmp_path):
+def test_compute_data_falls_back_to_novelty_without_favorites(tmp_path):
     manifest = [
         {"file": "/x/a.png", "tag": "a", "prompt_name": "p", "centroid_sim": 0.5, "novelty": 0.9,
          "prompt_type": "conflict", "strength": 1.0, "cfg": 5.0},

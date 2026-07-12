@@ -1309,7 +1309,211 @@ The review also caught that the revised spec/plan commits existed in the reposit
 
 All 8 tests pass. Merged into `feat/preference-toggle` (`bcbc3ff`), verified the merge commit landed before removing the worktree, then removed both the worktree and the now-merged local branch.
 
-### 2026-07-11: Preference classifier significance, retraining, and staleness status
+### 2026-07-11: Pairwise head-to-head preference model implemented
+
+Added `search/preference_pairwise_model.py` on the isolated `head-to-head-compare` branch. The model turns each stored winner and loser pair into an embedding difference and its negation, producing balanced positive and negative training rows for logistic regression. It refuses to train below 50 comparisons, cross-validates with leave-one-out for smaller row sets and five stratified folds otherwise, and writes the model plus timestamped metadata only after training succeeds. The model scores individual embeddings with logistic regression's decision function, which orders images by predicted preference.
+
+The new focused test module covers mirrored rows, unknown tags, multiple comparisons, scoring order, cross-validation, the comparison floor, persisted model metadata, and the missing-comparisons CLI path. `uv run pytest tests/test_preference_pairwise_model.py -v` passed all 8 tests. Scikit-learn emitted 17 `OptimizeWarning` messages from logistic regression under Python 3.14; they did not affect the assertions.
+
+### 2026-07-11: Comparison pair sampler implemented
+
+Added `search/comparison_sampler.py` for the head-to-head compare UI. Before 50 stored comparisons, it samples two distinct images from independently chosen occupied faithfulness x novelty bins, which spreads early labels across the available image space. Once a preference model exists at or above that floor, it scores a random pool of up to 200 images through injected scoring and embedding callbacks, then returns the two closest scores as the model's most uncertain comparison. The module stays independent of the pairwise model and embedding cache so the later server wiring supplies those dependencies. `uv run pytest tests/test_comparison_sampler.py -v` passed all 8 focused tests.
+
+### 2026-07-11: Compare page UI implemented
+
+Added `build/compare_page.py`, the static generator for the head-to-head preference interface. It fetches the next pair from `/api/compare/next`, sends the chosen winner and loser to `/api/compare`, displays two directly clickable image panes, accepts left and right arrow-key choices, tracks the session count, and shows a completion state. Each pane has a magnifier that opens a full-resolution overlay with mouse drag panning.
+
+The focused page tests passed: `uv run pytest tests/test_compare_page.py -v` reported 7 passed. The old yes/no rating page and its tests were removed. The full suite stops during collection in 10 curation-server test modules because `curation_server.py` still imports the deleted legacy page; Task 4 replaces that import and route. `rg -l "rate_page" src tests` now identifies only `src/clawmarks/curation_server.py`.
+
+### 2026-07-11: Compare page review fixes
+
+Added touch drag support to the full-resolution compare overlay. `touchstart`, `touchmove`, and `touchend` now use the same bounded pan calculation as mouse drag. A touch with no movement closes the overlay, while a touch drag prevents page scrolling. Also made both comparison API requests reject non-success HTTP responses and show a visible connection error instead of leaving the page silent.
+
+### 2026-07-11: Server comparison API integrated
+
+Replaced the legacy yes/no rating routes with the pairwise comparison API in `curation_server.py`. `GET /api/compare/next` returns two item summaries or `{"done": true}` when fewer than two images exist. `POST /api/compare` appends `{winner, loser, compared_at}` records to `user_comparisons.json` and retrains the pairwise model every 10 comparisons after the 50-comparison floor. A successful retrain refreshes the server's in-memory model cache immediately, so the next pair selection uses it without a restart.
+
+The server now imports `comparison_sampler`, `preference_pairwise_model`, and `compare_page`; it no longer reads, writes, or deletes the legacy rating store or model. Updated status-route and helper tests to match the pairwise data shape, then added HTTP-server coverage for pair selection, completion, comparison persistence, validation, the compare page, and removed rate routes. Focused tests passed 11 of 11, and the full suite passed 160 tests. The suite still emits 35 pre-existing sklearn and UMAP warnings.
+
+### 2026-07-11: Navigation moved from legacy rating to head-to-head comparison
+
+Replaced the shared navigation entry for the deleted `rate.html` page with `compare.html`, labeled "compare images (head-to-head)." Added a regression test that requires `compare.html` and forbids `rate.html` in `NAV_OPTIONS`. The test failed before the change because only the legacy URL was present, then passed afterward: 2 passed, 1 deselected. `uv run` reported an environment-path warning because the active `VIRTUAL_ENV` points at the parent workspace rather than this worktree's `.venv`; pytest still used the worktree environment.
+
+### 2026-07-11: Elite archive now uses favorites and the pairwise preference model
+
+Updated `build/elite_archive.py` so a favorited image from `user_favorites.json` supplies the
+per-cell human override. The retired yes/no rating store no longer exists after the head-to-head
+comparison migration, while favorites retain full item records keyed by tag and remain suitable
+for this independent bookmark role. The optional Stage 5b ordering now imports the pairwise
+preference model and uses its `score` function. The generated archive also fetches
+`/api/favorites` and labels human-selected winners as "favorited." Focused archive and
+predicted-preference tests passed 9 of 9. `uv run` emitted the known environment-path warning
+because `VIRTUAL_ENV` points to the parent workspace, but pytest used this worktree's `.venv`.
+
+### 2026-07-11: Search driver now uses favorites and pairwise preference scoring
+
+Updated `search/driver.py` so round 2's exploit pool reads complete item records from
+`user_favorites.json` instead of joining legacy yes/no ratings to `scored_manifest.json`. Stage
+5b now loads `preference_pairwise_model.joblib` and ranks embeddings with the pairwise model's
+`score` function. Added focused favorite-loader coverage and removed the retired rating-loader
+tests. Verification and commit details follow in the implementation record for this task.
+
+### 2026-07-11: Preference rank page now uses pairwise preference scoring
+
+Updated `build/preference_rank.py` to load `preference_pairwise_model.joblib` and rank embedded
+images through the pairwise model's `score` function. The page now describes predicted preference
+scores learned from head-to-head comparisons, rather than probabilities from yes/no ratings. The
+focused preference-rank suite passed 4 of 4 tests before and after the change. `uv run` emitted the
+known environment-path warning because `VIRTUAL_ENV` points to the parent workspace, but pytest
+used this worktree's `.venv`.
+
+### 2026-07-11: Preference status page now reports comparison counts, not yes/no label counts
+
+Rewrote `build/preference_status.py` so it reports `n_comparisons`/`min_comparisons` against
+`user_comparisons.json` and the pairwise model's `MIN_COMPARISONS` gate, instead of the retired
+`n_yes`/`n_no`/`n_total` label counts. The trained-model panel and the predicted-preference toggle
+now read from `preference_pairwise_model.py`'s `MODEL_FILE`/`MODEL_META_FILE`. Task 4 had already
+updated the server's watched-files list for the new comparison and model files, so no
+`curation_server.py` change was needed here. The focused suite passed 6 of 6 tests, the
+`curation_server` preference-status route regression check passed 5 of 5, and the full suite
+passed 161 of 161.
+
+### 2026-07-11: Head-to-head comparison migration complete; verification sweep found two missed call sites
+
+The yes/no rating system (`search/preference_model.py`, `rate.html`, `user_ratings.json`) is
+fully replaced by head-to-head comparisons across every live code path: comparison sampling,
+the compare UI, the server's compare endpoints, the elite archive, the search driver's exploit
+pool, the preference-rank page, and the preference-status page. See
+`docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md` and
+`docs/superpowers/plans/2026-07-11-head-to-head-preference.md`. The old `search/preference_model.py`
+module, `user_ratings.json`, and any existing `preference_model.joblib` remain on disk wherever
+they already existed, untouched and unused by any code after this migration.
+
+The Task 10 verification sweep's grep check (`rg` for `preference_model\b|rating_sampler|rate_page|
+rate\.html|predict_proba|/api/rate\b|/api/ratings\b` under `src/`) found two call sites the plan's
+ten tasks didn't cover: `build/map_view.py` and `build/scan_gallery.py` both still fetched the
+retired `/api/ratings` endpoint to highlight "picked" (formerly yes-rated) images. Because both
+calls were wrapped in a silent `.catch()`, the pages didn't crash. Instead, the "picked" highlight
+and the "picked only" filter quietly stopped working the moment Task 4 removed the endpoint,
+a real regression missed by the plan's task list. Fixed both to read `/api/favorites` instead,
+matching the same favorites-as-override-signal pattern used in Tasks 6 and 7. Neither file had
+existing test coverage for this behavior, so no tests needed updating; both files' existing test
+suites (4 and 6 tests) still pass. Full suite: 161 of 161 passed after the fix.
+
+Manually smoke-tested the live server via Playwright against `notes/uncanny_seedrun1` (the only
+directory in this checkout with `embeddings.npz` and `scored_manifest.json`), served on a
+non-default port so as not to collide with another automation's server already running on the
+project's default port 8420. Confirmed on `/compare.html`: click-to-pick and the ←/→ keyboard
+picks both record a comparison and load a fresh pair; the zoom overlay opens on the magnifier
+tap with the correct full-resolution image and closes on a second tap. Confirmed
+`/preference_status.html` reflects the session's 3 new comparisons and the correct
+comparisons-based gate message. Confirmed `/preference_rank.html` shows the expected
+no-trained-model message (referencing `preference_pairwise_model`, not the legacy module) since
+3 comparisons is below the 50-comparison floor. No browser console errors beyond a harmless
+missing-favicon 404. Deleted the `user_comparisons.json` file this smoke test wrote to
+`uncanny_seedrun1` afterward, since it was test data, not a real session.
+
+### 2026-07-11: Ported PR #9's significance testing, staleness detection, and retrain UI onto the pairwise model
+
+While this branch (head-to-head comparisons) was in progress, a concurrent automation's PR #9
+merged into `main`, adding three features to the legacy yes/no system this branch retires:
+a permutation-test significance check (`preference_model.significance()`), staleness detection
+via a fingerprint of the exact labels used to train (`preference_model.ratings_fingerprint()`),
+and a "Retrain now" button on `preference_status.html` backed by a new
+`/api/preference_retrain` endpoint. Both branches touched the same three files
+(`search/preference_model.py`, `build/preference_status.py`, `curation_server.py`), so merging
+as-is would have produced a real design collision, not a resolvable text conflict: PR #9's
+additions were written against the retired yes/no model. The user chose to port PR #9's ideas
+onto the new pairwise system rather than discard them or merge both designs unreconciled.
+
+Ported each feature onto `search/preference_pairwise_model.py` and the pairwise-based
+`build/preference_status.py` rewritten in this branch's Task 9:
+- `significance()`: a permutation test reporting a p-value and the majority-class baseline
+  accuracy (always exactly 0.5 for the pairwise model, since mirroring every comparison
+  guarantees exact class balance, unlike the legacy yes/no labels).
+- `comparisons_fingerprint()`: a hash of the exact (winner, loser) pairs a train run would use,
+  built on a new shared `_iter_usable_comparisons()` helper so `build_training_set` and the
+  fingerprint can't drift apart. `preference_status.compute_data()` compares this against the
+  fingerprint stored in the last training run's metadata to show a staleness banner ("N new
+  comparisons since last train" or a generic "comparisons have changed" message if the count
+  matches but the pairs changed, e.g. a comparison result correction).
+- Atomic model save: `train_and_save()` now writes the joblib file to a `.tmp` path and
+  `os.replace()`s it into place, matching the existing atomic pattern already used for the
+  metadata sidecar and matching this project's standing rule against fragile invalidate-by-delete
+  patterns.
+- A "Retrain now" button and `/api/preference_retrain` POST endpoint in `curation_server.py`,
+  gated by `_preference_retrain_gate_error()`, which mirrors `train_and_save()`'s own gates using
+  `build_training_set()` so the check can distinguish "not enough comparisons yet" from
+  "comparisons exist but their embeddings aren't cached" (the second needs an `embed_cache`
+  refresh, not more comparing, and pointing someone at `compare.html` for that would waste their
+  time). A successful manual retrain also refreshes the in-memory `_pairwise_model_cache` the
+  comparison sampler reads, matching the existing auto-retrain behavior in
+  `_maybe_retrain_pairwise_model`.
+- `_prediction_watched_files()`: `archive.html` (when using predicted preference) and
+  `preference_rank.html` now watch the trained model file for cache invalidation, not just the
+  scored manifest. Before this fix, a retrain (manual or the existing every-N-comparisons
+  auto-retrain) wouldn't invalidate either page's cached render until the manifest itself
+  changed or the server restarted, silently serving stale predictions.
+
+Added 13 new tests across `test_preference_pairwise_model.py`, `test_preference_status.py`, and
+`test_curation_server_preference_status_route.py` covering significance, fingerprint stability
+and sensitivity to swapped comparisons, the staleness banner's two message variants, and the
+retrain endpoint's three response paths (success, gated rejection, training crash). Full suite:
+177 of 177 passed. Manually smoke-tested `/preference_status.html` via Playwright against
+`notes/uncanny_seedrun1`: the "Retrain now" button renders, and clicking it with zero recorded
+comparisons correctly surfaces the gate message ("only 0 usable comparisons (need 50)...")
+without writing any file, confirmed via `git status` on the seed-run directory afterward. No
+console errors beyond the harmless missing-favicon 404. `archive.html`, `preference_rank.html`,
+and `compare.html` all still returned 200.
+
+### 2026-07-11: GLM 5.2 review of the PR #9 port found a real training-floor bug
+
+Dispatched an independent review of the PR #9 port (previous entry) via the `opencode` CLI
+(`opencode-go/glm-5.2`), handing it the port's diff and PR #9's original diff for comparison.
+It returned "Needs fixes": 1 Important finding and 5 Minor.
+
+**Important, fixed:** `train_and_save()` only checked the raw comparisons count against
+`MIN_COMPARISONS` before training, not the usable count after `build_training_set()` filters out
+comparisons whose tags lack a cached embedding. A comparisons list could clear the raw floor
+while its usable subset fell well below it, so a model could train (and get served) on far fewer
+real training rows than the floor is meant to guarantee, silently, via the auto-retrain path or
+the CLI. `_preference_retrain_gate_error()` in `curation_server.py` already checked the usable
+count correctly, so the manual "Retrain now" button would have refused correctly while the
+auto-retrain path or `python -m clawmarks.search.preference_pairwise_model` would not have,
+an inconsistency between two code paths meant to enforce the same rule. Fixed by computing
+`n_usable = X.shape[0] // 2` and refusing to train when it falls below `MIN_COMPARISONS`, and
+storing `n_usable_comparisons` in the model metadata so downstream staleness checks can use the
+real trained-on count instead of the raw comparisons count.
+
+**Minor, fixed:**
+- `preference_status.compute_data()`'s "new comparisons since last train" count subtracted the
+  *raw* `n_comparisons` from the model metadata against a *usable* row count, a unit mismatch
+  that could over- or under-report staleness. Fixed to read the new `n_usable_comparisons` field
+  (falling back to `n_comparisons` for metadata written before this fix).
+- Two HTML strings in `preference_status.render_html()`'s staleness banner used a single hyphen
+  as a clause separator (`"... last train (...) - retrain to include them."`), a dash-substitute
+  this project's style rule bans. Rewritten as two sentences.
+
+**Minor, not fixed (judged not worth a special case for a hypothetical the Important-finding fix
+already closes, since the two code paths now share the same usable-count floor):** the review
+also flagged that `_preference_retrain_gate_error()`'s docstring claim of mirroring
+`train_and_save()` "exactly" only became true after the Important fix landed, and suggested a
+couple of test-isolation and edge-case gaps. Addressed by adding 3 new tests (a fingerprint
+winner/loser-swap test, a fingerprint duplicate-comparison test, and a regression test proving
+`train_and_save()` now refuses when the raw count clears `MIN_COMPARISONS` but the usable count
+doesn't) and adding the missing `embed_cache.EMBEDDINGS_FILE` monkeypatch to one pre-existing
+test that hadn't isolated it.
+
+Full suite after all fixes: 180 of 180 passed (3 new tests; the earlier 177 all still pass,
+including the staleness-banner tests, whose lowercase "retrain to include them" assertions were
+updated to match the corrected sentence's capitalized "Retrain to include them").
+
+### 2026-07-11: Preference classifier significance, retraining, and staleness status (PR #9, legacy model)
+
+The following entry is PR #9's own log of its work, merged in unchanged for the historical
+record. PR #9 targeted `search/preference_model.py`, the legacy yes/no rating model this
+branch's migration retires; its ideas were subsequently ported onto the pairwise model in the
+two entries above, since both branches touched overlapping files with incompatible designs.
 
 Added a 200-shuffle permutation test to preference-model training. A permutation test repeatedly
 shuffles the yes/no labels and measures how often random labels score at least as well as the real
