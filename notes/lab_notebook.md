@@ -1309,6 +1309,45 @@ The review also caught that the revised spec/plan commits existed in the reposit
 
 All 8 tests pass. Merged into `feat/preference-toggle` (`bcbc3ff`), verified the merge commit landed before removing the worktree, then removed both the worktree and the now-merged local branch.
 
+### 2026-07-10: Research workspace redesign grounded in existing scientific tools
+
+The first integrated workflow mockup was rejected as visually infantile and scientifically
+shallow. Its linear stepper, generic cards, and simplified findings hid the project's actual
+experimental structure. The replacement direction is an idea workbench where observations link
+to competing hypotheses, hypotheses branch into testable experiment designs, and completed runs
+update the evidence for each branch. The design study will borrow specific proven mechanics from
+OSF preregistration (explicit predictions and decision rules), Benchling (linked notebook evidence),
+Weights & Biases and DVC (baseline-centered run comparison and reproducibility), Ax (constrained
+search spaces and trial lifecycles), JMP (response-surface exploration), and pyribs (archive,
+emitter, and scheduler separation). No production implementation has started; the design remains
+in collaborative brainstorming.
+
+### 2026-07-10: Preference-guided exploration research narrows the redesign
+
+An independent MiniMax M3 research pass reviewed contextual Bradley-Terry preference learning,
+active acquisition, quality-diversity archives, and embedding-space mapping for the CLAWMARKS
+exploration tool. The central correction is operational: a logistic-regression preference model
+over frozen DINOv2 image embeddings cannot provide a useful gradient through the LoRA or diffusion
+sampler. It can predict preference, compare candidates, and quantify uncertainty after images are
+rendered. The search must therefore remain a black-box search over controllable inputs such as
+prompts, LoRA strength, CFG, seeds, and later text-conditioning embeddings.
+
+The current direction retains DINOv2, ratings, lineage, budget guards, and quality-diversity
+coverage. It replaces the tool-directory UX with one bounded Expedition that shows the goal,
+budget, explored neighborhoods, rating queue, current elites, and the next generation action in
+one operation. The user chose site-launched, explicitly confirmed paid batches and selected text
+embedding search as a later search surface. This needs a new ComfyUI conditioning interface and
+remains separate from the first interface redesign. The map will distinguish a trustworthy
+high-dimensional nearest-neighbor/coverage system from a lower-trust 2D navigation view; it will
+not claim that UMAP preserves global geometry.
+
+The product architecture is now fixed as an **Expedition console**, not a polished directory of
+independent tools and not a general-purpose research workbench. An Expedition is one bounded paid
+search with an explicit goal, allowed controls, batch size, hard budget ceiling, current corpus,
+review queue, launch confirmation, lineage, and outcome record. The lab notebook remains the
+scientific record. A broader observation, hypothesis, and experiment workbench is deferred until
+the Expedition loop proves useful.
+
 ### 2026-07-11: Pairwise head-to-head preference model implemented
 
 Added `search/preference_pairwise_model.py` on the isolated `head-to-head-compare` branch. The model turns each stored winner and loser pair into an embedding difference and its negation, producing balanced positive and negative training rows for logistic regression. It refuses to train below 50 comparisons, cross-validates with leave-one-out for smaller row sets and five stratified folds otherwise, and writes the model plus timestamped metadata only after training succeeds. The model scores individual embeddings with logistic regression's decision function, which orders images by predicted preference.
@@ -1542,3 +1581,54 @@ apparent reason; simplified to the plain form. The implementer's own environment
 project venv, and it worked around that by adding a `sys.path`-patching `tests/conftest.py` instead
 of running `uv sync`; that file was deleted rather than merged, since a normal `uv sync --extra dev`
 in a fresh worktree is the correct fix and this repo already relies on an editable install elsewhere.
+
+### 2026-07-12: Independent GLM review of the merged head-to-head system (PR #10), six fixes shipped as PR #11
+
+The head-to-head comparison system (the whole `head-to-head-compare` branch above) merged as PR #10
+without an independent whole-diff review attached: its PR body cited per-task SDD reviews, but no
+single review ran against the full ~2900-line code diff. Ran that review after the fact via
+`delegate-code-review`: four parallel GLM 5.2 finder subagents (correctness, cross-file, reuse and
+simplification, efficiency and conventions) orchestrated on opencode, then every candidate
+hand-verified against the actual code before trusting it.
+
+The project's number-one concern came back clean: the pairwise model, its metadata sidecar, and
+`user_comparisons.json` all persist through a `.tmp` file plus `os.replace` (atomic), and nothing
+deletes a cache to invalidate it. No data-safety regression.
+
+Six real findings, all fixed and merged as PR #11 (`fix/head-to-head-review`, isolated worktree,
+full suite 184 passing including two new regression tests):
+
+1. **Touch tap recorded an unintended comparison (high).** `compare.html`'s zoom overlay omitted
+   `e.preventDefault()` on touch, so closing zoom by tapping fired a synthetic click on the pane
+   beneath it, posting a comparison the user never made. This is the exact synthetic-click gotcha
+   the 2026-07-10 swipe-zoom entry above documented for `rate.html`; it regressed in the new page
+   because `rate_page.py` was replaced wholesale rather than edited. Fixed by calling
+   `preventDefault()` in the overlay `touchstart` (registered `{passive: false}`), and confirmed
+   headlessly: a dispatched `touchstart` now reports `defaultPrevented === true`.
+2. **`/api/compare` accepted `winner == loser` (medium).** A self-comparison produces a zero-vector
+   embedding difference labeled both 1 and 0, contradictory training rows. Now rejected with 400.
+3. **Auto-retrain could fail an already-saved comparison (medium).** The every-tenth-comparison
+   retrain ran with no exception handling inside `/api/compare`; a training crash 500'd a request
+   whose comparison was already persisted, inviting a duplicate on retry. Made best-effort, matching
+   `/api/preference_retrain`.
+4. **Unescaped `prompt_name` in `#meta` innerHTML (low-medium).** A prompt containing HTML broke the
+   comparison page's metadata rendering. Now escaped.
+5. **Em dash in shipped UI text (low).** `compare.html`'s done-state used `&mdash;`, against the
+   project no-em-dash rule. Replaced with a period.
+6. **False "nothing left to compare" (low).** When a trained model existed but no current manifest
+   image had a cached embedding, `/api/compare/next` returned `{"done": true}` instead of falling
+   back to random pairing. Now drops to stratified-random sampling.
+
+Two findings were deferred as documented follow-ups, not fixed here: the synchronous retrain holds
+the request lock (a correct fix moves training off the request thread), and the status page gates
+"ready to train" on the raw comparison count while the retrain endpoint gates on the usable count
+(reconciling them forces embedding I/O on every status load and a test rewrite). The bulk of the
+reuse and dead-code candidates were refuted: the surviving `preference_model.py`, `rating_sampler.py`,
+`user_ratings.json`, and their tests are the head-to-head plan's explicit "legacy stays on disk,
+untouched, unused" constraint, not dead-code bugs.
+
+Gotcha worth carrying forward: replacing a UI file wholesale (here `rate_page.py` to `compare_page.py`)
+silently drops hard-won fixes that lived only in the old file. The touch `preventDefault` was fixed
+once already on 2026-07-10; the rewrite lost it because nothing tied the fix to a test. The new
+regression tests cover the two server-side behaviors, but a touch-device gesture check still isn't
+automated in the suite.

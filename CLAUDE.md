@@ -64,6 +64,11 @@ reachable directly, so a plain local HTTP server (e.g. `python3 -m http.server`,
 sheets, and other HTML/image deliverables. Reach for the Artifact tool only when the user asks
 for it by name or explicitly wants a claude.ai-hosted, shareable link.
 
+- **Always verify a web artifact with Playwright MCP before sharing it with the user.** Open the
+  rendered artifact through its user-facing URL, inspect the accessibility snapshot, exercise its
+  advertised interactions, and check browser console errors. Verify desktop and mobile layouts
+  when the artifact claims to support both. Fix every functional error before offering the link.
+
 ## Working task list: TODO.txt
 
 `TODO.txt` at the repo root is the ephemeral working task list, your Bible for what's actually
