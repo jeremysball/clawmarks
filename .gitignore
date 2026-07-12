@@ -40,6 +40,8 @@ notes/uncanny_sweep/solution_map_data.json
 notes/uncanny_sweep/*.pt
 notes/uncanny_sweep2/*.html
 notes/uncanny_sweep2/scored_manifest.json
+notes/uncanny_seedrun1/
+.playwright-mcp/
 tests/fixtures/sample_sweep/notes/uncanny_sweep/*.html
 tests/fixtures/sample_sweep/notes/uncanny_sweep/*.js
 tests/fixtures/sample_sweep/notes/uncanny_sweep/embeddings.npz
