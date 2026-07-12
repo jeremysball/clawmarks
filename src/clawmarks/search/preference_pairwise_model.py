@@ -123,13 +123,17 @@ def score(model, embeddings):
 def train_and_save(comparisons):
     """Trains on `comparisons` (an already-loaded list) and persists MODEL_FILE/MODEL_META_FILE.
     Returns {"model", "cv_accuracy", "n_comparisons"}, or None if there aren't enough usable
-    comparisons to train on (fewer than MIN_COMPARISONS, or none reference tags present in the
-    embedding cache)."""
+    comparisons to train on: fewer than MIN_COMPARISONS reference tags present in the embedding
+    cache, even if the raw comparisons list itself clears MIN_COMPARISONS. Checking the raw count
+    first is only a cheap early exit; the usable count (X.shape[0] // 2, since build_training_set
+    mirrors every row) is the floor that actually governs whether a model gets trained, and it's
+    what curation_server.py's retrain-gate check mirrors."""
     if len(comparisons) < MIN_COMPARISONS:
         return None
     tags, embeddings = embed_cache.load_cache(embed_cache.EMBEDDINGS_FILE)
     X, y = build_training_set(tags, embeddings, comparisons)
-    if X.shape[0] == 0:
+    n_usable = X.shape[0] // 2
+    if n_usable < MIN_COMPARISONS:
         return None
     acc = cross_validate(X, y)
     stats = significance(X, y)
@@ -140,6 +144,7 @@ def train_and_save(comparisons):
     meta = {
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "n_comparisons": len(comparisons),
+        "n_usable_comparisons": n_usable,
         "comparisons_fingerprint": comparisons_fingerprint(tags, embeddings, comparisons),
         "cv_accuracy": round(acc, 4),
         "baseline_accuracy": stats["baseline_accuracy"],

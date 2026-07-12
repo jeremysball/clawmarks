@@ -160,3 +160,49 @@ def test_comparisons_fingerprint_ignores_comparisons_with_unknown_tags():
     with_unknown = without_unknown + [{"winner": "a", "loser": "missing", "compared_at": "t1"}]
     assert (ppm.comparisons_fingerprint(tags, embeddings, without_unknown)
             == ppm.comparisons_fingerprint(tags, embeddings, with_unknown))
+
+
+def test_comparisons_fingerprint_changes_when_winner_and_loser_are_swapped():
+    """A swapped winner/loser is a different training row (the mirrored sign flips), so it
+    must not collide with the original pair's fingerprint."""
+    tags = ["a", "b"]
+    embeddings = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    original = [{"winner": "a", "loser": "b", "compared_at": "t0"}]
+    swapped = [{"winner": "b", "loser": "a", "compared_at": "t0"}]
+    assert (ppm.comparisons_fingerprint(tags, embeddings, original)
+            != ppm.comparisons_fingerprint(tags, embeddings, swapped))
+
+
+def test_comparisons_fingerprint_changes_when_a_comparison_is_duplicated():
+    """A duplicate comparison adds another usable training row even though the set of distinct
+    pairs is unchanged, so the fingerprint (which tracks the exact rows a train run would use)
+    must reflect the duplicate rather than silently deduping it."""
+    tags = ["a", "b"]
+    embeddings = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    single = [{"winner": "a", "loser": "b", "compared_at": "t0"}]
+    duplicated = single + [{"winner": "a", "loser": "b", "compared_at": "t1"}]
+    assert (ppm.comparisons_fingerprint(tags, embeddings, single)
+            != ppm.comparisons_fingerprint(tags, embeddings, duplicated))
+
+
+def test_train_and_save_refuses_when_usable_comparisons_fall_below_raw_count(tmp_path, monkeypatch):
+    """Regression test for a bug where train_and_save only checked the raw comparisons count
+    against MIN_COMPARISONS, not the usable (embedding-cached) count. Here the raw count clears
+    MIN_COMPARISONS but most comparisons reference tags missing from the embedding cache, so the
+    usable count falls below the floor and training must still be refused."""
+    monkeypatch.setattr(ppm, "SWEEP_DIR", tmp_path)
+    monkeypatch.setattr(ppm, "MODEL_FILE", tmp_path / "preference_pairwise_model.joblib")
+    monkeypatch.setattr(ppm, "MODEL_META_FILE", tmp_path / "preference_pairwise_model_meta.json")
+
+    rng = np.random.RandomState(0)
+    cached_tags = ["a", "b"]
+    embeddings = rng.normal(size=(2, 2)).astype(np.float32)
+    embed_cache.save_cache(tmp_path / "embeddings.npz", cached_tags, embeddings)
+    monkeypatch.setattr(ppm.embed_cache, "EMBEDDINGS_FILE", tmp_path / "embeddings.npz")
+
+    comparisons = [{"winner": "a", "loser": "b", "compared_at": "t0"}] * 5
+    comparisons += [{"winner": f"missing{i}", "loser": f"missing{i}b", "compared_at": "t"} for i in range(55)]
+    assert len(comparisons) >= ppm.MIN_COMPARISONS
+
+    assert ppm.train_and_save(comparisons) is None
+    assert not (tmp_path / "preference_pairwise_model.joblib").exists()

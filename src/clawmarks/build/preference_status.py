@@ -40,7 +40,8 @@ def compute_data(sweep_dir):
     if model_meta:
         tags, embeddings = embed_cache.load_cache(embed_cache.EMBEDDINGS_FILE)
         _, usable_y = preference_pairwise_model.build_training_set(tags, embeddings, comparisons)
-        new_comparisons_since_train = max(0, len(usable_y) // 2 - model_meta["n_comparisons"])
+        n_usable_at_train = model_meta.get("n_usable_comparisons", model_meta["n_comparisons"])
+        new_comparisons_since_train = max(0, len(usable_y) // 2 - n_usable_at_train)
         if "comparisons_fingerprint" in model_meta:
             current_fingerprint = preference_pairwise_model.comparisons_fingerprint(tags, embeddings, comparisons)
             comparisons_changed_since_train = current_fingerprint != model_meta["comparisons_fingerprint"]
@@ -87,10 +88,10 @@ def render_html(data):
         trained_at = data["model_meta"]["trained_at"]
         if data["new_comparisons_since_train"] > 0:
             staleness_html = (f'<p class="stale">{data["new_comparisons_since_train"]} new comparisons since last '
-                              f'train ({trained_at}) - retrain to include them.</p>')
+                              f'train ({trained_at}). Retrain to include them.</p>')
         else:
-            staleness_html = (f'<p class="stale">comparisons have changed since last train ({trained_at}) '
-                              f'- retrain to include them.</p>')
+            staleness_html = (f'<p class="stale">comparisons have changed since last train ({trained_at}). '
+                              f'Retrain to include them.</p>')
 
     disabled_attr = "" if data["has_model"] else "disabled"
     checked_attr = "checked" if data["use_predicted_preference"] else ""
