@@ -44,3 +44,28 @@ def test_render_html_has_session_count():
 def test_render_html_has_done_state():
     html = compare_page.render_html()
     assert 'id="done"' in html
+
+
+def test_render_html_has_per_pane_captions_not_shared_meta():
+    html = compare_page.render_html()
+    assert 'id="cap1"' in html
+    assert 'id="cap2"' in html
+    # The old single shared caption row is gone; captions now live inside each pane so they
+    # stay with their image when the panes stack on mobile.
+    assert 'id="meta"' not in html
+
+
+def test_render_html_has_progress_bar_driven_by_status():
+    html = compare_page.render_html()
+    assert 'id="prog-fill"' in html
+    assert "function renderProgress(" in html
+    # The bar reflects a real signal: the model's cross-validated accuracy from the status API.
+    assert "/api/preference_status" in html
+    assert "cv_accuracy" in html
+
+
+def test_render_html_captions_avoid_innerhtml_injection():
+    html = compare_page.render_html()
+    # prompt_name is model-controlled; captions must be set via textContent, never innerHTML.
+    assert "cap1').textContent" in html
+    assert "cap2').textContent" in html
