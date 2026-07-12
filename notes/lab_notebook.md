@@ -1465,3 +1465,45 @@ comparisons correctly surfaces the gate message ("only 0 usable comparisons (nee
 without writing any file, confirmed via `git status` on the seed-run directory afterward. No
 console errors beyond the harmless missing-favicon 404. `archive.html`, `preference_rank.html`,
 and `compare.html` all still returned 200.
+
+### 2026-07-11: GLM 5.2 review of the PR #9 port found a real training-floor bug
+
+Dispatched an independent review of the PR #9 port (previous entry) via the `opencode` CLI
+(`opencode-go/glm-5.2`), handing it the port's diff and PR #9's original diff for comparison.
+It returned "Needs fixes": 1 Important finding and 5 Minor.
+
+**Important, fixed:** `train_and_save()` only checked the raw comparisons count against
+`MIN_COMPARISONS` before training, not the usable count after `build_training_set()` filters out
+comparisons whose tags lack a cached embedding. A comparisons list could clear the raw floor
+while its usable subset fell well below it, so a model could train (and get served) on far fewer
+real training rows than the floor is meant to guarantee, silently, via the auto-retrain path or
+the CLI. `_preference_retrain_gate_error()` in `curation_server.py` already checked the usable
+count correctly, so the manual "Retrain now" button would have refused correctly while the
+auto-retrain path or `python -m clawmarks.search.preference_pairwise_model` would not have,
+an inconsistency between two code paths meant to enforce the same rule. Fixed by computing
+`n_usable = X.shape[0] // 2` and refusing to train when it falls below `MIN_COMPARISONS`, and
+storing `n_usable_comparisons` in the model metadata so downstream staleness checks can use the
+real trained-on count instead of the raw comparisons count.
+
+**Minor, fixed:**
+- `preference_status.compute_data()`'s "new comparisons since last train" count subtracted the
+  *raw* `n_comparisons` from the model metadata against a *usable* row count, a unit mismatch
+  that could over- or under-report staleness. Fixed to read the new `n_usable_comparisons` field
+  (falling back to `n_comparisons` for metadata written before this fix).
+- Two HTML strings in `preference_status.render_html()`'s staleness banner used a single hyphen
+  as a clause separator (`"... last train (...) - retrain to include them."`), a dash-substitute
+  this project's style rule bans. Rewritten as two sentences.
+
+**Minor, not fixed (judged not worth a special case for a hypothetical the Important-finding fix
+already closes, since the two code paths now share the same usable-count floor):** the review
+also flagged that `_preference_retrain_gate_error()`'s docstring claim of mirroring
+`train_and_save()` "exactly" only became true after the Important fix landed, and suggested a
+couple of test-isolation and edge-case gaps. Addressed by adding 3 new tests (a fingerprint
+winner/loser-swap test, a fingerprint duplicate-comparison test, and a regression test proving
+`train_and_save()` now refuses when the raw count clears `MIN_COMPARISONS` but the usable count
+doesn't) and adding the missing `embed_cache.EMBEDDINGS_FILE` monkeypatch to one pre-existing
+test that hadn't isolated it.
+
+Full suite after all fixes: 180 of 180 passed (3 new tests; the earlier 177 all still pass,
+including the staleness-banner tests, whose lowercase "retrain to include them" assertions were
+updated to match the corrected sentence's capitalized "Retrain to include them").

@@ -54,6 +54,7 @@ def test_compute_data_reads_model_meta_and_toggle_when_model_exists(tmp_path, mo
     monkeypatch.setattr(preference_status.preference_settings, "PREFERENCE_SETTINGS_FILE", settings_path)
     monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_FILE", model_path)
     monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_META_FILE", meta_path)
+    monkeypatch.setattr(preference_status.embed_cache, "EMBEDDINGS_FILE", tmp_path / "embeddings.npz")
     model_path.write_text("fake model bytes")
     meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8}
     meta_path.write_text(json.dumps(meta))
@@ -178,7 +179,7 @@ def test_render_html_shows_staleness_banner_when_new_comparisons_exist():
     html = preference_status.render_html(data)
 
     assert "5 new comparisons since last train (2026-07-11T00:00:00+00:00)" in html
-    assert "retrain to include them" in html
+    assert "Retrain to include them" in html
 
 
 def test_render_html_shows_generic_staleness_banner_when_comparisons_changed_but_count_is_same():
@@ -190,7 +191,7 @@ def test_render_html_shows_generic_staleness_banner_when_comparisons_changed_but
     html = preference_status.render_html(data)
 
     assert "comparisons have changed since last train (2026-07-11T00:00:00+00:00)" in html
-    assert "retrain to include them" in html
+    assert "Retrain to include them" in html
 
 
 def test_render_html_omits_staleness_banner_when_model_is_current_or_missing():
@@ -202,5 +203,5 @@ def test_render_html_omits_staleness_banner_when_model_is_current_or_missing():
                     "has_model": False, "model_meta": None, "new_comparisons_since_train": 0,
                     "comparisons_changed_since_train": False, "use_predicted_preference": False}
 
-    assert "retrain to include them" not in preference_status.render_html(current_data)
-    assert "retrain to include them" not in preference_status.render_html(missing_data)
+    assert "Retrain to include them" not in preference_status.render_html(current_data)
+    assert "Retrain to include them" not in preference_status.render_html(missing_data)
