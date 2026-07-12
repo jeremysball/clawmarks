@@ -4,17 +4,13 @@ import json
 import numpy as np
 
 from clawmarks.build import preference_status
-from clawmarks.search import embed_cache, preference_model
+from clawmarks.search import embed_cache, preference_pairwise_model
 
 
-def _write_ratings(tmp_path, n_yes, n_no):
-    ratings = {}
-    for i in range(n_yes):
-        ratings[f"y{i}"] = {"label": "yes", "rated_at": "t"}
-    for i in range(n_no):
-        ratings[f"n{i}"] = {"label": "no", "rated_at": "t"}
-    (tmp_path / "user_ratings.json").write_text(json.dumps(ratings))
-    return ratings
+def _write_comparisons(tmp_path, n):
+    comparisons = [{"winner": f"w{i}", "loser": f"l{i}", "compared_at": "t"} for i in range(n)]
+    (tmp_path / "user_comparisons.json").write_text(json.dumps(comparisons))
+    return comparisons
 
 
 def _write_embeddings(tmp_path, tags, monkeypatch):
@@ -23,120 +19,111 @@ def _write_embeddings(tmp_path, tags, monkeypatch):
     monkeypatch.setattr(preference_status.embed_cache, "EMBEDDINGS_FILE", tmp_path / "embeddings.npz")
 
 
-def test_compute_data_with_no_ratings_file_reports_zero_counts(tmp_path, monkeypatch):
+def test_compute_data_with_no_comparisons_file_reports_zero_count(tmp_path, monkeypatch):
     monkeypatch.setattr(preference_status.preference_settings, "PREFERENCE_SETTINGS_FILE", tmp_path / "preference_settings.json")
-    monkeypatch.setattr(preference_status.preference_model, "MODEL_FILE", tmp_path / "preference_model.joblib")
+    monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_FILE", tmp_path / "preference_pairwise_model.joblib")
     data = preference_status.compute_data(tmp_path)
-    assert data["n_yes"] == 0 and data["n_no"] == 0 and data["n_total"] == 0
+    assert data["n_comparisons"] == 0
     assert data["has_model"] is False
     assert data["model_meta"] is None
-    assert data["new_labels_since_train"] == 0
     assert data["use_predicted_preference"] is False
-    assert "50" in data["labels_gate_message"]
+    assert "50" in data["comparisons_gate_message"]
 
 
-def test_compute_data_below_min_labels_reports_count_gate(tmp_path, monkeypatch):
+def test_compute_data_below_min_comparisons_reports_count_gate(tmp_path, monkeypatch):
     monkeypatch.setattr(preference_status.preference_settings, "PREFERENCE_SETTINGS_FILE", tmp_path / "preference_settings.json")
-    monkeypatch.setattr(preference_status.preference_model, "MODEL_FILE", tmp_path / "preference_model.joblib")
-    _write_ratings(tmp_path, n_yes=10, n_no=5)
+    monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_FILE", tmp_path / "preference_pairwise_model.joblib")
+    _write_comparisons(tmp_path, 15)
     data = preference_status.compute_data(tmp_path)
-    assert data["n_yes"] == 10 and data["n_no"] == 5 and data["n_total"] == 15
-    assert "15" in data["labels_gate_message"] and "50" in data["labels_gate_message"]
+    assert data["n_comparisons"] == 15
+    assert "15" in data["comparisons_gate_message"] and "50" in data["comparisons_gate_message"]
 
 
-def test_compute_data_at_min_labels_but_imbalanced_reports_balance_gate(tmp_path, monkeypatch):
+def test_compute_data_at_min_comparisons_has_no_gate_message(tmp_path, monkeypatch):
     monkeypatch.setattr(preference_status.preference_settings, "PREFERENCE_SETTINGS_FILE", tmp_path / "preference_settings.json")
-    monkeypatch.setattr(preference_status.preference_model, "MODEL_FILE", tmp_path / "preference_model.joblib")
-    _write_ratings(tmp_path, n_yes=58, n_no=2)
+    monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_FILE", tmp_path / "preference_pairwise_model.joblib")
+    _write_comparisons(tmp_path, 50)
     data = preference_status.compute_data(tmp_path)
-    assert "5-fold" in data["labels_gate_message"]
-
-
-def test_compute_data_well_balanced_above_min_labels_has_no_gate_message(tmp_path, monkeypatch):
-    monkeypatch.setattr(preference_status.preference_settings, "PREFERENCE_SETTINGS_FILE", tmp_path / "preference_settings.json")
-    monkeypatch.setattr(preference_status.preference_model, "MODEL_FILE", tmp_path / "preference_model.joblib")
-    _write_ratings(tmp_path, n_yes=30, n_no=30)
-    data = preference_status.compute_data(tmp_path)
-    assert data["labels_gate_message"] == ""
+    assert data["comparisons_gate_message"] == ""
 
 
 def test_compute_data_reads_model_meta_and_toggle_when_model_exists(tmp_path, monkeypatch):
     settings_path = tmp_path / "preference_settings.json"
-    model_path = tmp_path / "preference_model.joblib"
-    meta_path = tmp_path / "preference_model_meta.json"
+    model_path = tmp_path / "preference_pairwise_model.joblib"
+    meta_path = tmp_path / "preference_pairwise_model_meta.json"
     monkeypatch.setattr(preference_status.preference_settings, "PREFERENCE_SETTINGS_FILE", settings_path)
-    monkeypatch.setattr(preference_status.preference_model, "MODEL_FILE", model_path)
-    monkeypatch.setattr(preference_status.preference_model, "MODEL_META_FILE", meta_path)
+    monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_FILE", model_path)
+    monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_META_FILE", meta_path)
+    monkeypatch.setattr(preference_status.embed_cache, "EMBEDDINGS_FILE", tmp_path / "embeddings.npz")
     model_path.write_text("fake model bytes")
-    meta = {"trained_at": "2026-07-10T00:00:00+00:00", "n_labels": 60, "n_yes": 30, "n_no": 30, "cv_accuracy": 0.8}
+    meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8}
     meta_path.write_text(json.dumps(meta))
     preference_status.preference_settings.save(True)
 
     data = preference_status.compute_data(tmp_path)
     assert data["has_model"] is True
     assert data["model_meta"] == meta
-    assert data["new_labels_since_train"] == 0
-    assert data["ratings_changed_since_train"] is False
+    assert data["new_comparisons_since_train"] == 0
     assert data["use_predicted_preference"] is True
 
 
-def test_compute_data_counts_new_labels_since_last_train(tmp_path, monkeypatch):
+def test_compute_data_counts_new_comparisons_since_last_train(tmp_path, monkeypatch):
     settings_path = tmp_path / "preference_settings.json"
-    model_path = tmp_path / "preference_model.joblib"
-    meta_path = tmp_path / "preference_model_meta.json"
+    model_path = tmp_path / "preference_pairwise_model.joblib"
+    meta_path = tmp_path / "preference_pairwise_model_meta.json"
     monkeypatch.setattr(preference_status.preference_settings, "PREFERENCE_SETTINGS_FILE", settings_path)
-    monkeypatch.setattr(preference_status.preference_model, "MODEL_FILE", model_path)
-    monkeypatch.setattr(preference_status.preference_model, "MODEL_META_FILE", meta_path)
-    ratings = _write_ratings(tmp_path, n_yes=35, n_no=30)
-    _write_embeddings(tmp_path, list(ratings.keys()), monkeypatch)
+    monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_FILE", model_path)
+    monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_META_FILE", meta_path)
+    comparisons = _write_comparisons(tmp_path, 65)
+    tags = sorted({t for c in comparisons for t in (c["winner"], c["loser"])})
+    _write_embeddings(tmp_path, tags, monkeypatch)
     model_path.write_text("fake model bytes")
     meta_path.write_text(json.dumps({
-        "trained_at": "2026-07-10T00:00:00+00:00", "n_labels": 60,
-        "n_yes": 30, "n_no": 30, "cv_accuracy": 0.8,
+        "trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8,
     }))
 
     data = preference_status.compute_data(tmp_path)
 
-    assert data["new_labels_since_train"] == 5
-    assert data["ratings_changed_since_train"] is True
+    assert data["new_comparisons_since_train"] == 5
+    assert data["comparisons_changed_since_train"] is True
 
 
-def test_compute_data_detects_relabel_via_fingerprint_with_same_count(tmp_path, monkeypatch):
-    """A rating flipping from yes to no on an already-counted tag doesn't change n_total, but it
-    does change which images the model would train on -- the fingerprint should catch this even
-    though a bare label-count diff (the pre-fix behavior) would report zero new labels."""
+def test_compute_data_detects_swap_via_fingerprint_with_same_count(tmp_path, monkeypatch):
+    """A comparison's winner/loser being replaced by a different pair doesn't change
+    n_comparisons, but it does change which images the model would train on. The fingerprint
+    should catch this even though a bare comparison-count diff (the pre-fix behavior) would
+    report zero new comparisons."""
     settings_path = tmp_path / "preference_settings.json"
-    model_path = tmp_path / "preference_model.joblib"
-    meta_path = tmp_path / "preference_model_meta.json"
+    model_path = tmp_path / "preference_pairwise_model.joblib"
+    meta_path = tmp_path / "preference_pairwise_model_meta.json"
     monkeypatch.setattr(preference_status.preference_settings, "PREFERENCE_SETTINGS_FILE", settings_path)
-    monkeypatch.setattr(preference_status.preference_model, "MODEL_FILE", model_path)
-    monkeypatch.setattr(preference_status.preference_model, "MODEL_META_FILE", meta_path)
-    ratings = _write_ratings(tmp_path, n_yes=30, n_no=30)
-    tags = list(ratings.keys())
+    monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_FILE", model_path)
+    monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_META_FILE", meta_path)
+    comparisons = _write_comparisons(tmp_path, 60)
+    tags = sorted({t for c in comparisons for t in (c["winner"], c["loser"])})
     _write_embeddings(tmp_path, tags, monkeypatch)
     tags_arr, embeddings = embed_cache.load_cache(tmp_path / "embeddings.npz")
-    trained_fingerprint = preference_model.ratings_fingerprint(tags_arr, embeddings, ratings)
+    trained_fingerprint = preference_pairwise_model.comparisons_fingerprint(tags_arr, embeddings, comparisons)
     model_path.write_text("fake model bytes")
     meta_path.write_text(json.dumps({
-        "trained_at": "2026-07-10T00:00:00+00:00", "n_labels": 60,
-        "n_yes": 30, "n_no": 30, "cv_accuracy": 0.8, "ratings_fingerprint": trained_fingerprint,
+        "trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8,
+        "comparisons_fingerprint": trained_fingerprint,
     }))
 
-    # Flip one existing rating; n_total (and the usable count) stay at 60.
-    flipped_tag = tags[0]
-    ratings[flipped_tag]["label"] = "no" if ratings[flipped_tag]["label"] == "yes" else "yes"
-    (tmp_path / "user_ratings.json").write_text(json.dumps(ratings))
+    # Replace one comparison's loser; n_comparisons stays at 60.
+    comparisons[0]["loser"] = comparisons[1]["loser"]
+    (tmp_path / "user_comparisons.json").write_text(json.dumps(comparisons))
 
     data = preference_status.compute_data(tmp_path)
 
-    assert data["new_labels_since_train"] == 0
-    assert data["ratings_changed_since_train"] is True
+    assert data["new_comparisons_since_train"] == 0
+    assert data["comparisons_changed_since_train"] is True
 
 
 def test_render_html_disables_toggle_when_no_model():
-    data = {"n_yes": 0, "n_no": 0, "n_total": 0, "min_labels": 50, "labels_gate_message": "not enough labels",
-            "has_model": False, "model_meta": None, "new_labels_since_train": 0,
-            "ratings_changed_since_train": False, "use_predicted_preference": False}
+    data = {"n_comparisons": 0, "min_comparisons": 50, "comparisons_gate_message": "not enough comparisons",
+            "has_model": False, "model_meta": None, "new_comparisons_since_train": 0,
+            "comparisons_changed_since_train": False, "use_predicted_preference": False}
     html = preference_status.render_html(data)
     assert "disabled" in html
     assert "/api/preference_toggle" in html
@@ -144,13 +131,12 @@ def test_render_html_disables_toggle_when_no_model():
 
 
 def test_render_html_enables_toggle_when_model_exists():
-    meta = {"trained_at": "2026-07-10T00:00:00+00:00", "n_labels": 60, "n_yes": 30, "n_no": 30, "cv_accuracy": 0.8,
+    meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8,
             "baseline_accuracy": 0.5, "p_value": 0.03, "n_permutations": 200}
-    data = {"n_yes": 30, "n_no": 30, "n_total": 60, "min_labels": 50, "labels_gate_message": "",
-            "has_model": True, "model_meta": meta, "new_labels_since_train": 0,
-            "ratings_changed_since_train": False, "use_predicted_preference": True}
+    data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+            "has_model": True, "model_meta": meta, "new_comparisons_since_train": 0,
+            "comparisons_changed_since_train": False, "use_predicted_preference": True}
     html = preference_status.render_html(data)
-    assert 'id="toggle" checked  onchange' in html
     assert "checked" in html
     assert "0.8" in html
     assert "majority-class baseline accuracy" in html
@@ -161,11 +147,11 @@ def test_render_html_enables_toggle_when_model_exists():
 
 
 def test_render_html_interprets_non_significant_p_value():
-    meta = {"trained_at": "2026-07-10T00:00:00+00:00", "n_labels": 60, "n_yes": 30, "n_no": 30, "cv_accuracy": 0.8,
+    meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8,
             "baseline_accuracy": 0.5, "p_value": 0.4, "n_permutations": 200}
-    data = {"n_yes": 30, "n_no": 30, "n_total": 60, "min_labels": 50, "labels_gate_message": "",
-            "has_model": True, "model_meta": meta, "new_labels_since_train": 0,
-            "ratings_changed_since_train": False, "use_predicted_preference": True}
+    data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+            "has_model": True, "model_meta": meta, "new_comparisons_since_train": 0,
+            "comparisons_changed_since_train": False, "use_predicted_preference": True}
 
     html = preference_status.render_html(data)
 
@@ -173,10 +159,10 @@ def test_render_html_interprets_non_significant_p_value():
 
 
 def test_render_html_omits_statistical_rows_for_old_model_meta():
-    meta = {"trained_at": "2026-07-10T00:00:00+00:00", "n_labels": 60, "n_yes": 30, "n_no": 30, "cv_accuracy": 0.8}
-    data = {"n_yes": 30, "n_no": 30, "n_total": 60, "min_labels": 50, "labels_gate_message": "",
-            "has_model": True, "model_meta": meta, "new_labels_since_train": 0,
-            "ratings_changed_since_train": False, "use_predicted_preference": True}
+    meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8}
+    data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+            "has_model": True, "model_meta": meta, "new_comparisons_since_train": 0,
+            "comparisons_changed_since_train": False, "use_predicted_preference": True}
 
     html = preference_status.render_html(data)
 
@@ -184,38 +170,38 @@ def test_render_html_omits_statistical_rows_for_old_model_meta():
     assert "permutation p-value" not in html
 
 
-def test_render_html_shows_staleness_banner_when_new_labels_exist():
-    meta = {"trained_at": "2026-07-10T00:00:00+00:00", "n_labels": 60, "n_yes": 30, "n_no": 30, "cv_accuracy": 0.8}
-    data = {"n_yes": 35, "n_no": 30, "n_total": 65, "min_labels": 50, "labels_gate_message": "",
-            "has_model": True, "model_meta": meta, "new_labels_since_train": 5,
-            "ratings_changed_since_train": True, "use_predicted_preference": True}
+def test_render_html_shows_staleness_banner_when_new_comparisons_exist():
+    meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8}
+    data = {"n_comparisons": 65, "min_comparisons": 50, "comparisons_gate_message": "",
+            "has_model": True, "model_meta": meta, "new_comparisons_since_train": 5,
+            "comparisons_changed_since_train": True, "use_predicted_preference": True}
 
     html = preference_status.render_html(data)
 
-    assert "5 new ratings since last train (2026-07-10T00:00:00+00:00)" in html
-    assert "retrain to include them" in html
+    assert "5 new comparisons since last train (2026-07-11T00:00:00+00:00)" in html
+    assert "Retrain to include them" in html
 
 
-def test_render_html_shows_generic_staleness_banner_when_ratings_changed_but_count_is_same():
-    meta = {"trained_at": "2026-07-10T00:00:00+00:00", "n_labels": 60, "n_yes": 30, "n_no": 30, "cv_accuracy": 0.8}
-    data = {"n_yes": 29, "n_no": 31, "n_total": 60, "min_labels": 50, "labels_gate_message": "",
-            "has_model": True, "model_meta": meta, "new_labels_since_train": 0,
-            "ratings_changed_since_train": True, "use_predicted_preference": True}
+def test_render_html_shows_generic_staleness_banner_when_comparisons_changed_but_count_is_same():
+    meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8}
+    data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+            "has_model": True, "model_meta": meta, "new_comparisons_since_train": 0,
+            "comparisons_changed_since_train": True, "use_predicted_preference": True}
 
     html = preference_status.render_html(data)
 
-    assert "ratings have changed since last train (2026-07-10T00:00:00+00:00)" in html
-    assert "retrain to include them" in html
+    assert "comparisons have changed since last train (2026-07-11T00:00:00+00:00)" in html
+    assert "Retrain to include them" in html
 
 
 def test_render_html_omits_staleness_banner_when_model_is_current_or_missing():
-    current_meta = {"trained_at": "2026-07-10T00:00:00+00:00", "n_labels": 60, "n_yes": 30, "n_no": 30, "cv_accuracy": 0.8}
-    current_data = {"n_yes": 30, "n_no": 30, "n_total": 60, "min_labels": 50, "labels_gate_message": "",
-                    "has_model": True, "model_meta": current_meta, "new_labels_since_train": 0,
-                    "ratings_changed_since_train": False, "use_predicted_preference": True}
-    missing_data = {"n_yes": 30, "n_no": 30, "n_total": 60, "min_labels": 50, "labels_gate_message": "",
-                    "has_model": False, "model_meta": None, "new_labels_since_train": 0,
-                    "ratings_changed_since_train": False, "use_predicted_preference": False}
+    current_meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8}
+    current_data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+                    "has_model": True, "model_meta": current_meta, "new_comparisons_since_train": 0,
+                    "comparisons_changed_since_train": False, "use_predicted_preference": True}
+    missing_data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+                    "has_model": False, "model_meta": None, "new_comparisons_since_train": 0,
+                    "comparisons_changed_since_train": False, "use_predicted_preference": False}
 
-    assert "retrain to include them" not in preference_status.render_html(current_data)
-    assert "retrain to include them" not in preference_status.render_html(missing_data)
+    assert "Retrain to include them" not in preference_status.render_html(current_data)
+    assert "Retrain to include them" not in preference_status.render_html(missing_data)
