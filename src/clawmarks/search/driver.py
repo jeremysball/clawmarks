@@ -235,7 +235,11 @@ def load_state(cfg):
             state = json.load(f)
     except (OSError, json.JSONDecodeError) as e:
         raise RuntimeError(f"cannot resume: persisted state {state_file} is unreadable: {e}") from e
-    _validate_state(state, state_file)
+    if cfg.seed_from_start and isinstance(state, dict) and "stage" not in state:
+        # Round 2's historical state predates the stage field. Normalize only this known schema
+        # difference in memory; every other required field remains mandatory.
+        state["stage"] = 0
+    _validate_state(state, state_file, allow_legacy_round1_baseline=cfg.round == 1)
     return state
 
 
@@ -247,7 +251,7 @@ def _new_state():
     }
 
 
-def _validate_state(state, state_file):
+def _validate_state(state, state_file, allow_legacy_round1_baseline=False):
     required = {
         "generation", "stage", "plateau_count", "novelty_history", "gpt55_subjects",
         "start_balance", "start_time",
@@ -265,7 +269,14 @@ def _validate_state(state, state_file):
         for value in state["novelty_history"]
     ):
         raise RuntimeError(f"cannot resume: persisted state {state_file} has invalid novelty_history")
-    if len(state["novelty_history"]) != state["generation"]:
+    history_length = len(state["novelty_history"])
+    expected_lengths = {state["generation"]}
+    if allow_legacy_round1_baseline:
+        # The original round-1 run stored a fixed generation-0 baseline at index zero, so its
+        # surviving state has one more history value than completed generations. Keep that value
+        # because the plateau detector consumes novelty_history as an ordered history.
+        expected_lengths.add(state["generation"] + 1)
+    if history_length not in expected_lengths:
         raise RuntimeError(
             f"cannot resume: persisted state {state_file} has generation/history mismatch"
         )
@@ -306,7 +317,7 @@ def _atomic_json_write(path, value):
 
 def save_state(cfg, state):
     state_file = _state_file(cfg)
-    _validate_state(state, state_file)
+    _validate_state(state, state_file, allow_legacy_round1_baseline=cfg.round == 1)
     _atomic_json_write(state_file, state)
 
 
@@ -368,8 +379,8 @@ def _validate_manifest(manifest, manifest_path):
                 raise RuntimeError(f"cannot resume: persisted manifest {manifest_path} has invalid {name}")
 
 
-def _validate_resume_agreement(state, manifest, state_file, manifest_path):
-    _validate_state(state, state_file)
+def _validate_resume_agreement(state, manifest, state_file, manifest_path, allow_legacy_round1_baseline=False):
+    _validate_state(state, state_file, allow_legacy_round1_baseline=allow_legacy_round1_baseline)
     _validate_manifest(manifest, manifest_path)
     generations = [
         generation for entry in manifest
@@ -690,6 +701,7 @@ def main(argv=None):
         manifest,
         _state_file(cfg),
         out_dir / "scored_manifest.json",
+        allow_legacy_round1_baseline=cfg.round == 1,
     )
     if state["start_balance"] is None:
         state["start_balance"] = get_balance()

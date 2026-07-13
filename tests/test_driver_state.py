@@ -43,11 +43,14 @@ def test_state_file_round_two_keeps_its_round_suffix(tmp_path, monkeypatch):
 def test_load_state_resumes_from_the_correctly_named_round_one_file(tmp_path, monkeypatch):
     monkeypatch.setattr(driver, "SWEEP_DIR", tmp_path)
     (tmp_path / "allnight_state.json").write_text(json.dumps({
-        "generation": 7, "stage": 1, "plateau_count": 2, "novelty_history": [0.1] * 7,
+        "generation": 49, "stage": 1, "plateau_count": 2,
+        "novelty_history": [0.0] + [0.1] * 49,
         "gpt55_subjects": [], "start_balance": 5.0, "start_time": 100.0,
     }))
     state = driver.load_state(driver.ROUND_CONFIGS[1])
-    assert state["generation"] == 7
+    assert state["generation"] == 49
+    assert len(state["novelty_history"]) == 50
+    assert state["novelty_history"][0] == 0.0
 
 
 def test_load_state_resumes_from_the_correctly_named_round_two_file(tmp_path, monkeypatch):
@@ -57,11 +60,35 @@ def test_load_state_resumes_from_the_correctly_named_round_two_file(tmp_path, mo
     isolation."""
     monkeypatch.setattr(driver, "SWEEP2_DIR", tmp_path)
     (tmp_path / "allnight2_state.json").write_text(json.dumps({
-        "generation": 3, "stage": 0, "plateau_count": 0, "novelty_history": [0.1] * 3,
+        "generation": 14, "plateau_count": 0, "novelty_history": [0.1] * 14,
         "gpt55_subjects": [], "start_balance": 1.0, "start_time": 100.0,
     }))
     state = driver.load_state(driver.ROUND_CONFIGS[2])
-    assert state["generation"] == 3
+    assert state["generation"] == 14
+    assert state["stage"] == 0
+    assert "stage" not in json.loads((tmp_path / "allnight2_state.json").read_text())
+
+
+@pytest.mark.parametrize("history_length", [48, 51])
+def test_round_one_rejects_other_history_lengths(tmp_path, monkeypatch, history_length):
+    monkeypatch.setattr(driver, "SWEEP_DIR", tmp_path)
+    (tmp_path / "allnight_state.json").write_text(json.dumps({
+        "generation": 49, "stage": 1, "plateau_count": 2,
+        "novelty_history": [0.1] * history_length,
+        "gpt55_subjects": [], "start_balance": 5.0, "start_time": 100.0,
+    }))
+    with pytest.raises(RuntimeError, match="generation/history mismatch"):
+        driver.load_state(driver.ROUND_CONFIGS[1])
+
+
+def test_round_two_rejects_missing_field_other_than_stage(tmp_path, monkeypatch):
+    monkeypatch.setattr(driver, "SWEEP2_DIR", tmp_path)
+    (tmp_path / "allnight2_state.json").write_text(json.dumps({
+        "generation": 14, "novelty_history": [0.1] * 14,
+        "gpt55_subjects": [], "start_balance": 1.0, "start_time": 100.0,
+    }))
+    with pytest.raises(RuntimeError, match="missing required fields"):
+        driver.load_state(driver.ROUND_CONFIGS[2])
 
 
 def test_load_resumable_manifest_returns_empty_when_no_manifest_exists(tmp_path):
