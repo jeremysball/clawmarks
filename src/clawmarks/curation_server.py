@@ -167,9 +167,10 @@ def _preference_retrain_gate_error():
     """Mirrors preference_pairwise_model.train_and_save's own gates exactly, using
     build_training_set so a comparison referencing a tag without a cached embedding can't make
     this check pass while the real training call still has too few usable rows. Distinguishes
-    "not enough comparisons yet" from "comparisons exist but their embeddings aren't cached",
-    since the first is fixed by comparing more images and the second isn't, and pointing someone
-    at compare.html for the wrong problem wastes their time."""
+    three cases: "not enough comparisons yet", "comparisons exist but their embeddings aren't
+    cached", and "comparisons exist and are cached but repeated judgments on the same pairs
+    consolidated below the floor" (see preference_pairwise_model.n_consolidated_pairs) -- each has
+    a different fix, and pointing someone at the wrong one wastes their time."""
     comparisons = load_comparisons()
     n_raw_comparisons = len(comparisons)
     tags, embeddings = embed_cache.load_cache(embed_cache.EMBEDDINGS_FILE)
@@ -177,6 +178,11 @@ def _preference_retrain_gate_error():
     n_usable = len(y) // 2
     if n_usable < preference_pairwise_model.MIN_COMPARISONS:
         if n_raw_comparisons >= preference_pairwise_model.MIN_COMPARISONS:
+            n_consolidated = preference_pairwise_model.n_consolidated_pairs(comparisons)
+            if n_consolidated < preference_pairwise_model.MIN_COMPARISONS:
+                return (f"only {n_usable} distinct usable pairs after consolidating repeated "
+                        f"judgments on the same pair (need {preference_pairwise_model.MIN_COMPARISONS}); "
+                        f"compare more distinct pairs via compare.html first.")
             return (f"only {n_usable} of {n_raw_comparisons} comparisons reference images with a "
                     f"cached embedding (need {preference_pairwise_model.MIN_COMPARISONS} usable); "
                     f"run `python -m clawmarks.search.embed_cache` to refresh the embedding cache.")
