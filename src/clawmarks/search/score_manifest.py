@@ -11,7 +11,9 @@ than part of the live per-request rendering path curation_server.py's page views
 Run after notes/run_uncanny_sweep.py finishes (or on manifest_partial.json if run early):
     python3 -m clawmarks.search.score_manifest [manifest_path]
 """
-import os, sys, json
+import os
+import sys
+import json
 import torch
 import numpy as np
 from PIL import Image

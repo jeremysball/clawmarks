@@ -11,7 +11,6 @@ with `<script src="lightbox.js"></script>` and opens images via `Lightbox.open(t
 `window.open('scan.html?open=...')`: no new tab, no page load, works from any page because the
 module fetches scan_data.json itself.
 """
-import os
 
 NAV_OPTIONS = [
     ("explore.html", "all tools (hub)"),

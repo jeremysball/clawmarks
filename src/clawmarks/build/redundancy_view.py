@@ -15,7 +15,9 @@ enough to threshold on). compute_data(sweep_dir, deps) takes solution_map's resu
 `deps["solution-map"]`, served live by curation_server.py through LiveCache's
 depends_on=["solution-map"] mechanism, not a standalone build step.
 """
-import json, math, os
+import json
+import math
+import os
 
 from clawmarks.shared_ui import nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, INFOTIP_CSS, info_btn
 

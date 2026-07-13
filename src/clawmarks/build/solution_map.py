@@ -24,7 +24,10 @@ compute_data() is a data-only live-cache target with no route of its own; map.ht
 redundancy.html both depend on it (target name "solution-map"), via curation_server.py calling
 LiveCache.get(..., depends_on=["solution-map"]).
 """
-import os, json, time, re
+import os
+import json
+import time
+import re
 import torch
 from transformers import AutoModel
 
