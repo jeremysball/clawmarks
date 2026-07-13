@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 
 from clawmarks.search import preference_model
@@ -98,12 +100,6 @@ def test_class_balance_error_allows_a_well_balanced_label_set():
 def test_class_balance_error_allows_an_imbalanced_but_above_fold_count_label_set_below_min_labels():
     y = np.array([1] * 8 + [0] * 2, dtype=np.int64)
     assert preference_model.class_balance_error(y) == ""
-
-
-# append to tests/test_preference_model.py
-import json
-
-import numpy as np
 
 
 def test_main_writes_metadata_sidecar_on_successful_train(tmp_path, monkeypatch):

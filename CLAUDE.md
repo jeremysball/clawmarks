@@ -26,6 +26,21 @@ cache-invalidate-by-`os.remove` pattern, saved only because a backup happened to
   unnecessary backup is minutes; the cost of a missing one has already been a full sweep of
   irreplaceable generation output.
 
+## `fd` and `rg` hide gitignored files: the image data is invisible to them
+
+`fd` and `rg` skip `.gitignore`d and hidden files by default, and nearly every generated image
+on this project lives under a gitignored glob (`*.png`, `*.jpg`, `notes/uncanny_sweep/*.html`,
+and more). So `fd -e png notes/uncanny_seedrun1` reports zero PNGs while `ls` shows all 100. This
+already cost real confusion once: a directory of 100 full-resolution 1024x1024 PNGs looked empty
+and got mistaken for missing data.
+
+- To find generation output, disable the filtering: `fd -I` (include ignored), `fd -HI` (also
+  hidden), or `rg -uu`. Plain `ls`, `find`, and `grep` never filter, so they always see the
+  images.
+- Before concluding an image directory is empty or a sweep lost its output, confirm with `ls` or
+  `fd -I`, not a bare `fd`/`rg`. An absent result from the default tools means "not tracked by
+  git," not "not on disk."
+
 ## Your role
 
 Act as a lab assistant helping a non-academic, undergraduate-level researcher turn a
@@ -103,6 +118,25 @@ environment before running any script that needs them (`source .envrc`, or via d
 installed). Scripts read these with `os.environ["NAME"]`, never a literal string. If a new
 secret shows up in a future session, put it in `.envrc` immediately, not inline in the script
 that first needed it.
+
+## Running tests
+
+The full suite (`python3 -m pytest -q`) takes about a minute, cheap enough to run before calling
+any change done. But don't make every edit-test cycle pay that minute:
+
+- **While iterating on one area, run only the test file(s) for what you're touching**
+  (`python3 -m pytest -q tests/test_<thing>.py`), not the full suite. Re-running everything on
+  every small edit wastes time without catching anything the targeted file wouldn't.
+- **Run the full suite once before treating a change as finished**, and again after merging to
+  `main` if CI hasn't already confirmed it (`.github/workflows/check.yml` runs it on every PR and
+  push to `main`; check its status there before re-running locally to save the minute).
+- **A live-server change still needs a live check**, per the visual-deliverables rule above: the
+  test suite verifies unit-level correctness, not that a page actually renders right. Restart
+  `curation_server.py` and verify with Playwright before calling a UI change done, even if every
+  test passes.
+- If a change touches Docker packaging (`Dockerfile`, `docker-compose.yml`), a passing pytest
+  suite says nothing about whether the image builds or runs; CI's `build` job is the gate for
+  that, not the pytest suite.
 
 ## Writing style
 

@@ -1,5 +1,6 @@
 # secrets, never commit
 .envrc
+.env
 runpod-ssh/
 
 # ephemeral working notes, per CLAUDE.md convention: not tracked
@@ -51,6 +52,9 @@ tests/fixtures/sample_sweep/notes/uncanny_sweep/user_ratings.json
 *.jpeg
 !corrected_dataset_extract/*.jpg
 !tests/fixtures/**/*.jpg
+# curation_server.py opens this at import time; without a real file on disk, every fresh
+# checkout (CI, Docker build) fails to import the module at all.
+!src/clawmarks/static/favicon.png
 
 # python
 __pycache__/

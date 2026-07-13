@@ -1,0 +1,53 @@
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: clawmarks
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - clawmarks-tailscale-state:/var/lib/tailscale
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/jeremysball/clawmarks-lora:latest
+    pull_policy: always
+    network_mode: "service:tailscale"
+    environment:
+      - CLAWMARKS_SWEEP_DIR=${CLAWMARKS_SWEEP_DIR:-/app/notes/uncanny_sweep}
+      - RUNPOD_API_KEY=${RUNPOD_API_KEY}
+      - CIVITAI_TOKEN=${CIVITAI_TOKEN}
+      - CIVITAI_MODEL_ID=${CIVITAI_MODEL_ID}
+      # Headless auth for the `opencode run` calls seeds.html's "Generate" button makes
+      # (curation_server.py's /api/seeds/generate). opencode reads OPENAI_API_KEY directly as
+      # an alternative to its interactive OAuth login, so no credential file needs mounting.
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    # Bind mounts, not named volumes: these hold irreplaceable RunPod-billed generation output
+    # and real training images (CLAUDE.md's data-integrity rule). A bind mount keeps them
+    # directly on the host filesystem where the project's existing backup/verify workflow can
+    # reach them; a named volume would hide them inside Docker's storage driver.
+    volumes:
+      - ./notes:/app/notes
+      - ./corrected_dataset_extract:/app/corrected_dataset_extract:ro
+    depends_on:
+      - tailscale
+    restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.scope=clawmarks
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=60
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_SCOPE=clawmarks
+    restart: unless-stopped
+
+volumes:
+  clawmarks-tailscale-state:

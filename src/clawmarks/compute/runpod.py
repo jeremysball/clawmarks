@@ -10,7 +10,6 @@ left running from a previous session), call register_pod(pod_id, host, port) fir
 """
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -34,7 +33,7 @@ DEFAULT_DATASET_DIR = str(ROOT / "corrected_dataset_extract")
 DEFAULT_REMOTE_SETUP_SCRIPT = str(ROOT / "notes" / "remote_setup.sh")
 DEFAULT_POD_INDEX = 1
 
-_known_pods = {}
+_known_pods: dict[str, tuple[str, int]] = {}
 
 
 def register_pod(pod_id, host, port):

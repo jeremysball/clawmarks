@@ -1,8 +1,19 @@
 """
-Static file server + tiny comparison API for the uncanny-frontier scan gallery. Replaces the
+Dynamic page server + tiny comparison API for the uncanny-frontier scan gallery. Replaces the
 plain `python3 -m http.server` that was serving notes/uncanny_sweep/ read-only: a plain static
 server can't accept writes, and the whole point of this is letting a human record head-to-head
 preference comparisons from the browser, which needs somewhere to persist that choice.
+
+Rendering model (do NOT mistake this for a static-file server, despite the file paths below):
+every .html route builds its page in-process at request time from the live manifest, via
+`<view>.render_html(<view>.compute_data(...))`, and injects the view's data straight into the
+returned HTML. There are no static .html files on disk and no per-page data .json to 404 on. The
+one companion-JSON route is /scan_data.json, which scan.html alone fetches client-side to redraw
+its grid without a full reload; every other view (map, redundancy, coverage, lineage,
+novelty_decay, archive) embeds its data inline at render, so a page that looks empty is
+either legitimately empty for this dataset (e.g. lineage on a single-generation seed run with no
+parent_tag chains) or a client-side threshold/filter issue, never a missing file. The old data
+build artifacts (solution_map_data.json, similarity.json) are gone; nothing here reads them.
 
 Comparisons are stored in notes/uncanny_sweep/user_comparisons.json, a list of
 {winner, loser, compared_at} records. search/preference_pairwise_model.py trains a Bradley-
@@ -60,12 +71,21 @@ Everything else falls through to normal static file serving.
 
 Run with: clawmarks serve [port]
 """
-import base64, json, os, random, subprocess, sys, threading, time
+import base64
+import json
+import os
+import random
+import subprocess
+import sys
+import threading
+import time
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 from clawmarks.config import ROOT, SEEDS_FILE, SWEEP_DIR
+from clawmarks.search.score_manifest import REAL_DIR
 from clawmarks.search.seed_pool import merge as seed_pool_merge
 from clawmarks.search import comparison_sampler, preference_settings, preference_pairwise_model
 from clawmarks.search import embed_cache
@@ -74,10 +94,13 @@ from clawmarks.shared_ui import _LIGHTBOX_JS, SCROLLNAV_JS, INFOTIP_JS
 from clawmarks.live_cache import LiveCache
 from clawmarks.build import (
     scan_gallery, similarity_index, solution_map, map_view, redundancy_view, coverage_map,
-    novelty_decay, lineage_view, elite_archive, preference_rank, uncanny_gallery, explore_hub,
+    novelty_decay, lineage_view, elite_archive, preference_rank, explore_hub,
     seed_browser, compare_page, preference_status,
 )
 from clawmarks.build.thumbnails import generate_thumbnail
+
+with open(os.path.join(os.path.dirname(__file__), "static", "favicon.png"), "rb") as _f:
+    _FAVICON_PNG = _f.read()
 
 _live_cache = LiveCache()
 
@@ -257,7 +280,7 @@ def load_store(path):
 
 
 def save_store(path, store):
-    tmp = path + ".tmp"
+    tmp = str(path) + ".tmp"
     with open(tmp, "w") as f:
         json.dump(store, f, indent=1)
     os.replace(tmp, path)
@@ -326,9 +349,14 @@ def next_compare_response(manifest, comparisons):
             # embeddings were rebuilt with new tags). The uncertainty path can score nothing,
             # so drop to stratified-random over the full manifest instead of returning done.
             model = None
+    seen = {}
+    for c in comparisons:
+        for tag in (c.get("winner"), c.get("loser")):
+            if tag:
+                seen[tag] = seen.get(tag, 0) + 1
     pair = comparison_sampler.pick_next_pair(
         candidate_manifest, len(comparisons), model=model,
-        score_fn=preference_pairwise_model.score, embeddings_for=_embeddings_for,
+        score_fn=preference_pairwise_model.score, embeddings_for=_embeddings_for, seen=seen,
     )
     if pair is None:
         return {"done": True}
@@ -403,6 +431,14 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(302)
             self.send_header("Location", "/scan.html")
             self.end_headers()
+            return
+
+        if self.path in ("/favicon.ico", "/favicon.png"):
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(_FAVICON_PNG)))
+            self.end_headers()
+            self.wfile.write(_FAVICON_PNG)
             return
 
         _JS_ASSETS = {"/lightbox.js": _LIGHTBOX_JS, "/scrollnav.js": SCROLLNAV_JS, "/infotip.js": INFOTIP_JS}
@@ -524,16 +560,6 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200, _get_preference_status_data())
             return
 
-        if self.path == "/gallery.html":
-            html = uncanny_gallery.render_html(_get_manifest_cached("gallery", uncanny_gallery.compute_data))
-            body = html.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
         if self.path == "/explore.html":
             body = explore_hub.render_html().encode()
             self.send_response(200)
@@ -556,6 +582,25 @@ class Handler(SimpleHTTPRequestHandler):
             body = compare_page.render_html().encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if self.path.startswith("/real/"):
+            # basename() strips any path components a malicious/malformed request tried to smuggle
+            # in (e.g. /real/../../etc/passwd), so this can only ever resolve to a direct child of
+            # REAL_DIR, read-only.
+            name = os.path.basename(urllib.parse.unquote(self.path[len("/real/"):]))
+            real_path = os.path.join(REAL_DIR, name)
+            if not name or not os.path.isfile(real_path):
+                self.send_error(404, "no such real training image")
+                return
+            with open(real_path, "rb") as f:
+                body = f.read()
+            content_type = "image/png" if real_path.lower().endswith(".png") else "image/jpeg"
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)

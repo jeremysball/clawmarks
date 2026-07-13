@@ -13,7 +13,9 @@ compute_data() depends on similarity_index's compute_data() (DEPENDS_ON = ["simi
 for both scan.html and scan_data.json (the shared data source lightbox.js fetches on every tool
 page, not just scan.html's own grid).
 """
-import json, os, re
+import json
+import os
+import re
 
 from clawmarks.shared_ui import MOBILE_BASE_CSS, INFOTIP_CSS, info_btn
 
@@ -193,7 +195,6 @@ body {{
     <option value="novelty_decay.html">novelty decay watchlist</option>
     <option value="lineage.html">lineage tree</option>
     <option value="seeds.html">candidate seeds</option>
-    <option value="gallery.html">binned atlas (original)</option>
   </select></label>
   <label>Sort{novelty_tip} <select id="sortKey">
     <option value="novelty_desc">Novelty (high to low)</option>
