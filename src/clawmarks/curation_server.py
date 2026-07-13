@@ -71,13 +71,14 @@ Everything else falls through to normal static file serving.
 
 Run with: clawmarks serve [port]
 
-This binds 0.0.0.0, which listens on every interface the host has, not just a
-tailnet one — if the host also has a LAN/Wi-Fi interface, anything on that
-network can reach this server too, with no auth in front of it. There is no
---host flag today; if you need this reachable only from your tailnet, put it
-behind a host firewall rule restricting the port to the tailscale0 interface,
-or front it with `tailscale serve` bound to 127.0.0.1 instead of exposing this
-process directly.
+Binds the tailscale0 interface's own IP by default (falling back to 0.0.0.0 if
+tailscale isn't running), not every interface the host has — if the host also
+has a LAN/Wi-Fi interface, 0.0.0.0 would let anything on that network reach
+this unauthenticated server too. Set CLAWMARKS_HOST to override the default:
+127.0.0.1 to front it with `tailscale serve` instead of exposing this process
+directly, or 0.0.0.0 explicitly if you really want every interface (e.g. a
+Docker sidecar topology where tailscale0 lives in a different container's
+netns and auto-detection would otherwise fall back to 0.0.0.0 anyway).
 """
 import base64
 import json
@@ -1367,7 +1368,7 @@ def main(argv=None):
     if argv:
         port = int(argv[0])
     _reconcile_stuck_trials()
-    host = tailscale_ip()
+    host = os.environ.get("CLAWMARKS_HOST") or tailscale_ip()
     server = ThreadingHTTPServer((host, port), Handler)
     print(f"serving {SWEEP_DIR} + ratings API on {host}:{port}", flush=True)
     server.serve_forever()
