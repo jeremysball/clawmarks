@@ -203,7 +203,12 @@ def _out_dir(cfg):
 
 
 def _state_file(cfg):
-    return _out_dir(cfg) / f"allnight{cfg.round}_state.json"
+    """Round 1's original script (notes/run_uncanny_allnight.py) wrote its state to
+    allnight_state.json with no round-number suffix; round 2's (run_uncanny_allnight2.py) wrote
+    allnight2_state.json. Preserve those exact names so this merged driver resumes from the
+    state files that already exist on disk instead of silently starting over at generation 0."""
+    suffix = "" if cfg.round == 1 else str(cfg.round)
+    return _out_dir(cfg) / f"allnight{suffix}_state.json"
 
 
 def load_state(cfg):
@@ -221,6 +226,20 @@ def load_state(cfg):
 def save_state(cfg, state):
     with open(_state_file(cfg), "w") as f:
         json.dump(state, f, indent=1)
+
+
+def _load_resumable_manifest(out_dir):
+    """Loads this round's own already-persisted scored_manifest.json, if any, so restarting the
+    search resumes on top of prior generations instead of discarding them: the main loop used to
+    always start from an empty manifest and then overwrite scored_manifest.json with only the
+    new run's images, permanently losing every previously persisted record on every restart."""
+    manifest_path = out_dir / "scored_manifest.json"
+    if not manifest_path.exists():
+        return []
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    print(f"resuming with {len(manifest)} already-persisted images from {manifest_path}", flush=True)
+    return manifest
 
 
 def request_gpt55_subjects(cfg, existing_subjects, n=30):
@@ -309,7 +328,7 @@ def _predicted_preference_pool(manifest, model_path, embed_model, top_n=15):
 
 
 def _load_prev_round_state(cfg):
-    """Round 1's body still reads its own state file (allnight_state.json) and the
+    """Round 1's body still reads its own state file (see _state_file) and the
     first-run fixed-sweep manifest. Round 2 reads round 1's manifest as the exclusion set.
     Returns (manifest, prev_embs_or_None) tuple."""
     if cfg.exclude_prev_round:
@@ -560,7 +579,7 @@ def main(argv=None):
     # style_subject_count=5 below.
     style_subject_count = 5 if cfg.round == 1 else 4
 
-    manifest = []
+    manifest = _load_resumable_manifest(out_dir)
 
     while True:
         elapsed_h = (time.time() - start_time) / 3600
