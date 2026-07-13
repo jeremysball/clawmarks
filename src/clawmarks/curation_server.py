@@ -70,6 +70,14 @@ API:
 Everything else falls through to normal static file serving.
 
 Run with: clawmarks serve [port]
+
+This binds 0.0.0.0, which listens on every interface the host has, not just a
+tailnet one — if the host also has a LAN/Wi-Fi interface, anything on that
+network can reach this server too, with no auth in front of it. There is no
+--host flag today; if you need this reachable only from your tailnet, put it
+behind a host firewall rule restricting the port to the tailscale0 interface,
+or front it with `tailscale serve` bound to 127.0.0.1 instead of exposing this
+process directly.
 """
 import base64
 import json
