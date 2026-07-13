@@ -133,6 +133,27 @@ def test_submit_and_collect_cancels_jobs_still_pending_at_timeout(tmp_path, monk
     assert cancelled == ["job-1"]
 
 
+def test_submit_and_collect_surfaces_cancel_failure_in_summary(tmp_path, monkeypatch, capsys):
+    """Regression test for issue #16 review response: a cancel_job failure was silently
+    swallowed with no trace in the printed summary line, so an operator skimming logs had no
+    way to notice a job that kept running (and billing) because its cancel call itself failed.
+    The summary line must surface a cancel_failed count."""
+    monkeypatch.setattr(comfyui, "api_post", lambda path, payload: {"id": "job-1"} if path == "/run" else {})
+    monkeypatch.setattr(comfyui, "api_get", lambda path: {"status": "IN_PROGRESS"})
+
+    def _raise(job_id):
+        raise RuntimeError("cancel endpoint 500")
+    monkeypatch.setattr(comfyui, "cancel_job", _raise)
+
+    jobs = [{"tag": "t0", "prompt": "p", "seed": 1, "strength": 1.0, "cfg": 7.0, "steps": 28,
+             "sampler": "ddim", "negative": "bad"}]
+    driver.submit_and_collect(driver.ROUND_CONFIGS[1], jobs, tmp_path, "gen1", timeout_s=0)
+
+    out = capsys.readouterr().out
+    assert "CANCEL_FAIL job-1" in out
+    assert "cancel_failed=1" in out
+
+
 def test_submit_and_collect_does_not_cancel_completed_jobs(tmp_path, monkeypatch):
     monkeypatch.setattr(comfyui, "api_post", lambda path, payload: {"id": "job-1"} if path == "/run" else {})
     from PIL import Image

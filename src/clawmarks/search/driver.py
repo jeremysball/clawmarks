@@ -399,6 +399,7 @@ def submit_and_collect(cfg, jobs, out_dir, label, timeout_s=600):
                 pending.discard(jid)
         if pending:
             time.sleep(8)
+    cancel_failed = 0
     if pending:
         print(f"[{label}] {len(pending)} jobs still pending after {timeout_s}s, cancelling them "
               f"so they stop billing on the provider side", flush=True)
@@ -406,8 +407,10 @@ def submit_and_collect(cfg, jobs, out_dir, label, timeout_s=600):
             try:
                 cancel_job(jid)
             except Exception as e:
+                cancel_failed += 1
                 print(f"CANCEL_FAIL {jid}: {e}", flush=True)
-    print(f"[{label}] completed={completed} failed={failed} timed_out={len(pending)}", flush=True)
+    print(f"[{label}] completed={completed} failed={failed} timed_out={len(pending)} "
+          f"cancel_failed={cancel_failed}", flush=True)
     return manifest
 
 
