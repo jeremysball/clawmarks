@@ -10,8 +10,12 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [lint, typecheck, unit]
     steps:
       - uses: actions/checkout@v4
 
@@ -23,5 +27,14 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra dev
 
+      - name: Run lint
+        if: matrix.leg == 'lint'
+        run: uv run ruff check src tests
+
+      - name: Run type check
+        if: matrix.leg == 'typecheck'
+        run: uv run mypy src
+
       - name: Run tests
+        if: matrix.leg == 'unit'
         run: uv run pytest -q

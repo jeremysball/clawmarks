@@ -16,7 +16,8 @@ automated "elites" list.
 
 Run after scored_manifest.json exists: python3 -m clawmarks.build.elite_archive
 """
-import json, os
+import json
+import os
 
 from clawmarks.search.manifest_index import item_summary
 from clawmarks.search.preference_pairwise_model import MODEL_FILE as PREFERENCE_MODEL_FILE

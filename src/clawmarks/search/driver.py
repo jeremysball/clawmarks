@@ -378,7 +378,7 @@ def score_batch(model, real_embs, real_centroid, manifest_batch, prev_embs=None)
     nn_real = (embs @ real_embs.T).max(dim=1).values
     if prev_embs is not None and prev_embs.shape[0] > 0:
         nn_prev = (embs @ prev_embs.T).max(dim=1).values
-        nn_combined = torch_maximum(nn_real, nn_prev).tolist()
+        nn_combined = _torch_maximum(nn_real, nn_prev).tolist()
     else:
         nn_combined = nn_real.tolist()
     for m, cs, ns in zip(manifest_batch, centroid_sim, nn_combined):
@@ -425,7 +425,7 @@ def build_gallery(cfg, manifest, real_ref):
     top.sort(key=lambda m: -m["centroid_sim"])
 
     rows = "".join(
-        f'<div class="row">' + "".join(
+        '<div class="row">' + "".join(
             cell_html(grid.get((fb, nb), []), faith_edges, novelty_edges, fb, nb) for nb in range(N_BINS)
         ) + '</div>'
         for fb in range(N_BINS)
@@ -510,7 +510,8 @@ def main(argv=None):
     loo_sims = []
     for i in range(real_embs.shape[0]):
         others = torch.cat([real_embs[:i], real_embs[i + 1:]], dim=0)
-        loo_c = others.mean(dim=0); loo_c = loo_c / loo_c.norm()
+        loo_c = others.mean(dim=0)
+        loo_c = loo_c / loo_c.norm()
         loo_sims.append((real_embs[i] @ loo_c).item())
     real_ref = (sum(loo_sims) / len(loo_sims), min(loo_sims), max(loo_sims))
     print(f"real-image reference band: {real_ref}", flush=True)
