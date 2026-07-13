@@ -13,7 +13,9 @@ compute_data() depends on similarity_index's compute_data() (DEPENDS_ON = ["simi
 for both scan.html and scan_data.json (the shared data source lightbox.js fetches on every tool
 page, not just scan.html's own grid).
 """
-import json, os, re
+import json
+import os
+import re
 
 from clawmarks.shared_ui import MOBILE_BASE_CSS, INFOTIP_CSS, info_btn
 

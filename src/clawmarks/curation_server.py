@@ -71,7 +71,14 @@ Everything else falls through to normal static file serving.
 
 Run with: clawmarks serve [port]
 """
-import base64, json, os, random, subprocess, sys, threading, time
+import base64
+import json
+import os
+import random
+import subprocess
+import sys
+import threading
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone

@@ -4,7 +4,9 @@ nearest neighbors by cosine similarity, so scan.html can offer "show me images s
 this one" instead of only sort/filter by score. compute_data() is a data-only live-cache
 target with no route of its own; scan.html's own compute_data() depends on it.
 """
-import os, json, time
+import os
+import json
+import time
 import torch
 from transformers import AutoModel
 
