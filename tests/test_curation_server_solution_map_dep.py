@@ -34,7 +34,7 @@ def test_get_solution_map_data_watches_the_final_embeddings_file_too(tmp_path, m
 
     # Swap the embeddings file (simulating merge_round2.py overwriting it) without touching
     # scored_manifest.json. Without watching this file, the cache would never notice.
-    import os, time
+    import os
     new_mtime = os.path.getmtime(embs_file) + 5
     embs_file.write_text("v2")
     os.utime(embs_file, (new_mtime, new_mtime))

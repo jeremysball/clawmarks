@@ -1632,3 +1632,243 @@ silently drops hard-won fixes that lived only in the old file. The touch `preven
 once already on 2026-07-10; the rewrite lost it because nothing tied the fix to a test. The new
 regression tests cover the two server-side behaviors, but a touch-device gesture check still isn't
 automated in the suite.
+
+### 2026-07-12: Curation-UI polish (compare, elite archive, hub) and a data-safety near-miss
+
+Ran the live curation server against `notes/uncanny_seedrun1/` (100 real 1024x1024 PNGs, the only
+sweep with images still on disk after the Task 12 loss) to try out the head-to-head page, and made
+three UI improvements from that session, each its own commit with a regression test.
+
+**Compare page.** On a phone the two images stack vertically, but both captions had rendered on one
+shared row below both images, disconnected from the image each described. Moved each caption inside
+its own pane so it tracks its image when the panes stack; desktop keeps them side by side. Added a
+training-progress bar with two phases: below the 50-comparison floor it fills toward "Model unlocks
+in N votes"; at or above it, it shows the model's real cross-validated accuracy ("Model reads your
+taste: X%") mapped from the 0.5 coin-flip baseline to 1.0, and pulses on each tenth-comparison
+retrain. The accuracy is the genuine `cv_accuracy` from `preference_pairwise_model_meta.json` read
+via `/api/preference_status`, not a cosmetic animation, so the bar reflects the model actually
+learning. Verified headlessly on desktop (side-by-side) and mobile (stacked) viewports, plus a live
+vote that advanced the bar and loaded a fresh pair.
+
+**Elite archive.** Each cell now labels the faithfulness and novelty range its bin covers (e.g.
+`bin faith 2/4 (0.20-0.50) - novelty 4/4 (0.70-0.90)`), computed from the same quartile edges the
+binning already used but never surfaced. The four bins per axis are population quartiles, so each
+holds a similar share of images rather than an equal slice of the value range; the page now says so.
+
+**Home page vs. nav dropdown drift.** The `explore.html` hub was missing three tools the jump-to
+dropdown already listed: compare (head-to-head), predicted preference, and preference status, the
+entire head-to-head feature. Added all three and reordered the hub to mirror `shared_ui.NAV_OPTIONS`,
+with a test that fails if the two lists ever diverge again.
+
+**Data-safety near-miss (record in full, per Section 1's standing rule).** Before serving I took a
+complete-mirror backup of `notes/uncanny_seedrun1/` and verified it (208 files, 100 PNGs, `diff -rq`
+identical). While serving, the user cast 46 real comparisons, which the server wrote to a
+`user_comparisons.json` that did not exist when the backup was taken. Restoring that verified backup
+would therefore have destroyed all 46 votes: the exact partial-backup-then-full-restore shape that
+caused the Task 12 loss, one step from repeating. Caught it by checking backup-vs-current comparison
+counts (backup: no file; current: 46) before any restore, snapshotted the 46 votes to scratchpad
+immediately, and ran the write-path verification against a throwaway copy on a second port so no
+automated vote ever touched the real data. The live 46 votes stayed intact. Lesson reinforced: a
+backup only protects what existed when it was taken; re-verify before trusting it against live-mutated
+data, never assume a mirror is still complete.
+
+**Tooling gotcha, now in CLAUDE.md.** `fd` and `rg` skip `.gitignore`d files by default, and almost
+every image on this project sits under a gitignored glob, so `fd -e png notes/uncanny_seedrun1`
+reported zero PNGs while `ls` showed 100. A directory of real generation output looked empty and was
+briefly mistaken for lost data. Use `fd -I` / `rg -uu` (or plain `ls`/`find`) to see ignored image
+output; an empty default-tool result means "not tracked by git," not "not on disk."
+
+**Concept for the whitepaper: how Stage 5b (predicted preference) composes with MAP-Elites.** They
+are orthogonal. MAP-Elites owns diversity through its faithfulness x novelty archive; the trained
+preference model never becomes an archive axis or changes the bins. Each generation splits into
+explore jobs (fresh random subjects, which fill the archive across the whole grid) and exploit jobs
+(mutations near a pool of good parents). Stage 5b changes only the exploit pool: instead of mutating
+near favorited images or novelty-ranked elites (Stage 5a), it mutates near the top-N images the
+preference model scores highest (`driver._predicted_preference_pool`). So preference is a
+parent-selection signal for the exploit half only. Explore keeps mapping the frontier and the archive
+still keeps one novelty-champion per bin; preference just biases where refinement concentrates toward
+the user's taste. The tension to name in the paper: MAP-Elites deliberately preserves diversity
+(including low-preference bins) while the preference model is a narrowing pressure, so they coexist
+only because 5b steers exploitation, not exploration. Cranking the exploit fraction up with 5b on
+would risk collapsing the archive's diversity toward the user's taste. This is why 5b is opt-in and
+gated behind validating the model on `preference_rank.html` first.
+
+**Repeated-image bug in the compare sampler ("I've seen this pig ten times").** Below the
+50-comparison floor the sampler picked a grid bin uniformly at random, then a random image in it. A
+bin holding one image drew that image with probability 1/n_bins; an image sharing a dense bin with
+twenty others drew at 1/n_bins/20. So a lone-bin image reappeared far more often than a person reads
+as random, and one kept recurring. Rewrote `stratified_random_pair` to be coverage-aware: it now
+tracks how many past comparisons each image appears in (a `seen` tag->count map the server builds
+from the comparison history) and restricts each draw to the least-covered frontier (the bins whose
+least-shown image has the lowest seen-count), then the least-shown image in that bin. An image never
+recurs until every other bin's least-shown image has been shown as often, spreading coverage evenly
+across the archive while keeping the grid stratification. Two regression tests: an over-shown image
+does not reappear while less-shown ones exist, and across a simulated 60-draw session every image
+stays within one appearance of the minimum. Verified live: the previously over-shown tags did not
+recur across 25 fresh pairs.
+
+**"None of the pages do anything" was three separate things, none of them static files.** The user
+reported the non-compare pages looked broken and expected them "all served from the Python web
+server." I first mis-diagnosed this as missing static-JSON routes (`solution_map_data.json`,
+`similarity.json`) 404ing. That was wrong, and I had asserted it without testing. Every page is
+already rendered dynamically in-process (`view.render_html(view.compute_data(...))`); those old
+build-artifact JSONs are gone and nothing reads them. The real causes, found by rendering each page
+in a headless browser instead of theorizing:
+- **lineage.html and novelty_decay.html are legitimately empty for this dataset.** seedrun1 is a
+  single-generation seed run: all 100 images have `parent_tag: None` and `generation: None`, so there
+  are no exploit chains to draw. Both pages already show an explanatory placeholder. They will
+  populate on a real multi-round search, not a seed run.
+- **redundancy.html rendered blank because its slider range was hardcoded.** The similarity-threshold
+  slider ran 0.80 to 0.99 (default 0.93), tuned for near-duplicate detection in a tight
+  multi-generation sweep. seedrun1's closest pair sits at cosine 0.776, below even the slider's
+  minimum, so every slider position produced zero edges and an empty graph. Fixed
+  `redundancy_view.render_html` to size the slider to the actual edge distribution (span the real
+  min-to-max padded to a 0.05 grid, default where only the tightest ~5% of edges survive). seedrun1
+  now spans 0.15-0.80, defaults to 0.60, and renders 4 real clusters (largest 17 images) out of 73
+  effective clusters. Screenshot-verified.
+- **map.html was never broken.** Its UMAP scatter paints 100 points onto a `<canvas>`; my first probe
+  counted DOM `<circle>` elements and found none, a probe artifact, not an empty page. A second check
+  confirmed 3033 painted pixels.
+
+Root cause of the mis-diagnosis, now fixed in documentation: `curation_server.py`'s module docstring
+still opened with "Static file server," legacy language from when it wrapped `python3 -m
+http.server`. Rewrote the docstring to state the dynamic rendering model explicitly (every .html
+builds in-process at request time; `/scan_data.json` is the one client-fetched companion; a
+blank-looking page is empty-for-this-dataset or a client-side filter, never a missing file) so this
+mistake can't recur.
+
+**Added a three-prompt unfamiliar-subject seed file for noise-break testing.** Wrote
+`notes/uncanny_seedrun1/candidate_seeds_gen_1783887674.json` with three short, concrete prompts:
+an abandoned airport gate, wet shoes around a basement dehumidifier, and an empty bus shelter with
+leaves. The set intentionally spans space, object-machine, and weather-street categories so the next
+style-survival check tests more than one kind of off-distribution subject.
+
+**Added another three-prompt unfamiliar-subject seed file for noise-break testing.** Wrote
+`notes/uncanny_seedrun1/candidate_seeds_gen_1783887739.json` with a rain-lit laundromat, a sweating
+birthday cake on a conference table, and fog-stalled commuters on a platform, spanning space, object,
+weather, and crowd stress cases.
+
+### 2026-07-12: Worked the curation-UI continuation prompt's outstanding-work list (items 1-4)
+
+Picked up `notes/continuation_prompt_curation_ui.md` and worked through its ordered list against the
+live server on `notes/uncanny_seedrun1/`. Full suite went from 192 to 195 passing (net: removed 3
+gallery tests, added 6 new ones); every change verified live via headless Playwright, not just unit
+tests, per the continuation prompt's own instruction.
+
+1. **Removed the binned atlas (gallery.html).** Deleted its route in `curation_server.py`, the
+   `uncanny_gallery.py` view module, its `shared_ui.NAV_OPTIONS` and jump-to-dropdown entries, and its
+   `explore_hub.py` card. `search/driver.py`'s separate offline per-round gallery (a static file it
+   writes to the sweep dir, unrelated to the live server) still needed `thumb_data_uri`, so that
+   function moved to `build/thumbnails.py` instead of being deleted with the rest of the module. Live-
+   verified: `/gallery.html` 404s, the nav dropdown and hub no longer mention it, and the 52 real votes
+   in `user_comparisons.json` survived the server restart untouched.
+
+2. **novelty_decay.html now has an explicit empty-state placeholder**, matching lineage.html's pattern:
+   when no prompt family has appeared in 2+ generations (true for seedrun1, a single-generation seed
+   run), it explains why there's nothing to plot instead of rendering a blank chart. Added a regression
+   test asserting the placeholder renders when `compute_data`'s series list is empty.
+
+3. **seeds.html: real bug found and fixed, not just an empty-state issue.** The empty page traced to
+   `curation_server.save_store` doing `path + ".tmp"`, which breaks when `path` is a `pathlib.Path`
+   (as `SEEDS_FILE` is, unlike every other `*_FILE` constant in the module, which are f-strings). The
+   first live test of the "Generate" button actually called GPT-5.5 successfully, then silently lost
+   the result to this `TypeError` when persisting it, a real cost (one wasted GPT-5.5 call) worth
+   recording so it isn't repeated. Fixed with `str(path) + ".tmp"`, added a regression test that saves
+   through a `Path` object, and a second test that exercises the full `/api/seeds/generate` request
+   with a mocked `opencode` subprocess call. Re-ran the real end-to-end flow live afterward: GPT-5.5
+   returned three real seeds (an empty laundromat, a bus shelter of damp umbrellas, a storm-lit cul-de-
+   sac), all three persisted and rendered. Also added a clearer "no candidate seeds yet, use Generate
+   above" empty-state message for the zero-seed case itself.
+
+4. **Map hover now shows the actual nearest real training image, not just its filename and similarity
+   score.** Added a read-only `/real/<name>` route to `curation_server.py` that serves from
+   `search/score_manifest.REAL_DIR`, sanitized with `os.path.basename()` so a path-traversal attempt in
+   the requested name can only ever resolve to a direct child of `REAL_DIR` (regression test covers
+   this: a `..%2F..` request 404s instead of escaping the directory). `map_view.py`'s hover panel now
+   renders that image inline below the hovered point's own thumbnail, captioned with its similarity
+   score. Live-verified via `showInfo()` in a headless browser: hovering a point resolved
+   `nearest_real: FlzK3OUXoAEvv3e.jpg` to `/real/FlzK3OUXoAEvv3e.jpg`, which rendered as a visible
+   image in the panel, not a broken-image icon.
+
+**Tooling gotcha: the Playwright MCP server's `--executable-path` was hardcoded to `/home/node/...`**,
+a stale path from a different container image, while the browser binary actually lived under
+`/home/jeremy/.cache/ms-playwright/...` in this environment. Fixed by removing the hardcoded
+`--executable-path` from `~/.claude.json`'s `mcpServers.playwright.args` entirely, letting it
+auto-detect `$HOME/.cache/ms-playwright` instead. A stale Chrome `SingletonLock` from an earlier failed
+launch attempt also had to be cleared by hand (`rm` on the three `Singleton*` files under the relevant
+`mcp-chrome-*` profile dir) before the fixed config would launch cleanly.
+
+**Added a placeholder favicon.** Generated via FLUX (`flux-prompting` skill, `fal-ai/flux-pro/v1.1-
+ultra`) in the CLAWMARKS mixed-media style (a bold-ink fox face on aged cream paper), resized to
+128x128, and saved to `src/clawmarks/static/favicon.png`. `curation_server.py` now serves it at both
+`/favicon.ico` and `/favicon.png`, clearing the favicon-404 console noise every page previously threw.
+
+### 2026-07-12: CI/CD, CI-gated Docker build, and a Watchtower compose stack for curation_server.py
+
+Scoped to CLAWMARKS only, and to `curation_server.py` only within it (the RunPod driver and
+generation scripts stay host-side; only the always-on curation web server gets containerized).
+Modeled on `/workspace/hearth`'s existing pattern.
+
+- **`CLAUDE.md`, "Running tests" section**: run only the touched test file while iterating, the
+  full suite before calling a change done, and a live Playwright check for any UI change even
+  after the suite passes.
+- **`.github/workflows/check.yml`**: `uv sync --extra dev` + `uv run pytest -q` on every PR and
+  push to `main`. Confirmed the exact commands succeed locally first (195 passed, 52.92s) before
+  trusting them in CI.
+- **`Dockerfile`**: `python:3.12-slim` + `uv`, `COPY . .`, `uv sync --frozen --no-dev`, runs
+  `python3 -m clawmarks.curation_server 8420`. `.dockerignore` excludes `notes/` and
+  `corrected_dataset_extract/` outright: this project's data-integrity rule says irreplaceable
+  RunPod-billed generation output and real training images must never end up baked into a Docker
+  layer. Because `notes/` still isn't in the build context but `pyproject.toml` is,
+  `clawmarks.config.repo_root()` resolves `ROOT=/app` automatically with no `CLAWMARKS_ROOT`
+  override needed; the served dataset comes entirely from a bind mount at runtime.
+- **`docker-compose.yml`**: three services mirroring hearth's shape (`tailscale` sidecar,
+  `app`, `watchtower`), except plain HTTP instead of hearth's TLS cert mount, since
+  `curation_server.py` doesn't terminate TLS itself. `./notes` and
+  `./corrected_dataset_extract` are bind mounts, not named volumes, again per the data-integrity
+  rule: a bind mount keeps this data directly reachable by the project's existing
+  backup/verify workflow, where a named volume would hide it inside Docker's storage driver.
+  Image is `ghcr.io/jeremysball/clawmarks-lora`, matching the actual GitHub repo name.
+- **`.github/workflows/build.yml`**: `verify` builds the image on every PR without pushing
+  (catches a broken Dockerfile before merge); `publish` pushes to GHCR tagged `latest` and
+  `sha-<short>`, gated on `check` having already succeeded on `main` (`workflow_run` trigger),
+  matching hearth's two-job pattern exactly.
+- **`.env.example`** documents the compose stack's required secrets (`TS_AUTHKEY`,
+  `RUNPOD_API_KEY`, `CIVITAI_TOKEN`, `CIVITAI_MODEL_ID`, `OPENAI_API_KEY`) and
+  `CLAWMARKS_SWEEP_DIR`; `.env` added to `.gitignore` alongside the existing `.envrc` entry.
+
+**Known gap, resolved**: seeds.html's "Generate" button shells out to the `opencode` CLI, which
+on this host authenticates via an interactive OAuth login (`opencode auth login`, stored in
+`~/.local/share/opencode/auth.json`). Jeremy's call: don't mount that credential file into the
+container; instead the image installs `opencode` directly (official install script, in the
+Dockerfile) and authenticates headlessly via `OPENAI_API_KEY`. Checked against opencode.ai's own
+docs before wiring it in: `OPENAI_API_KEY` is a documented, supported alternative to the OAuth
+flow for exactly this kind of headless/CI/Docker use, not a guess. `docker-compose.yml` and
+`.env.example` both pass it through the same way the other secrets already do.
+
+### 2026-07-12: Design for unified detail view, real-image viewing, and thumb-then-full-res loading
+
+Wrote `docs/superpowers/specs/2026-07-12-detail-view-and-generation-design.md`, per the
+continuation prompt's item 5 ("plan, don't build, a unified image-detail + generate-around UI")
+and two of the follow-up batch's requests (view the full real reference image on the map; a
+generalized thumb-then-full-res swap API). Folded all three into one design since they're the
+same underlying investment, not three separate features.
+
+The useful finding was that most of item 5 already exists: `shared_ui.py`'s Lightbox component
+already gives seven of the eleven tool pages (scan, map, archive, preference_rank, redundancy,
+lineage, coverage) a linked detail modal with single-shot generate-around baked in. The actual
+gaps are narrower than the original ask implied: `compare.html` has no detail access at all,
+`/api/counterfactual` only ever produces one variation per click, and nothing in the codebase
+does progressive thumb-then-full loading, including this session's new `/real/<name>` route,
+which serves the real training photo at full resolution with no thumbnail stage. The spec
+proposes a small `compare.html` expand-icon into the existing Lightbox, an `n`-variation
+extension to the counterfactual endpoint capped at 6 per batch, and a `mountProgressive()` helper
+wired into both the Lightbox's main image and a new `/real_thumbs/<name>` route for the map
+panel. Design only; nothing implemented yet, tracked in `TODO.txt`.
+
+**Not done this session**: branch protection on `main` (needs `check` to have at least one run
+on GitHub, which needs this branch pushed/merged first) and an actual `docker build` (no
+`docker` binary in this sandbox; the first real build will be CI's `verify` job on the first PR
+touching `Dockerfile`/`docker-compose.yml`). Also unresolved: whether "explain in hearth's
+readme why docker compose uses watchtower" survived the "CLAWMARKS only" scope-down (answered in
+chat, not written into `hearth/README.md`), and what "what is the real key" referred to.

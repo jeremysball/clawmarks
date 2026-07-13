@@ -22,3 +22,30 @@ def test_render_html_embeds_edges():
     }
     html = redundancy_view.render_html(data)
     assert '"a": [["a", 0.9]]' in html
+
+
+def _thresh_attrs(html):
+    import re
+    m = re.search(r'id="thresh"[^>]*min="([0-9.]+)"[^>]*max="([0-9.]+)"[^>]*value="([0-9.]+)"', html)
+    return tuple(float(x) for x in m.groups())
+
+
+def test_slider_range_tracks_a_diverse_datasets_edge_distribution():
+    # A diverse population's closest pair can sit below the old hardcoded 0.80 slider minimum, which
+    # left every slider position empty and the page looking broken. The slider must reach the data:
+    # its minimum sits at or below the smallest edge and its default at or below the largest, so at
+    # least one edge always survives the default threshold.
+    edges = {f"n{i}": [[f"n{i+1}", 0.20 + 0.005 * i]] for i in range(60)}  # all edges in [0.20, 0.50)
+    data = {"sim_scored": edges, "thumbs": {}, "meta": {}}
+    lo, hi, default = _thresh_attrs(redundancy_view.render_html(data))
+    all_scores = [s for lst in edges.values() for _, s in lst]
+    assert lo <= min(all_scores)
+    assert default <= max(all_scores)
+    assert lo <= default <= hi
+
+
+def test_slider_falls_back_to_a_valid_range_with_no_edges():
+    lo, hi, default = _thresh_attrs(redundancy_view.render_html(
+        {"sim_scored": {}, "thumbs": {}, "meta": {}}))
+    assert lo < hi
+    assert lo <= default <= hi

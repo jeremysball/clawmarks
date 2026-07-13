@@ -25,9 +25,9 @@ def build_ranked_items(by_tag, tags, scores, sweep_dir, limit=500):
         key=lambda pair: -pair[1],
     )[:limit]
     items = []
-    for tag, score in ranked:
+    for tag, pref_score in ranked:
         summary = item_summary(by_tag[tag], sweep_dir)
-        summary["predicted_preference"] = round(float(score), 4)
+        summary["predicted_preference"] = round(float(pref_score), 4)
         items.append(summary)
     return items
 
