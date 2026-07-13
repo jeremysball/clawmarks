@@ -60,7 +60,7 @@ def build_training_set(tags, embeddings, comparisons):
     user_comparisons.json list. Returns (X, y): a mirrored pair of rows per usable comparison
     (embedding[winner] - embedding[loser] labeled 1, its negation labeled 0), skipping any
     comparison whose winner or loser tag isn't in the embedding cache."""
-    diffs = [w - l for _, _, w, l in _iter_usable_comparisons(tags, embeddings, comparisons)]
+    diffs = [w - loser_emb for _, _, w, loser_emb in _iter_usable_comparisons(tags, embeddings, comparisons)]
     if not diffs:
         return np.zeros((0, 0), dtype=np.float32), np.zeros((0,), dtype=np.int64)
     diffs = np.stack(diffs)
@@ -74,7 +74,7 @@ def comparisons_fingerprint(tags, embeddings, comparisons):
     means retraining now would use identical data to last time. Unlike a bare comparison count,
     this also catches a comparison being added and another (already-counted) one becoming
     unusable, e.g. after an embedding cache rebuild drops a tag."""
-    pairs = sorted((w, l) for w, l, _, _ in _iter_usable_comparisons(tags, embeddings, comparisons))
+    pairs = sorted((w, loser) for w, loser, _, _ in _iter_usable_comparisons(tags, embeddings, comparisons))
     return hashlib.sha256(json.dumps(pairs).encode()).hexdigest()
 
 

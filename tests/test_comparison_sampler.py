@@ -41,7 +41,8 @@ def test_stratified_random_pair_avoids_already_shown_images():
     picked = set()
     for _ in range(10):
         a, b = cs.stratified_random_pair(manifest, seen=seen, rng=rng)
-        picked.add(a["tag"]); picked.add(b["tag"])
+        picked.add(a["tag"])
+        picked.add(b["tag"])
     assert "t0" in picked
 
 

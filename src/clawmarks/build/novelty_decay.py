@@ -7,7 +7,8 @@ from the explore pool; one whose novelty still climbs is still yielding new terr
 
 Run after scored_manifest.json exists: python3 -m clawmarks.build.novelty_decay
 """
-import json, re
+import json
+import re
 from collections import defaultdict
 
 from clawmarks.shared_ui import nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, INFOTIP_CSS, info_btn
