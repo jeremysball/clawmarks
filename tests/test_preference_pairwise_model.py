@@ -185,6 +185,20 @@ def test_comparisons_fingerprint_changes_when_a_comparison_is_duplicated():
             != ppm.comparisons_fingerprint(tags, embeddings, duplicated))
 
 
+def test_cross_validate_does_not_leak_mirrored_pairs_across_folds():
+    """Regression test for a bug where StratifiedKFold split mirrored rows (a pair's diff and its
+    negation) independently across folds, letting the model exploit the leaked mirror instead of
+    learning real signal. On signal-free noise, that leak scored ~91% accuracy; grouping both
+    mirrored rows of a pair into the same fold should score close to chance (~50%) instead."""
+    rng = np.random.RandomState(0)
+    n_pairs = 60
+    diffs = rng.normal(size=(n_pairs, 768)).astype(np.float32)
+    X = np.concatenate([diffs, -diffs]).astype(np.float32)
+    y = np.concatenate([np.ones(n_pairs), np.zeros(n_pairs)])
+    acc = ppm.cross_validate(X, y)
+    assert acc < 0.65
+
+
 def test_train_and_save_refuses_when_usable_comparisons_fall_below_raw_count(tmp_path, monkeypatch):
     """Regression test for a bug where train_and_save only checked the raw comparisons count
     against MIN_COMPARISONS, not the usable (embedding-cached) count. Here the raw count clears

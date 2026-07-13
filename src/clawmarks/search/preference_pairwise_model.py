@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 import joblib
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import LeaveOneOut, StratifiedKFold, cross_val_score, permutation_test_score
+from sklearn.model_selection import GroupKFold, LeaveOneGroupOut, cross_val_score, permutation_test_score
 
 from clawmarks.config import SWEEP_DIR
 from clawmarks.search import embed_cache
@@ -78,23 +78,44 @@ def comparisons_fingerprint(tags, embeddings, comparisons):
     return hashlib.sha256(json.dumps(pairs).encode()).hexdigest()
 
 
-def cross_validate(X, y):
+def _pair_groups(n_rows):
+    """Maps each of the n_rows training rows to the underlying comparison it came from, so a CV
+    split can be forced to keep both mirrored rows of a pair (embedding[winner]-embedding[loser]
+    and its negation) together in one fold. build_training_set always lays rows out as
+    [diffs..., -diffs...], so row i and row i + n_rows//2 share a pair index of i % (n_rows//2).
+    Without this, a fold can see one mirrored row at train time and its exact negation at test
+    time, letting the model "predict" by sign alone instead of learning real signal."""
+    n_pairs = n_rows // 2
+    return np.concatenate([np.arange(n_pairs), np.arange(n_pairs)])
+
+
+def cross_validate(X, y, groups=None):
     """Mean cross-validated accuracy at predicting which side of a mirrored pair is the winner.
-    Leave-one-out below MIN_COMPARISONS rows, since every row matters at that scale; 5-fold
-    StratifiedKFold at or above it."""
-    cv = LeaveOneOut() if len(y) < MIN_COMPARISONS else StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
-    scores = cross_val_score(LogisticRegression(max_iter=1000), X, y, cv=cv)
+    Grouped by underlying pair so both mirrored rows of a comparison always land in the same
+    fold; otherwise the model can exploit the leaked mirror rather than learning real signal.
+    Leave-one-group-out below MIN_COMPARISONS pairs, since every pair matters at that scale;
+    5-fold GroupKFold at or above it."""
+    if groups is None:
+        groups = _pair_groups(len(y))
+    n_groups = len(np.unique(groups))
+    cv = LeaveOneGroupOut() if n_groups < MIN_COMPARISONS else GroupKFold(n_splits=5, shuffle=True, random_state=0)
+    scores = cross_val_score(LogisticRegression(max_iter=1000), X, y, cv=cv, groups=groups)
     return float(scores.mean())
 
 
-def significance(X, y, n_permutations=N_PERMUTATIONS, random_state=0):
+def significance(X, y, n_permutations=N_PERMUTATIONS, random_state=0, groups=None):
     """Permutation test: how often does a model trained on randomly shuffled labels score as
     well as the real one? A low p-value means the real accuracy is unlikely to be a fluke of
     this particular comparison set. baseline_accuracy is always 0.5 here because mirroring
-    guarantees exact class balance, unlike preference_model.py's yes/no labels."""
-    cv = LeaveOneOut() if len(y) < MIN_COMPARISONS else StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+    guarantees exact class balance, unlike preference_model.py's yes/no labels. Grouped by
+    underlying pair for the same reason as cross_validate: otherwise the permutation test also
+    reports significance on pure noise."""
+    if groups is None:
+        groups = _pair_groups(len(y))
+    n_groups = len(np.unique(groups))
+    cv = LeaveOneGroupOut() if n_groups < MIN_COMPARISONS else GroupKFold(n_splits=5, shuffle=True, random_state=0)
     _, _, p_value = permutation_test_score(
-        LogisticRegression(max_iter=1000), X, y, cv=cv,
+        LogisticRegression(max_iter=1000), X, y, cv=cv, groups=groups,
         n_permutations=n_permutations, random_state=random_state,
     )
     baseline_accuracy = max(np.bincount(y)) / len(y)
