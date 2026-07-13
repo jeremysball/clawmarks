@@ -71,6 +71,16 @@ def _consolidate_pairs(comparisons):
     return consolidated
 
 
+def n_consolidated_pairs(comparisons):
+    """Count of distinct pairs left after majority-vote consolidation, before filtering by
+    embedding-cache presence. Lets a caller like curation_server's retrain gate tell whether an
+    under-floor usable count is caused by missing embeddings (n_consolidated_pairs clears the
+    floor but n_usable from build_training_set doesn't) or by duplicate-judgment consolidation
+    itself (n_consolidated_pairs is already below the floor, so refreshing the embedding cache
+    wouldn't help)."""
+    return len(_consolidate_pairs(comparisons))
+
+
 def _iter_usable_comparisons(tags, embeddings, comparisons):
     """Yields (winner, loser, winner_embedding, loser_embedding) for every consolidated pair
     (see _consolidate_pairs) whose winner and loser tags are both present in the embedding cache.

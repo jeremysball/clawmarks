@@ -234,3 +234,36 @@ def test_train_and_save_refuses_when_usable_comparisons_fall_below_raw_count(tmp
 
     assert ppm.train_and_save(comparisons) is None
     assert not (tmp_path / "preference_pairwise_model.joblib").exists()
+
+
+def test_train_and_save_refuses_when_repeated_judgments_consolidate_below_the_floor(tmp_path, monkeypatch):
+    """Regression test for issue #13's headline exploit: 50 raw submissions of the SAME pair
+    clear the early `len(comparisons) < MIN_COMPARISONS` check in train_and_save, but consolidate
+    to a single usable pair, and must still be refused. Unlike
+    test_train_and_save_refuses_when_usable_comparisons_fall_below_raw_count above (which covers
+    the missing-embedding cause), every tag here has a cached embedding: the only reason usable
+    falls below the floor is duplicate-judgment consolidation itself."""
+    monkeypatch.setattr(ppm, "SWEEP_DIR", tmp_path)
+    monkeypatch.setattr(ppm, "MODEL_FILE", tmp_path / "preference_pairwise_model.joblib")
+    monkeypatch.setattr(ppm, "MODEL_META_FILE", tmp_path / "preference_pairwise_model_meta.json")
+
+    tags = ["a", "b"]
+    embeddings = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    embed_cache.save_cache(tmp_path / "embeddings.npz", tags, embeddings)
+    monkeypatch.setattr(ppm.embed_cache, "EMBEDDINGS_FILE", tmp_path / "embeddings.npz")
+
+    comparisons = [{"winner": "a", "loser": "b", "compared_at": "t0"}] * ppm.MIN_COMPARISONS
+    assert len(comparisons) >= ppm.MIN_COMPARISONS
+
+    assert ppm.train_and_save(comparisons) is None
+    assert not (tmp_path / "preference_pairwise_model.joblib").exists()
+
+
+def test_n_consolidated_pairs_counts_distinct_pairs_after_majority_vote():
+    comparisons = (
+        [{"winner": "a", "loser": "b", "compared_at": "t0"}] * 5
+        + [{"winner": "c", "loser": "d", "compared_at": "t1"}]
+        + [{"winner": "e", "loser": "f", "compared_at": "t2"}, {"winner": "f", "loser": "e", "compared_at": "t3"}]
+    )
+    # a/b: 1 distinct pair (5x same verdict), c/d: 1 distinct pair, e/f: tied 1-1, dropped.
+    assert ppm.n_consolidated_pairs(comparisons) == 2
