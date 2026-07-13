@@ -6,7 +6,7 @@ leave-one-out reference band computed from the real training images).
 
 This is the expensive step (loads DINOv2, embeds every real and generated image) and stays a
 standalone script, run once per search round after notes/run_uncanny_sweep.py finishes, rather
-than part of the live per-request rendering path build/uncanny_gallery.py now belongs to.
+than part of the live per-request rendering path curation_server.py's page views belong to.
 
 Run after notes/run_uncanny_sweep.py finishes (or on manifest_partial.json if run early):
     python3 -m clawmarks.search.score_manifest [manifest_path]

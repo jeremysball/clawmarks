@@ -30,3 +30,17 @@ def test_render_html_embeds_points():
     }
     html = map_view.render_html(data)
     assert '"tag": "a"' in html
+
+
+def test_render_html_wires_real_image_hover():
+    data = {
+        "points": [{"tag": "a", "x": 0.1, "y": 0.2, "gen": 0, "prompt_name": "p",
+                    "prompt_type": "conflict", "faith": 0.5, "novelty": 0.5, "category": "seedrun1",
+                    "thumb": "thumbs/a.jpg", "nearest_real": "r0", "nearest_real_sim": 0.9}],
+        "real_points": [{"x": 0.0, "y": 0.0}],
+        "max_gen": 0,
+        "real_anchor_counts": [("r0", 1)],
+    }
+    html = map_view.render_html(data)
+    assert 'id="realImg"' in html
+    assert "'/real/' + encodeURIComponent(p.nearest_real)" in html

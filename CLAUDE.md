@@ -119,6 +119,25 @@ installed). Scripts read these with `os.environ["NAME"]`, never a literal string
 secret shows up in a future session, put it in `.envrc` immediately, not inline in the script
 that first needed it.
 
+## Running tests
+
+The full suite (`python3 -m pytest -q`) takes about a minute, cheap enough to run before calling
+any change done. But don't make every edit-test cycle pay that minute:
+
+- **While iterating on one area, run only the test file(s) for what you're touching**
+  (`python3 -m pytest -q tests/test_<thing>.py`), not the full suite. Re-running everything on
+  every small edit wastes time without catching anything the targeted file wouldn't.
+- **Run the full suite once before treating a change as finished**, and again after merging to
+  `main` if CI hasn't already confirmed it (`.github/workflows/check.yml` runs it on every PR and
+  push to `main`; check its status there before re-running locally to save the minute).
+- **A live-server change still needs a live check**, per the visual-deliverables rule above: the
+  test suite verifies unit-level correctness, not that a page actually renders right. Restart
+  `curation_server.py` and verify with Playwright before calling a UI change done, even if every
+  test passes.
+- If a change touches Docker packaging (`Dockerfile`, `docker-compose.yml`), a passing pytest
+  suite says nothing about whether the image builds or runs; CI's `build` job is the gate for
+  that, not the pytest suite.
+
 ## Writing style
 
 Apply the `writing-clearly-and-concisely` skill to everything you write here: chat replies, the

@@ -48,6 +48,30 @@ def compute_data(sweep_dir):
 
 def render_html(data):
     series = data["series"]
+
+    if not series:
+        return f"""<!doctype html><html><head><meta charset="utf-8">
+<title>CLAWMARKS novelty decay watchlist</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root {{ color-scheme: dark; }}
+body {{ background:#0b0b0d; color:#eaeaee; font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
+h1 {{ font-size:18px; }}
+p {{ color:#9a9aa4; max-width:640px; font-size:13px; line-height:1.7; }}
+a.navlink {{ color:#7c9eff; font-size:12.5px; text-decoration:none; }}
+{TOPNAV_CSS}
+{MOBILE_BASE_CSS}
+</style></head><body>
+{nav_bar_html('novelty_decay.html')}
+<h1>Novelty decay watchlist</h1>
+<p>No prompt family in this dataset has appeared in 2+ generations yet, so there's no decay curve
+to plot (placeholder page). This chart tracks each prompt's mean novelty generation over
+generation, to flag prompts that have stopped yielding new territory; a single-generation seed
+run has nothing to compare across.</p>
+<p>Once a second generation runs against this sweep, reload this page and it will show one
+sparkline per prompt family that has appeared more than once, sorted worst-trending first.</p>
+</body></html>"""
+
     data_json = json.dumps(series)
 
     trend_tip = info_btn(

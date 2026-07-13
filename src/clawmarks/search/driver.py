@@ -398,7 +398,7 @@ def _torch_maximum(a, b):
 def cell_html(items, faith_edges, novelty_edges, fb, nb):
     if not items:
         return '<div class="cell empty"></div>'
-    from clawmarks.build.uncanny_gallery import thumb_data_uri
+    from clawmarks.build.thumbnails import thumb_data_uri
     thumbs = "".join(
         f'<img style="border:2px solid {TYPE_COLOR[m["prompt_type"]]}" '
         f'src="{thumb_data_uri(m["file"])}" title="{m["tag"]} faith={m["centroid_sim"]:.3f} novelty={m["novelty"]:.3f}">'
@@ -430,7 +430,7 @@ def build_gallery(cfg, manifest, real_ref):
         ) + '</div>'
         for fb in range(N_BINS)
     )
-    from clawmarks.build.uncanny_gallery import thumb_data_uri
+    from clawmarks.build.thumbnails import thumb_data_uri
     highlight_html = "".join(
         f'<figure><img style="border:2px solid {TYPE_COLOR[m["prompt_type"]]}" src="{thumb_data_uri(m["file"])}">'
         f'<figcaption>{m["prompt_name"]} | faith={m["centroid_sim"]:.3f} novelty={m["novelty"]:.3f}</figcaption></figure>'

@@ -82,6 +82,9 @@ canvas {{ background:var(--panel); border:1px solid var(--border); border-radius
 #panel img {{ width:100%; border-radius:8px; display:none; }}
 #panel .info {{ font-size:12px; color:var(--text-dim); line-height:1.7; margin-top:10px; }}
 #panel .info b {{ color:var(--text); }}
+#panel .realWrap {{ margin-top:10px; }}
+#panel .realWrap .caption {{ font-size:11px; color:var(--text-dim); margin-top:4px; }}
+#panel .realWrap img {{ border:1px solid var(--pick); }}
 button.playbtn {{ background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 12px; cursor:pointer; }}
 #anchorChart {{ display:flex; flex-direction:column; gap:4px; max-width:640px; }}
 .abar {{ display:flex; align-items:center; gap:8px; font-size:11.5px; cursor:pointer; }}
@@ -124,6 +127,10 @@ in embedding space, whether or not the faithfulness/novelty grid shows it as "ex
   <div id="panel">
     <img id="panelImg">
     <div class="info" id="panelInfo">Hover or tap a point for details.</div>
+    <div class="realWrap" id="realWrap" style="display:none;">
+      <img id="realImg">
+      <div class="caption" id="realCaption"></div>
+    </div>
   </div>
 </div>
 
@@ -230,6 +237,13 @@ function showInfo(p) {{
     + `faith=${{p.faith}} novelty=${{p.novelty}}<br>`
     + `nearest real: ${{p.nearest_real}} (sim ${{p.nearest_real_sim}})`
     + (picks[p.tag] ? '<br><b style="color:#f5c542">picked winner</b>' : '');
+
+  const realWrap = document.getElementById('realWrap');
+  const realImg = document.getElementById('realImg');
+  const realCaption = document.getElementById('realCaption');
+  realImg.src = '/real/' + encodeURIComponent(p.nearest_real);
+  realCaption.textContent = `Nearest real training image (sim ${{p.nearest_real_sim}})`;
+  realWrap.style.display = 'block';
 }}
 
 function eventToCanvasCoords(e) {{
