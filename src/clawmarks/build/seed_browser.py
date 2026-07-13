@@ -96,6 +96,13 @@ function fmtSource(s) {{
 
 function render(seeds) {{
   const entries = Object.entries(seeds).sort((a, b) => (b[1].created_at || '').localeCompare(a[1].created_at || ''));
+  if (entries.length === 0) {{
+    document.getElementById('count').textContent = '';
+    document.getElementById('seedList').innerHTML =
+      '<p class="sub" style="margin:0;">No candidate seeds yet for this dataset. Use "Generate" ' +
+      'above to ask GPT-5.5 for some, or wait for a search run to top up the pool on plateau.</p>';
+    return;
+  }}
   document.getElementById('count').textContent = entries.length + ' candidate seeds';
   document.getElementById('seedList').innerHTML = entries.map(([text, meta]) => `
     <div class="seed" data-text="${{text.replace(/"/g, '&quot;')}}">

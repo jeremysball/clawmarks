@@ -26,7 +26,6 @@ NAV_OPTIONS = [
     ("novelty_decay.html", "novelty decay watchlist"),
     ("lineage.html", "lineage tree"),
     ("seeds.html", "candidate seeds"),
-    ("gallery.html", "binned atlas (original)"),
 ]
 
 

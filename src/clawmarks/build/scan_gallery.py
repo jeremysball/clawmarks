@@ -193,7 +193,6 @@ body {{
     <option value="novelty_decay.html">novelty decay watchlist</option>
     <option value="lineage.html">lineage tree</option>
     <option value="seeds.html">candidate seeds</option>
-    <option value="gallery.html">binned atlas (original)</option>
   </select></label>
   <label>Sort{novelty_tip} <select id="sortKey">
     <option value="novelty_desc">Novelty (high to low)</option>

@@ -1736,3 +1736,139 @@ http.server`. Rewrote the docstring to state the dynamic rendering model explici
 builds in-process at request time; `/scan_data.json` is the one client-fetched companion; a
 blank-looking page is empty-for-this-dataset or a client-side filter, never a missing file) so this
 mistake can't recur.
+
+**Added a three-prompt unfamiliar-subject seed file for noise-break testing.** Wrote
+`notes/uncanny_seedrun1/candidate_seeds_gen_1783887674.json` with three short, concrete prompts:
+an abandoned airport gate, wet shoes around a basement dehumidifier, and an empty bus shelter with
+leaves. The set intentionally spans space, object-machine, and weather-street categories so the next
+style-survival check tests more than one kind of off-distribution subject.
+
+**Added another three-prompt unfamiliar-subject seed file for noise-break testing.** Wrote
+`notes/uncanny_seedrun1/candidate_seeds_gen_1783887739.json` with a rain-lit laundromat, a sweating
+birthday cake on a conference table, and fog-stalled commuters on a platform, spanning space, object,
+weather, and crowd stress cases.
+
+### 2026-07-12: Worked the curation-UI continuation prompt's outstanding-work list (items 1-4)
+
+Picked up `notes/continuation_prompt_curation_ui.md` and worked through its ordered list against the
+live server on `notes/uncanny_seedrun1/`. Full suite went from 192 to 195 passing (net: removed 3
+gallery tests, added 6 new ones); every change verified live via headless Playwright, not just unit
+tests, per the continuation prompt's own instruction.
+
+1. **Removed the binned atlas (gallery.html).** Deleted its route in `curation_server.py`, the
+   `uncanny_gallery.py` view module, its `shared_ui.NAV_OPTIONS` and jump-to-dropdown entries, and its
+   `explore_hub.py` card. `search/driver.py`'s separate offline per-round gallery (a static file it
+   writes to the sweep dir, unrelated to the live server) still needed `thumb_data_uri`, so that
+   function moved to `build/thumbnails.py` instead of being deleted with the rest of the module. Live-
+   verified: `/gallery.html` 404s, the nav dropdown and hub no longer mention it, and the 52 real votes
+   in `user_comparisons.json` survived the server restart untouched.
+
+2. **novelty_decay.html now has an explicit empty-state placeholder**, matching lineage.html's pattern:
+   when no prompt family has appeared in 2+ generations (true for seedrun1, a single-generation seed
+   run), it explains why there's nothing to plot instead of rendering a blank chart. Added a regression
+   test asserting the placeholder renders when `compute_data`'s series list is empty.
+
+3. **seeds.html: real bug found and fixed, not just an empty-state issue.** The empty page traced to
+   `curation_server.save_store` doing `path + ".tmp"`, which breaks when `path` is a `pathlib.Path`
+   (as `SEEDS_FILE` is, unlike every other `*_FILE` constant in the module, which are f-strings). The
+   first live test of the "Generate" button actually called GPT-5.5 successfully, then silently lost
+   the result to this `TypeError` when persisting it, a real cost (one wasted GPT-5.5 call) worth
+   recording so it isn't repeated. Fixed with `str(path) + ".tmp"`, added a regression test that saves
+   through a `Path` object, and a second test that exercises the full `/api/seeds/generate` request
+   with a mocked `opencode` subprocess call. Re-ran the real end-to-end flow live afterward: GPT-5.5
+   returned three real seeds (an empty laundromat, a bus shelter of damp umbrellas, a storm-lit cul-de-
+   sac), all three persisted and rendered. Also added a clearer "no candidate seeds yet, use Generate
+   above" empty-state message for the zero-seed case itself.
+
+4. **Map hover now shows the actual nearest real training image, not just its filename and similarity
+   score.** Added a read-only `/real/<name>` route to `curation_server.py` that serves from
+   `search/score_manifest.REAL_DIR`, sanitized with `os.path.basename()` so a path-traversal attempt in
+   the requested name can only ever resolve to a direct child of `REAL_DIR` (regression test covers
+   this: a `..%2F..` request 404s instead of escaping the directory). `map_view.py`'s hover panel now
+   renders that image inline below the hovered point's own thumbnail, captioned with its similarity
+   score. Live-verified via `showInfo()` in a headless browser: hovering a point resolved
+   `nearest_real: FlzK3OUXoAEvv3e.jpg` to `/real/FlzK3OUXoAEvv3e.jpg`, which rendered as a visible
+   image in the panel, not a broken-image icon.
+
+**Tooling gotcha: the Playwright MCP server's `--executable-path` was hardcoded to `/home/node/...`**,
+a stale path from a different container image, while the browser binary actually lived under
+`/home/jeremy/.cache/ms-playwright/...` in this environment. Fixed by removing the hardcoded
+`--executable-path` from `~/.claude.json`'s `mcpServers.playwright.args` entirely, letting it
+auto-detect `$HOME/.cache/ms-playwright` instead. A stale Chrome `SingletonLock` from an earlier failed
+launch attempt also had to be cleared by hand (`rm` on the three `Singleton*` files under the relevant
+`mcp-chrome-*` profile dir) before the fixed config would launch cleanly.
+
+**Added a placeholder favicon.** Generated via FLUX (`flux-prompting` skill, `fal-ai/flux-pro/v1.1-
+ultra`) in the CLAWMARKS mixed-media style (a bold-ink fox face on aged cream paper), resized to
+128x128, and saved to `src/clawmarks/static/favicon.png`. `curation_server.py` now serves it at both
+`/favicon.ico` and `/favicon.png`, clearing the favicon-404 console noise every page previously threw.
+
+### 2026-07-12: CI/CD, CI-gated Docker build, and a Watchtower compose stack for curation_server.py
+
+Scoped to CLAWMARKS only, and to `curation_server.py` only within it (the RunPod driver and
+generation scripts stay host-side; only the always-on curation web server gets containerized).
+Modeled on `/workspace/hearth`'s existing pattern.
+
+- **`CLAUDE.md`, "Running tests" section**: run only the touched test file while iterating, the
+  full suite before calling a change done, and a live Playwright check for any UI change even
+  after the suite passes.
+- **`.github/workflows/check.yml`**: `uv sync --extra dev` + `uv run pytest -q` on every PR and
+  push to `main`. Confirmed the exact commands succeed locally first (195 passed, 52.92s) before
+  trusting them in CI.
+- **`Dockerfile`**: `python:3.12-slim` + `uv`, `COPY . .`, `uv sync --frozen --no-dev`, runs
+  `python3 -m clawmarks.curation_server 8420`. `.dockerignore` excludes `notes/` and
+  `corrected_dataset_extract/` outright: this project's data-integrity rule says irreplaceable
+  RunPod-billed generation output and real training images must never end up baked into a Docker
+  layer. Because `notes/` still isn't in the build context but `pyproject.toml` is,
+  `clawmarks.config.repo_root()` resolves `ROOT=/app` automatically with no `CLAWMARKS_ROOT`
+  override needed; the served dataset comes entirely from a bind mount at runtime.
+- **`docker-compose.yml`**: three services mirroring hearth's shape (`tailscale` sidecar,
+  `app`, `watchtower`), except plain HTTP instead of hearth's TLS cert mount, since
+  `curation_server.py` doesn't terminate TLS itself. `./notes` and
+  `./corrected_dataset_extract` are bind mounts, not named volumes, again per the data-integrity
+  rule: a bind mount keeps this data directly reachable by the project's existing
+  backup/verify workflow, where a named volume would hide it inside Docker's storage driver.
+  Image is `ghcr.io/jeremysball/clawmarks-lora`, matching the actual GitHub repo name.
+- **`.github/workflows/build.yml`**: `verify` builds the image on every PR without pushing
+  (catches a broken Dockerfile before merge); `publish` pushes to GHCR tagged `latest` and
+  `sha-<short>`, gated on `check` having already succeeded on `main` (`workflow_run` trigger),
+  matching hearth's two-job pattern exactly.
+- **`.env.example`** documents the compose stack's required secrets (`TS_AUTHKEY`,
+  `RUNPOD_API_KEY`, `CIVITAI_TOKEN`, `CIVITAI_MODEL_ID`, `OPENAI_API_KEY`) and
+  `CLAWMARKS_SWEEP_DIR`; `.env` added to `.gitignore` alongside the existing `.envrc` entry.
+
+**Known gap, resolved**: seeds.html's "Generate" button shells out to the `opencode` CLI, which
+on this host authenticates via an interactive OAuth login (`opencode auth login`, stored in
+`~/.local/share/opencode/auth.json`). Jeremy's call: don't mount that credential file into the
+container; instead the image installs `opencode` directly (official install script, in the
+Dockerfile) and authenticates headlessly via `OPENAI_API_KEY`. Checked against opencode.ai's own
+docs before wiring it in: `OPENAI_API_KEY` is a documented, supported alternative to the OAuth
+flow for exactly this kind of headless/CI/Docker use, not a guess. `docker-compose.yml` and
+`.env.example` both pass it through the same way the other secrets already do.
+
+### 2026-07-12: Design for unified detail view, real-image viewing, and thumb-then-full-res loading
+
+Wrote `docs/superpowers/specs/2026-07-12-detail-view-and-generation-design.md`, per the
+continuation prompt's item 5 ("plan, don't build, a unified image-detail + generate-around UI")
+and two of the follow-up batch's requests (view the full real reference image on the map; a
+generalized thumb-then-full-res swap API). Folded all three into one design since they're the
+same underlying investment, not three separate features.
+
+The useful finding was that most of item 5 already exists: `shared_ui.py`'s Lightbox component
+already gives seven of the eleven tool pages (scan, map, archive, preference_rank, redundancy,
+lineage, coverage) a linked detail modal with single-shot generate-around baked in. The actual
+gaps are narrower than the original ask implied: `compare.html` has no detail access at all,
+`/api/counterfactual` only ever produces one variation per click, and nothing in the codebase
+does progressive thumb-then-full loading, including this session's new `/real/<name>` route,
+which serves the real training photo at full resolution with no thumbnail stage. The spec
+proposes a small `compare.html` expand-icon into the existing Lightbox, an `n`-variation
+extension to the counterfactual endpoint capped at 6 per batch, and a `mountProgressive()` helper
+wired into both the Lightbox's main image and a new `/real_thumbs/<name>` route for the map
+panel. Design only; nothing implemented yet, tracked in `TODO.txt`.
+
+**Not done this session**: branch protection on `main` (needs `check` to have at least one run
+on GitHub, which needs this branch pushed/merged first) and an actual `docker build` (no
+`docker` binary in this sandbox; the first real build will be CI's `verify` job on the first PR
+touching `Dockerfile`/`docker-compose.yml`). Also unresolved: whether "explain in hearth's
+readme why docker compose uses watchtower" survived the "CLAWMARKS only" scope-down (answered in
+chat, not written into `hearth/README.md`), and what "what is the real key" referred to.
