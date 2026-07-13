@@ -169,6 +169,15 @@ SCROLLNAV_JS = """
 """
 
 _LIGHTBOX_JS = r"""(function(){
+  // json_script() (see json_script() above) only protects the initial <script> data
+  // declaration from a </script> breakout; it does not HTML-escape the decoded string values.
+  // Any manifest field written into innerHTML or an HTML attribute below must go through
+  // escHtml() first, or a model-generated tag/prompt containing e.g. "<img src=x onerror=...>"
+  // executes when the lightbox renders it.
+  function escHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
   let DATA = null, byTag = null;
   let order = [];
   let idx = -1;
@@ -399,7 +408,7 @@ _LIGHTBOX_JS = r"""(function(){
       strip.innerHTML = simTags.map(t => {
         const n = byTag[t];
         if (!n) return '';
-        return `<img loading="lazy" src="${n.thumb}" title="f=${n.faith} n=${n.novelty} ${n.prompt_name}" data-tag="${t}">`;
+        return `<img loading="lazy" src="${escHtml(n.thumb)}" title="f=${n.faith} n=${n.novelty} ${escHtml(n.prompt_name)}" data-tag="${escHtml(t)}">`;
       }).join('');
       strip.querySelectorAll('img').forEach(img => { img.onclick = () => jump(img.dataset.tag); });
       strip.style.display = 'flex';
@@ -422,7 +431,7 @@ _LIGHTBOX_JS = r"""(function(){
     const mine = Object.values(counterfactuals).filter(c => c.origin_tag === d.tag);
     if (!mine.length) { list.innerHTML = ''; return; }
     list.innerHTML = mine.map(c =>
-      `<img loading="lazy" src="${c.file}" title="s=${c.strength} cfg=${c.cfg} seed=${c.seed}">`
+      `<img loading="lazy" src="${escHtml(c.file)}" title="s=${c.strength} cfg=${c.cfg} seed=${escHtml(String(c.seed))}">`
     ).join('');
   }
 

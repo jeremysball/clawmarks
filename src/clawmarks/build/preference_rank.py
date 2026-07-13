@@ -85,10 +85,25 @@ p.sub {{ color:var(--text-dim); max-width:760px; font-size:13px; line-height:1.6
 <p class="sub">Top {len(items)} images by predicted preference score, highest first.</p>
 <div id="grid"></div>
 <script>
+// json_script() only protects this declaration from a </script> breakout; it does not
+// HTML-escape decoded string values. Every ITEMS field written into innerHTML/an attribute
+// below must go through escHtml() first.
+function escHtml(s) {{
+  return String(s).replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]);
+}}
+
 const ITEMS = {data_json};
-document.getElementById('grid').innerHTML = ITEMS.map(it => `
+
+// Click handler looks the item up by its trusted array index instead of interpolating a tag
+// string into the onclick attribute, so an attacker-controlled tag can't break out of the JS
+// string literal there.
+function openItem(i) {{
+  Lightbox.open(ITEMS[i].tag);
+}}
+
+document.getElementById('grid').innerHTML = ITEMS.map((it, i) => `
   <div class="cell">
-    <img src="${{it.thumb}}" loading="lazy" data-tag="${{it.tag}}" onclick="Lightbox.open('${{it.tag}}')">
+    <img src="${{escHtml(it.thumb)}}" loading="lazy" data-tag="${{escHtml(it.tag)}}" onclick="openItem(${{i}})">
     <div class="meta">p=${{it.predicted_preference}} | f=${{it.faith}} n=${{it.novelty}}</div>
   </div>`).join('');
 </script>

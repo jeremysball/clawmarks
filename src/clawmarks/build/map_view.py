@@ -140,6 +140,13 @@ real style, not the whole training set; click a bar to highlight those images on
 <div id="anchorChart"></div>
 
 <script>
+// json_script() only protects this declaration from a </script> breakout; it does not
+// HTML-escape decoded string values. Every POINTS/REAL field written into innerHTML below
+// must go through escHtml() first.
+function escHtml(s) {{
+  return String(s).replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]);
+}}
+
 const POINTS = {points_json};
 const REAL = {real_json};
 const ANCHOR_COUNTS = {real_anchor_json};
@@ -231,10 +238,10 @@ function showInfo(p) {{
   img.style.display = 'block';
   img.style.cursor = 'pointer';
   img.onclick = () => Lightbox.open(p.tag);
-  info.innerHTML = `<b>${{p.tag}}</b><br>gen ${{p.gen}} | ${{p.category}}<br>`
-    + `type=${{p.prompt_type}} | prompt=${{p.prompt_name}}<br>`
+  info.innerHTML = `<b>${{escHtml(p.tag)}}</b><br>gen ${{p.gen}} | ${{escHtml(p.category)}}<br>`
+    + `type=${{escHtml(p.prompt_type)}} | prompt=${{escHtml(p.prompt_name)}}<br>`
     + `faith=${{p.faith}} novelty=${{p.novelty}}<br>`
-    + `nearest real: ${{p.nearest_real}} (sim ${{p.nearest_real_sim}})`
+    + `nearest real: ${{escHtml(p.nearest_real)}} (sim ${{p.nearest_real_sim}})`
     + (picks[p.tag] ? '<br><b style="color:#f5c542">picked winner</b>' : '');
 
   const realWrap = document.getElementById('realWrap');
@@ -294,8 +301,8 @@ document.getElementById('playBtn').addEventListener('click', () => {{
 const anchorChart = document.getElementById('anchorChart');
 const maxCount = ANCHOR_COUNTS.length ? ANCHOR_COUNTS[0][1] : 1;
 anchorChart.innerHTML = ANCHOR_COUNTS.map(([name, count]) => `
-  <div class="abar" data-name="${{name}}">
-    <div class="label">${{name}}</div>
+  <div class="abar" data-name="${{escHtml(name)}}">
+    <div class="label">${{escHtml(name)}}</div>
     <div class="track"><div class="fill" style="width:${{(count / maxCount * 100).toFixed(1)}}%"></div></div>
     <div class="count">${{count}}</div>
   </div>`).join('');

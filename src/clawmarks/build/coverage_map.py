@@ -250,6 +250,13 @@ all. Click a cell to preview its top image, or "view all" to see every image in 
 </div>
 
 <script>
+// json_script() only protects this declaration from a </script> breakout; it does not
+// HTML-escape decoded string values. Every CELLS field written into innerHTML/an attribute
+// below must go through escHtml() first.
+function escHtml(s) {{
+  return String(s).replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]);
+}}
+
 const CELLS = {data_json};
 const N_BINS = {N_BINS};
 const MAX_COUNT = {max_count};
@@ -299,7 +306,7 @@ function showCell(c) {{
   info.innerHTML = `<b>faith</b> [${{c.faith_lo}}, ${{c.faith_hi}})<br>`
     + `<b>novelty</b> [${{c.novelty_lo}}, ${{c.novelty_hi}})<br>`
     + `<b>count</b> ${{c.count}}${{c.frontier ? ' &mdash; frontier cell' : ''}}<br>`
-    + (c.best_tag ? `<b>top image</b> ${{c.best_tag}}` : 'no images in this cell yet');
+    + (c.best_tag ? `<b>top image</b> ${{escHtml(c.best_tag)}}` : 'no images in this cell yet');
   viewAllBtn.style.display = c.count > 0 ? 'block' : 'none';
 }}
 
@@ -307,14 +314,21 @@ document.getElementById('viewAllBtn').addEventListener('click', () => {{
   if (currentCell) openModal(currentCell);
 }});
 
+// Click handler looks the item up by its trusted array index instead of interpolating a tag
+// string into the onclick attribute, so an attacker-controlled tag can't break out of the JS
+// string literal there.
+function openModalItem(j) {{
+  Lightbox.open(currentCell.items[j].tag);
+}}
+
 function openModal(c) {{
   document.getElementById('modalTitle').textContent =
     `${{c.count}} images | faith [${{c.faith_lo}}, ${{c.faith_hi}}) x novelty [${{c.novelty_lo}}, ${{c.novelty_hi}})`;
-  document.getElementById('modalGrid').innerHTML = c.items.map(it => `
+  document.getElementById('modalGrid').innerHTML = c.items.map((it, j) => `
     <div class="item">
-      <img src="${{it.thumb}}" loading="lazy" data-tag="${{it.tag}}" title="${{it.tag}}" style="cursor:pointer"
-           onclick="Lightbox.open('${{it.tag}}')">
-      <div class="meta">${{it.prompt_name}}<br>f=${{it.faith}} n=${{it.novelty}}</div>
+      <img src="${{escHtml(it.thumb)}}" loading="lazy" data-tag="${{escHtml(it.tag)}}" title="${{escHtml(it.tag)}}" style="cursor:pointer"
+           onclick="openModalItem(${{j}})">
+      <div class="meta">${{escHtml(it.prompt_name)}}<br>f=${{it.faith}} n=${{it.novelty}}</div>
     </div>`).join('');
   document.getElementById('modal').classList.add('open');
 }}

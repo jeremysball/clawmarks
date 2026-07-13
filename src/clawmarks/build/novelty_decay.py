@@ -122,6 +122,13 @@ from the explore pool; a rising line means it's still working.</p>
 <div id="list"></div>
 
 <script>
+// json_script() only protects this declaration from a </script> breakout; it does not
+// HTML-escape decoded string values. Every SERIES field written into innerHTML below must
+// go through escHtml() first.
+function escHtml(s) {{
+  return String(s).replace(/[&<>"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}})[c]);
+}}
+
 const SERIES = {data_json};
 const list = document.getElementById('list');
 
@@ -142,7 +149,7 @@ list.innerHTML = SERIES.map(s => {{
   const cls = s.trend < -0.01 ? 'down' : (s.trend > 0.01 ? 'up' : 'flat');
   const label = s.trend < -0.01 ? 'declining' : (s.trend > 0.01 ? 'still rising' : 'flat');
   return `<div class="row">
-    <div class="name">${{s.prompt_name}}<span class="n">${{s.total_n}} images, ${{s.points.length}} gens</span></div>
+    <div class="name">${{escHtml(s.prompt_name)}}<span class="n">${{s.total_n}} images, ${{s.points.length}} gens</span></div>
     ${{sparkline(s.points)}}
     <div class="trendtag ${{cls}}">${{label}}</div>
   </div>`;
