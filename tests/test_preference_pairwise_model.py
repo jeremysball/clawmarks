@@ -173,16 +173,44 @@ def test_comparisons_fingerprint_changes_when_winner_and_loser_are_swapped():
             != ppm.comparisons_fingerprint(tags, embeddings, swapped))
 
 
-def test_comparisons_fingerprint_changes_when_a_comparison_is_duplicated():
-    """A duplicate comparison adds another usable training row even though the set of distinct
-    pairs is unchanged, so the fingerprint (which tracks the exact rows a train run would use)
-    must reflect the duplicate rather than silently deduping it."""
+def test_comparisons_fingerprint_is_unchanged_when_a_judgment_is_repeated():
+    """Regression test for issue #13: repeating the same judgment on a pair must not add another
+    independent training row, since that inflates apparent accuracy/significance on what is
+    really the same evidence submitted twice. The fingerprint (and the training set it tracks)
+    must consolidate repeated judgments into a single verdict."""
     tags = ["a", "b"]
     embeddings = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
     single = [{"winner": "a", "loser": "b", "compared_at": "t0"}]
     duplicated = single + [{"winner": "a", "loser": "b", "compared_at": "t1"}]
     assert (ppm.comparisons_fingerprint(tags, embeddings, single)
-            != ppm.comparisons_fingerprint(tags, embeddings, duplicated))
+            == ppm.comparisons_fingerprint(tags, embeddings, duplicated))
+    X, y = ppm.build_training_set(tags, embeddings, duplicated)
+    assert X.shape == (2, 2)
+
+
+def test_consolidate_pairs_uses_majority_vote_and_drops_ties():
+    comparisons = (
+        [{"winner": "a", "loser": "b", "compared_at": "t0"}] * 3
+        + [{"winner": "b", "loser": "a", "compared_at": "t1"}]
+        + [{"winner": "c", "loser": "d", "compared_at": "t2"}]
+        + [{"winner": "d", "loser": "c", "compared_at": "t3"}]
+    )
+    consolidated = ppm._consolidate_pairs(comparisons)
+    assert set(consolidated) == {("a", "b")}
+
+
+def test_cross_validate_does_not_leak_mirrored_pairs_across_folds():
+    """Regression test for a bug where StratifiedKFold split mirrored rows (a pair's diff and its
+    negation) independently across folds, letting the model exploit the leaked mirror instead of
+    learning real signal. On signal-free noise, that leak scored ~91% accuracy; grouping both
+    mirrored rows of a pair into the same fold should score close to chance (~50%) instead."""
+    rng = np.random.RandomState(0)
+    n_pairs = 60
+    diffs = rng.normal(size=(n_pairs, 768)).astype(np.float32)
+    X = np.concatenate([diffs, -diffs]).astype(np.float32)
+    y = np.concatenate([np.ones(n_pairs), np.zeros(n_pairs)])
+    acc = ppm.cross_validate(X, y)
+    assert acc < 0.65
 
 
 def test_train_and_save_refuses_when_usable_comparisons_fall_below_raw_count(tmp_path, monkeypatch):
@@ -206,3 +234,36 @@ def test_train_and_save_refuses_when_usable_comparisons_fall_below_raw_count(tmp
 
     assert ppm.train_and_save(comparisons) is None
     assert not (tmp_path / "preference_pairwise_model.joblib").exists()
+
+
+def test_train_and_save_refuses_when_repeated_judgments_consolidate_below_the_floor(tmp_path, monkeypatch):
+    """Regression test for issue #13's headline exploit: 50 raw submissions of the SAME pair
+    clear the early `len(comparisons) < MIN_COMPARISONS` check in train_and_save, but consolidate
+    to a single usable pair, and must still be refused. Unlike
+    test_train_and_save_refuses_when_usable_comparisons_fall_below_raw_count above (which covers
+    the missing-embedding cause), every tag here has a cached embedding: the only reason usable
+    falls below the floor is duplicate-judgment consolidation itself."""
+    monkeypatch.setattr(ppm, "SWEEP_DIR", tmp_path)
+    monkeypatch.setattr(ppm, "MODEL_FILE", tmp_path / "preference_pairwise_model.joblib")
+    monkeypatch.setattr(ppm, "MODEL_META_FILE", tmp_path / "preference_pairwise_model_meta.json")
+
+    tags = ["a", "b"]
+    embeddings = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    embed_cache.save_cache(tmp_path / "embeddings.npz", tags, embeddings)
+    monkeypatch.setattr(ppm.embed_cache, "EMBEDDINGS_FILE", tmp_path / "embeddings.npz")
+
+    comparisons = [{"winner": "a", "loser": "b", "compared_at": "t0"}] * ppm.MIN_COMPARISONS
+    assert len(comparisons) >= ppm.MIN_COMPARISONS
+
+    assert ppm.train_and_save(comparisons) is None
+    assert not (tmp_path / "preference_pairwise_model.joblib").exists()
+
+
+def test_n_consolidated_pairs_counts_distinct_pairs_after_majority_vote():
+    comparisons = (
+        [{"winner": "a", "loser": "b", "compared_at": "t0"}] * 5
+        + [{"winner": "c", "loser": "d", "compared_at": "t1"}]
+        + [{"winner": "e", "loser": "f", "compared_at": "t2"}, {"winner": "f", "loser": "e", "compared_at": "t3"}]
+    )
+    # a/b: 1 distinct pair (5x same verdict), c/d: 1 distinct pair, e/f: tied 1-1, dropped.
+    assert ppm.n_consolidated_pairs(comparisons) == 2

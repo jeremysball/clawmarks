@@ -42,7 +42,9 @@ def test_compute_data_below_min_comparisons_reports_count_gate(tmp_path, monkeyp
 def test_compute_data_at_min_comparisons_has_no_gate_message(tmp_path, monkeypatch):
     monkeypatch.setattr(preference_status.preference_settings, "PREFERENCE_SETTINGS_FILE", tmp_path / "preference_settings.json")
     monkeypatch.setattr(preference_status.preference_pairwise_model, "MODEL_FILE", tmp_path / "preference_pairwise_model.joblib")
-    _write_comparisons(tmp_path, 50)
+    comparisons = _write_comparisons(tmp_path, 50)
+    tags = sorted({t for c in comparisons for t in (c["winner"], c["loser"])})
+    _write_embeddings(tmp_path, tags, monkeypatch)
     data = preference_status.compute_data(tmp_path)
     assert data["comparisons_gate_message"] == ""
 
@@ -121,7 +123,7 @@ def test_compute_data_detects_swap_via_fingerprint_with_same_count(tmp_path, mon
 
 
 def test_render_html_disables_toggle_when_no_model():
-    data = {"n_comparisons": 0, "min_comparisons": 50, "comparisons_gate_message": "not enough comparisons",
+    data = {"n_comparisons": 0, "n_usable": 0, "min_comparisons": 50, "comparisons_gate_message": "not enough comparisons",
             "has_model": False, "model_meta": None, "new_comparisons_since_train": 0,
             "comparisons_changed_since_train": False, "use_predicted_preference": False}
     html = preference_status.render_html(data)
@@ -133,7 +135,7 @@ def test_render_html_disables_toggle_when_no_model():
 def test_render_html_enables_toggle_when_model_exists():
     meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8,
             "baseline_accuracy": 0.5, "p_value": 0.03, "n_permutations": 200}
-    data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+    data = {"n_comparisons": 60, "n_usable": 60, "min_comparisons": 50, "comparisons_gate_message": "",
             "has_model": True, "model_meta": meta, "new_comparisons_since_train": 0,
             "comparisons_changed_since_train": False, "use_predicted_preference": True}
     html = preference_status.render_html(data)
@@ -149,7 +151,7 @@ def test_render_html_enables_toggle_when_model_exists():
 def test_render_html_interprets_non_significant_p_value():
     meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8,
             "baseline_accuracy": 0.5, "p_value": 0.4, "n_permutations": 200}
-    data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+    data = {"n_comparisons": 60, "n_usable": 60, "min_comparisons": 50, "comparisons_gate_message": "",
             "has_model": True, "model_meta": meta, "new_comparisons_since_train": 0,
             "comparisons_changed_since_train": False, "use_predicted_preference": True}
 
@@ -160,7 +162,7 @@ def test_render_html_interprets_non_significant_p_value():
 
 def test_render_html_omits_statistical_rows_for_old_model_meta():
     meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8}
-    data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+    data = {"n_comparisons": 60, "n_usable": 60, "min_comparisons": 50, "comparisons_gate_message": "",
             "has_model": True, "model_meta": meta, "new_comparisons_since_train": 0,
             "comparisons_changed_since_train": False, "use_predicted_preference": True}
 
@@ -172,7 +174,7 @@ def test_render_html_omits_statistical_rows_for_old_model_meta():
 
 def test_render_html_shows_staleness_banner_when_new_comparisons_exist():
     meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8}
-    data = {"n_comparisons": 65, "min_comparisons": 50, "comparisons_gate_message": "",
+    data = {"n_comparisons": 65, "n_usable": 65, "min_comparisons": 50, "comparisons_gate_message": "",
             "has_model": True, "model_meta": meta, "new_comparisons_since_train": 5,
             "comparisons_changed_since_train": True, "use_predicted_preference": True}
 
@@ -184,7 +186,7 @@ def test_render_html_shows_staleness_banner_when_new_comparisons_exist():
 
 def test_render_html_shows_generic_staleness_banner_when_comparisons_changed_but_count_is_same():
     meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8}
-    data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+    data = {"n_comparisons": 60, "n_usable": 60, "min_comparisons": 50, "comparisons_gate_message": "",
             "has_model": True, "model_meta": meta, "new_comparisons_since_train": 0,
             "comparisons_changed_since_train": True, "use_predicted_preference": True}
 
@@ -196,10 +198,10 @@ def test_render_html_shows_generic_staleness_banner_when_comparisons_changed_but
 
 def test_render_html_omits_staleness_banner_when_model_is_current_or_missing():
     current_meta = {"trained_at": "2026-07-11T00:00:00+00:00", "n_comparisons": 60, "cv_accuracy": 0.8}
-    current_data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+    current_data = {"n_comparisons": 60, "n_usable": 60, "min_comparisons": 50, "comparisons_gate_message": "",
                     "has_model": True, "model_meta": current_meta, "new_comparisons_since_train": 0,
                     "comparisons_changed_since_train": False, "use_predicted_preference": True}
-    missing_data = {"n_comparisons": 60, "min_comparisons": 50, "comparisons_gate_message": "",
+    missing_data = {"n_comparisons": 60, "n_usable": 60, "min_comparisons": 50, "comparisons_gate_message": "",
                     "has_model": False, "model_meta": None, "new_comparisons_since_train": 0,
                     "comparisons_changed_since_train": False, "use_predicted_preference": False}
 
