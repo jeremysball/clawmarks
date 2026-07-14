@@ -2088,3 +2088,12 @@ The list-valued defaults, including `widened_textures`, were therefore shared by
 left those fields unset. A regression test reproduced the leak by appending to one loaded config
 and observing the mutation in a second config. `copy.deepcopy` now gives each load independent
 list objects. The new regression test and the five-test `load_leg_config` slice both pass.
+
+### 2026-07-14 (session 5): added the missing state-history regression coverage
+
+Task 3 review identified that the existing round-1 state-resume test used exact-length history and
+therefore would have passed before the legacy validator shim was removed. Added direct validator
+coverage for both a 49-entry history at generation 50 and the actual historical exception, a
+51-entry history at generation 50. The latter proves the removed round-1 shim no longer accepts
+`generation + 1` history entries. Renamed the shared state filename test to describe its current
+leg-independent behavior. The targeted driver-state suite passes with 29 tests.
