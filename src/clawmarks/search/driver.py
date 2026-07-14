@@ -178,16 +178,11 @@ def _spent_or_none(start_balance):
 
 
 def _out_dir(cfg):
-    return SWEEP_DIR if cfg.out_dir_name == "uncanny_round1" else SWEEP2_DIR
+    return cfg.dir
 
 
 def _state_file(cfg):
-    """Round 1's original script (notes/run_uncanny_allnight.py) wrote its state to
-    allnight_state.json with no round-number suffix; round 2's (run_uncanny_allnight2.py) wrote
-    allnight2_state.json. Preserve those exact names so this merged driver resumes from the
-    state files that already exist on disk instead of silently starting over at generation 0."""
-    suffix = "" if cfg.round == 1 else str(cfg.round)
-    return _out_dir(cfg) / f"allnight{suffix}_state.json"
+    return cfg.dir / "allnight_state.json"
 
 
 def load_state(cfg):
@@ -199,11 +194,7 @@ def load_state(cfg):
             state = json.load(f)
     except (OSError, json.JSONDecodeError) as e:
         raise RuntimeError(f"cannot resume: persisted state {state_file} is unreadable: {e}") from e
-    if cfg.seed_from_start and isinstance(state, dict) and "stage" not in state:
-        # Round 2's historical state predates the stage field. Normalize only this known schema
-        # difference in memory; every other required field remains mandatory.
-        state["stage"] = 0
-    _validate_state(state, state_file, allow_legacy_round1_baseline=cfg.round == 1)
+    _validate_state(state, state_file)
     return state
 
 
@@ -215,7 +206,7 @@ def _new_state():
     }
 
 
-def _validate_state(state, state_file, allow_legacy_round1_baseline=False):
+def _validate_state(state, state_file):
     required = {
         "generation", "stage", "plateau_count", "novelty_history", "gpt55_subjects",
         "start_balance", "start_time",
@@ -233,14 +224,7 @@ def _validate_state(state, state_file, allow_legacy_round1_baseline=False):
         for value in state["novelty_history"]
     ):
         raise RuntimeError(f"cannot resume: persisted state {state_file} has invalid novelty_history")
-    history_length = len(state["novelty_history"])
-    expected_lengths = {state["generation"]}
-    if allow_legacy_round1_baseline:
-        # The original round-1 run stored a fixed generation-0 baseline at index zero, so its
-        # surviving state has one more history value than completed generations. Keep that value
-        # because the plateau detector consumes novelty_history as an ordered history.
-        expected_lengths.add(state["generation"] + 1)
-    if history_length not in expected_lengths:
+    if len(state["novelty_history"]) != state["generation"]:
         raise RuntimeError(
             f"cannot resume: persisted state {state_file} has generation/history mismatch"
         )
@@ -264,7 +248,7 @@ def _validate_state(state, state_file, allow_legacy_round1_baseline=False):
 
 def save_state(cfg, state):
     state_file = _state_file(cfg)
-    _validate_state(state, state_file, allow_legacy_round1_baseline=cfg.round == 1)
+    _validate_state(state, state_file)
     _atomic_json_write(state_file, state)
 
 
@@ -326,8 +310,8 @@ def _validate_manifest(manifest, manifest_path):
                 raise RuntimeError(f"cannot resume: persisted manifest {manifest_path} has invalid {name}")
 
 
-def _validate_resume_agreement(state, manifest, state_file, manifest_path, allow_legacy_round1_baseline=False):
-    _validate_state(state, state_file, allow_legacy_round1_baseline=allow_legacy_round1_baseline)
+def _validate_resume_agreement(state, manifest, state_file, manifest_path):
+    _validate_state(state, state_file)
     _validate_manifest(manifest, manifest_path)
     generations = [
         generation for entry in manifest
