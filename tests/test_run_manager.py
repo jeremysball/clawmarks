@@ -164,7 +164,7 @@ def test_stop_run_is_noop_when_nothing_running(tmp_path, monkeypatch):
 
 def test_stop_run_sends_sigterm_and_removes_lock(tmp_path, monkeypatch):
     lock_file = tmp_path / ".searchrun.lock"
-    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True)
     time.sleep(0.2)
     info = {"pid": proc.pid, "round": 1, "started_at": 1.0, "out_dir": "x"}
     lock_file.write_text(json.dumps(info))
@@ -176,6 +176,33 @@ def test_stop_run_sends_sigterm_and_removes_lock(tmp_path, monkeypatch):
     assert not lock_file.exists()
     proc.wait(timeout=5)
     assert proc.returncode is not None
+
+
+def test_stop_run_kills_the_whole_process_group_not_just_the_leader(tmp_path, monkeypatch):
+    """launch_run starts the driver with start_new_session=True so it can outlive a request
+    thread; if the driver later shells out to a slow child (e.g. an opencode subprocess call),
+    stop must reach that child too, not just the driver's own pid."""
+    lock_file = tmp_path / ".searchrun.lock"
+    proc = subprocess.Popen([
+        sys.executable, "-c",
+        "import subprocess, time, sys; "
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); "
+        "print(child.pid, flush=True); "
+        "time.sleep(30)",
+    ], start_new_session=True, stdout=subprocess.PIPE, text=True)
+    child_pid = int(proc.stdout.readline().strip())
+    info = {"pid": proc.pid, "round": 1, "started_at": 1.0, "out_dir": "x"}
+    lock_file.write_text(json.dumps(info))
+    monkeypatch.setattr(run_manager, "LOCK_FILE", lock_file)
+
+    result = run_manager.stop_run(grace_s=5)
+
+    assert result == {"running": False}
+    proc.wait(timeout=5)
+    deadline = time.time() + 5
+    while time.time() < deadline and run_manager.is_process_alive(child_pid):
+        time.sleep(0.1)
+    assert not run_manager.is_process_alive(child_pid)
 
 
 def test_build_report_with_no_state_or_manifest_yet(tmp_path):
@@ -261,7 +288,8 @@ def test_build_report_computes_spend_when_current_balance_given(tmp_path):
 def test_stop_run_sigkills_after_grace_period_if_process_ignores_sigterm(tmp_path, monkeypatch):
     lock_file = tmp_path / ".searchrun.lock"
     proc = subprocess.Popen([sys.executable, "-c",
-        "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)"])
+        "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)"],
+        start_new_session=True)
     time.sleep(0.2)
     info = {"pid": proc.pid, "round": 1, "started_at": 1.0, "out_dir": "x"}
     lock_file.write_text(json.dumps(info))
@@ -272,3 +300,100 @@ def test_stop_run_sigkills_after_grace_period_if_process_ignores_sigterm(tmp_pat
     assert result == {"running": False}
     proc.wait(timeout=5)
     assert proc.returncode is not None
+
+
+def test_launch_run_is_race_free_under_concurrent_calls(tmp_path, monkeypatch):
+    """The production server is threaded, so two POSTs can race here. launch_run must let only
+    one of two near-simultaneous callers through, not both -- two concurrent driver.py processes
+    writing to the same out_dir would corrupt it."""
+    import threading
+
+    lock_file = tmp_path / ".searchrun.lock"
+    monkeypatch.setattr(run_manager, "LOCK_FILE", lock_file)
+    out_dir = tmp_path / "sweep_not_yet_created"
+
+    results = []
+
+    class FakeProc:
+        pid = os.getpid()
+
+    def popen_fn(*a, **k):
+        return FakeProc()
+
+    def attempt():
+        try:
+            results.append(("ok", run_manager.launch_run(
+                1, out_dir, "fake-key", popen_fn=popen_fn, balance_fn=lambda key: 100.0)))
+        except run_manager.LaunchError as e:
+            results.append(("error", str(e)))
+
+    threads = [threading.Thread(target=attempt) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=5)
+
+    oks = [r for r in results if r[0] == "ok"]
+    errors = [r for r in results if r[0] == "error"]
+    assert len(oks) == 1
+    assert len(errors) == 1
+    assert "already in progress" in errors[0][1]
+
+
+def test_launch_run_reaps_the_child_and_clears_the_lock_if_writing_the_lock_fails(tmp_path, monkeypatch):
+    """If the lock write fails after the subprocess is already spawned, the child must not be
+    left running with no lock file -- that would silently break the one-run-at-a-time guarantee
+    for every launch after it."""
+    lock_file = tmp_path / ".searchrun.lock"
+    monkeypatch.setattr(run_manager, "LOCK_FILE", lock_file)
+    out_dir = tmp_path / "sweep_not_yet_created"
+
+    killed = []
+
+    class FakeProc:
+        pid = 424242
+
+        def kill(self):
+            killed.append(self.pid)
+
+    def broken_dump(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(run_manager.json, "dump", broken_dump)
+
+    with pytest.raises(OSError):
+        run_manager.launch_run(1, out_dir, "fake-key",
+                                popen_fn=lambda *a, **k: FakeProc(),
+                                balance_fn=lambda key: 100.0)
+
+    assert killed == [424242]
+    assert not lock_file.exists()
+
+
+def test_current_run_treats_a_pid_reused_by_an_unrelated_process_as_stale(tmp_path, monkeypatch):
+    lock_file = tmp_path / ".searchrun.lock"
+    info = {
+        "pid": os.getpid(), "round": 1, "started_at": 1.0, "out_dir": "x",
+        "start_time_ticks": -1,  # cannot match this process's real start time
+    }
+    lock_file.write_text(json.dumps(info))
+    monkeypatch.setattr(run_manager, "LOCK_FILE", lock_file)
+
+    assert run_manager.current_run() is None
+    assert not lock_file.exists()
+
+
+def test_launch_run_records_pid_start_time_for_reuse_detection(tmp_path, monkeypatch):
+    lock_file = tmp_path / ".searchrun.lock"
+    monkeypatch.setattr(run_manager, "LOCK_FILE", lock_file)
+    out_dir = tmp_path / "sweep_not_yet_created"
+
+    class FakeProc:
+        pid = os.getpid()
+
+    info = run_manager.launch_run(1, out_dir, "fake-key",
+                                   popen_fn=lambda *a, **k: FakeProc(),
+                                   balance_fn=lambda key: 100.0)
+
+    assert info["start_time_ticks"] == run_manager._process_start_time(os.getpid())
+    assert info["start_time_ticks"] is not None
