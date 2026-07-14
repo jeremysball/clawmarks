@@ -16,7 +16,8 @@ automated "elites" list.
 
 Run after scored_manifest.json exists: python3 -m clawmarks.build.elite_archive
 """
-import json, os
+import json
+import os
 
 from clawmarks.search.manifest_index import item_summary
 from clawmarks.search.preference_pairwise_model import MODEL_FILE as PREFERENCE_MODEL_FILE
@@ -74,6 +75,17 @@ def compute_data(sweep_dir, use_predicted_preference=False):
     faith_edges = bin_edges(faith_vals, N_BINS)
     novelty_edges = bin_edges(novelty_vals, N_BINS)
 
+    def bin_ranges(vals, edges):
+        """[lo, hi] value span for each of the N_BINS bins, so the archive can label what range
+        of faithfulness/novelty a cell actually covers. Bin 0 starts at the data minimum, the
+        last bin ends at the maximum, and the interior boundaries are the quantile edges."""
+        lo_bounds = [vals[0]] + edges
+        hi_bounds = edges + [vals[-1]]
+        return [[round(lo, 3), round(hi, 3)] for lo, hi in zip(lo_bounds, hi_bounds)]
+
+    faith_bins = bin_ranges(faith_vals, faith_edges)
+    novelty_bins = bin_ranges(novelty_vals, novelty_edges)
+
     def bin_of(val, edges):
         for i, e in enumerate(edges):
             if val <= e:
@@ -103,12 +115,15 @@ def compute_data(sweep_dir, use_predicted_preference=False):
             })
 
     cells.sort(key=lambda c: (c["fb"], c["nb"]))
-    return {"cells": cells, "n_human": n_human}
+    return {"cells": cells, "n_human": n_human,
+            "faith_bins": faith_bins, "novelty_bins": novelty_bins}
 
 
 def render_html(data):
     cells = data["cells"]
     data_json = json.dumps(cells)
+    faith_bins_json = json.dumps(data.get("faith_bins", []))
+    novelty_bins_json = json.dumps(data.get("novelty_bins", []))
 
     elite_tip = info_btn(
         "MAP-Elites is a search strategy that keeps a grid of bins (here, faithfulness x novelty) "
@@ -134,6 +149,8 @@ a.navlink {{ color:#7c9eff; font-size:12.5px; text-decoration:none; }}
 .cell img {{ width:100%; aspect-ratio:1; object-fit:cover; display:block; cursor:pointer; }}
 .cell .meta {{ padding:8px 10px; font-size:11px; color:var(--text-dim); line-height:1.6; }}
 .cell .meta b {{ color:var(--text); }}
+.cell .meta .bin {{ display:block; margin-top:5px; padding-top:5px; border-top:1px solid var(--border);
+  color:var(--text); font-size:10.5px; }}
 .cell.human {{ box-shadow:0 0 0 2px var(--pick); }}
 .cell.predicted {{ box-shadow:0 0 0 2px var(--predicted); }}
 .badge {{ display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; margin-left:4px; }}
@@ -176,7 +193,9 @@ blue-bordered cells (only when this page is built with --use-predicted-preferenc
 trained model's top pick for that cell; others fall back to the highest-novelty image the
 automated search found. The DINOv2 scorer only ranks faithfulness and novelty, not aesthetic
 quality, so it can't tell which image in a cell is the better picture: click "view all" to browse
-every candidate in a cell and pick a different one by hand.</p>
+every candidate in a cell and pick a different one by hand. Each cell's bin label spells out the
+faithfulness and novelty range that defines it; the four bins per axis are population quartiles,
+so every bin holds a similar share of the images rather than an equal slice of the value range.</p>
 
 <div id="grid"></div>
 
@@ -191,9 +210,17 @@ every candidate in a cell and pick a different one by hand.</p>
 <script>
 const CELLS = {data_json};
 let picks = {{}};
+const FAITH_BINS = {faith_bins_json};
+const NOVELTY_BINS = {novelty_bins_json};
+const N_BINS = {N_BINS};
 
 // display novelty descending within faith rows, faith ascending row order, to roughly mirror gallery.html
 CELLS.sort((a, b) => a.fb - b.fb || b.nb - a.nb);
+
+function binRange(arr, idx) {{
+  const r = arr[idx];
+  return r ? `${{r[0]}}–${{r[1]}}` : '?';
+}}
 
 function eliteFor(c) {{
   const pickedHere = c.items.filter(it => picks[it.tag]);
@@ -217,6 +244,8 @@ function render() {{
         <b>${{elite.prompt_name}}</b> <span class="badge ${{badgeClass}}">${{source}}</span><br>
         faith=${{elite.faith}} novelty=${{elite.novelty}}<br>
         n=${{c.n}} in cell | s=${{elite.strength}} cfg=${{elite.cfg}}
+        <span class="bin">bin faith ${{c.fb + 1}}/${{N_BINS}} (${{binRange(FAITH_BINS, c.fb)}}) ·
+        novelty ${{c.nb + 1}}/${{N_BINS}} (${{binRange(NOVELTY_BINS, c.nb)}})</span>
       </div>
       <button class="viewall" onclick="openModal(${{i}})">view all ${{c.n}} in this cell</button>
     </div>`;

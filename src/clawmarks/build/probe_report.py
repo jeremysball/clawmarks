@@ -1,4 +1,5 @@
-import base64, os
+import base64
+import os
 
 from clawmarks.config import PROBE_DIR
 

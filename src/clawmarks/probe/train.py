@@ -32,13 +32,7 @@ confidence that a lucky seed is a real effect). Omit --seed only for exploratory
 that won't be compared against a paired control.
 """
 
-# Fixed seed list reused across every direction and control probe from round 1 onward, so that
-# replicate i of any direction shares a training seed with replicate i of control (paired design,
-# see --seed above). Do not reorder or reuse a subset: pairing depends on the same index
-# mapping to the same seed everywhere.
-CANONICAL_SEEDS = [20260709, 8675309, 271828, 141421, 314159, 161803, 57721, 30103]
 import argparse
-import json
 import os
 import re
 import sys
@@ -46,6 +40,12 @@ import sys
 import paramiko
 
 from clawmarks.config import ROOT
+
+# Fixed seed list reused across every direction and control probe from round 1 onward, so that
+# replicate i of any direction shares a training seed with replicate i of control (paired design,
+# see --seed above). Do not reorder or reuse a subset: pairing depends on the same index
+# mapping to the same seed everywhere.
+CANONICAL_SEEDS = [20260709, 8675309, 271828, 141421, 314159, 161803, 57721, 30103]
 
 KEY_PATH = f"{ROOT}/runpod-ssh/id_ed25519"
 
