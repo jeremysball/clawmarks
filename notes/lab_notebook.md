@@ -1926,3 +1926,52 @@ generated image as an independent exchangeable unit, which does not hold if imag
 prompt, seed, or checkpoint in a way that correlates their embeddings. Until that is checked
 (or the claim is scoped down to "these two fixed image collections"), treat the MMD p-value as
 suggestive, not a rigorously calibrated significance level.
+
+### 2026-07-14: Phase 2 open-threads cleanup (transactional writes, retrain-off-lock, N-variation counterfactuals, search-run launch UI)
+
+Closed out five items that had been sitting half-finished across the curation server and
+recovery scripts, each landed as its own TDD task with an independent GLM review:
+
+- Recovery scripts (`notes/recover_*` style atomic-write helpers) now accumulate quarantine
+  entries across runs instead of overwriting the ledger each time, and widen the cleanup
+  `except` so a partial write can't leave an orphaned temp file behind.
+- The preference-model retrain triggered by a rating submission no longer runs synchronously
+  inside the request lock (the deferred follow-up noted in the 2026-07-12 entry above); a rating
+  POST returns immediately and the retrain runs off-lock.
+- `/api/counterfactual` now accepts `n` (batch generation, capped at 6) and the Lightbox gained
+  `mountProgressive()` for thumb-then-full-res loading. Two bugs surfaced by GLM review and
+  fixed before merge: a pinned seed was generating `n` byte-identical images instead of forcing
+  a single job (the design spec's own pseudocode says one job when the seed is pinned, since
+  paying RunPod for identical copies is pure waste), and two concurrent counterfactual requests
+  for the same origin/batch-index could collide on the same output filename (fixed with a uuid
+  suffix on `new_tag`). `mountProgressive` also had a stale-callback race: the shared lightbox
+  `<img>` element is reused across navigations, so a superseded full-res load could still land
+  after the user navigated elsewhere and clobber the newer image; fixed with a per-call token
+  checked in both `onload` and a new `onerror` handler.
+- Implemented docs/superpowers/specs/2026-07-12-overnight-search-launch-design.md: `runs.html` +
+  `run_manager.py` let a search round be launched, monitored, and stopped from the browser
+  instead of SSHing in, with a per-run report (novelty trajectory, plateau count, spend, pick
+  rate by category, explore/exploit split) read straight off `allnight_state.json`/
+  `scored_manifest.json`. A second GLM review pass on this one caught real safety-rail gaps
+  worth recording since they're the kind of thing that looks fine until two requests race:
+  the original lock acquire was check-then-write (TOCTOU), so two near-simultaneous launches
+  under the server's `ThreadingHTTPServer` could both pass the "already running" guard and spawn
+  two `driver.py` processes against the same `out_dir`; fixed with an atomic
+  `O_CREAT|O_EXCL` lock claim. If writing the lock after spawning failed, the child was left
+  running with no lock at all, silently defeating the one-run-at-a-time guarantee; fixed by
+  reaping the child on any failure after Popen. `stop_run` trusted a bare PID-alive check, so a
+  reused PID after the real driver died would get SIGKILL'd as if it were the driver; fixed by
+  recording the launched PID's `/proc` start time and treating a mismatch as a stale lock.
+  `stop_run` also only signaled the driver's own PID, not its process group, so a `driver.py`
+  mid-`opencode` subprocess call at stop time would orphan that child; fixed with
+  `killpg`/`getpgid` (safe here since the driver is started with `start_new_session=True`, so
+  its pgid equals its own pid).
+- Deleted two rejected specs (`2026-07-11-toml-config-design.md` TOML-config, `2026-07-11-ui-
+  redesign-design.md` three-pillar nav) and added `*.backup_candidate_seeds_*` to `.gitignore`.
+  TODO.txt reconciled to match: the "Curation UI" implement items, the retrain-off-lock deferred
+  follow-up, and both search-run-launch UI items are now checked off there.
+
+Full suite: 334 passing, ruff/mypy clean. All work landed on the
+`worktree-phase2-task6-transactional-writes` branch; per-task branch/PR split from the original
+plan was not followed this pass (flagged for the finishing-a-development-branch step).
+
