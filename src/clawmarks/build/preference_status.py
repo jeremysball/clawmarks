@@ -22,8 +22,17 @@ def compute_data(sweep_dir):
         comparisons = []
     n_comparisons = len(comparisons)
 
-    if n_comparisons < preference_pairwise_model.MIN_COMPARISONS:
-        gate_message = (f"only {n_comparisons} comparisons (need "
+    # Loaded unconditionally (not just when a model already exists) so the gate below reflects
+    # usable pairs after de-duplication, not the raw submission count: a manifest of 50 raw
+    # submissions of the *same* pair now consolidates to 1 usable pair (see issue #13), and a
+    # gate keyed on the raw count would tell the user they're "ready to train" right before the
+    # actual retrain call refuses for the same data.
+    tags, embeddings = embed_cache.load_cache(embed_cache.EMBEDDINGS_FILE)
+    _, usable_y = preference_pairwise_model.build_training_set(tags, embeddings, comparisons)
+    n_usable = len(usable_y) // 2
+
+    if n_usable < preference_pairwise_model.MIN_COMPARISONS:
+        gate_message = (f"only {n_usable} usable comparisons of {n_comparisons} total (need "
                          f"{preference_pairwise_model.MIN_COMPARISONS}); compare more images "
                          f"via compare.html.")
     else:
@@ -38,10 +47,8 @@ def compute_data(sweep_dir):
     new_comparisons_since_train = 0
     comparisons_changed_since_train = False
     if model_meta:
-        tags, embeddings = embed_cache.load_cache(embed_cache.EMBEDDINGS_FILE)
-        _, usable_y = preference_pairwise_model.build_training_set(tags, embeddings, comparisons)
         n_usable_at_train = model_meta.get("n_usable_comparisons", model_meta["n_comparisons"])
-        new_comparisons_since_train = max(0, len(usable_y) // 2 - n_usable_at_train)
+        new_comparisons_since_train = max(0, n_usable - n_usable_at_train)
         if "comparisons_fingerprint" in model_meta:
             current_fingerprint = preference_pairwise_model.comparisons_fingerprint(tags, embeddings, comparisons)
             comparisons_changed_since_train = current_fingerprint != model_meta["comparisons_fingerprint"]
@@ -52,6 +59,7 @@ def compute_data(sweep_dir):
 
     return {
         "n_comparisons": n_comparisons,
+        "n_usable": n_usable,
         "min_comparisons": preference_pairwise_model.MIN_COMPARISONS,
         "comparisons_gate_message": gate_message,
         "has_model": has_model,
@@ -129,7 +137,7 @@ table.meta td:first-child {{ color:var(--text); }}
 
 {nav_bar_html('preference_status.html')}
 <h1>Preference classifier status</h1>
-<p class="sub">Comparisons: {data["n_comparisons"]} total (needs {data["min_comparisons"]}).</p>
+<p class="sub">Comparisons: {data["n_usable"]} usable of {data["n_comparisons"]} total (needs {data["min_comparisons"]}).</p>
 <div class="panel">
 {gate_html}
 {staleness_html}
