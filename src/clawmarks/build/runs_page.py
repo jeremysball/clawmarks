@@ -119,8 +119,8 @@ function refreshReport() {{
     renderSpark(d.novelty_trajectory);
     const cats = Object.keys(d.explore_exploit_split);
     document.getElementById('categoryBreakdown').innerHTML = cats.length ? cats.map(cat =>
-      `<div class="catrow"><span>${{escHtml(cat)}}</span><span>${{d.explore_exploit_split[cat]}} images, ` +
-      `${{(d.pick_rate_by_category[cat] * 100).toFixed(0)}}% picked</span></div>`
+      `<div class="catrow"><span>${{escHtml(cat)}}</span><span>${{escHtml(d.explore_exploit_split[cat])}} images, ` +
+      `${{escHtml((d.pick_rate_by_category[cat] * 100).toFixed(0))}}% picked</span></div>`
     ).join('') : '<span style="color:var(--text-dim);font-size:12.5px;">No images scored for this round yet.</span>';
   }});
 }}
