@@ -81,6 +81,7 @@ Docker sidecar topology where tailscale0 lives in a different container's
 netns and auto-detection would otherwise fall back to 0.0.0.0 anyway).
 """
 import base64
+import html
 import json
 import os
 import random
@@ -89,6 +90,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import urllib.parse
 import urllib.request
 import uuid
@@ -680,6 +682,24 @@ def manifest_entry_by_tag(tag):
     return _manifest_cache["by_tag"].get(tag)
 
 
+_ROUTES = [
+    ("/scan.html", "scan gallery"),
+    ("/map.html", "solution map"),
+    ("/redundancy.html", "redundancy clustering"),
+    ("/coverage.html", "coverage map"),
+    ("/novelty_decay.html", "novelty decay"),
+    ("/lineage.html", "lineage view"),
+    ("/archive.html", "archive"),
+    ("/preference_rank.html", "preference ranking"),
+    ("/preference_status.html", "preference status"),
+    ("/explore.html", "explore"),
+    ("/seeds.html", "seed browser"),
+    ("/compare.html", "compare"),
+    ("/cockpit.html", "cockpit"),
+    ("/runs.html", "runs"),
+]
+
+
 class Handler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"  # keep-alive, so 3392 grid thumbnails don't reopen a
                                      # connection per image
@@ -703,6 +723,169 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        try:
+            self._do_GET()
+        except Exception as e:
+            if self._wants_json():
+                self._send_json_error(e)
+            else:
+                self._send_error_page(e, traceback.format_exc())
+
+    def _wants_json(self):
+        path = self.path.split("?")[0]
+        return path.startswith("/api/") or path.endswith(".json")
+
+    def _send_json_error(self, exc):
+        no_manifest = isinstance(exc, FileNotFoundError) and "scored_manifest.json" in str(exc)
+        try:
+            self._json_response(500, {
+                "error": f"{type(exc).__name__}: {exc}",
+                "no_manifest": no_manifest,
+            })
+        except Exception:
+            pass  # client already gone; nothing left to send
+
+    def _send_error_page(self, exc, detail):
+        message = f"{type(exc).__name__}: {exc}"
+        hint = ""
+        if isinstance(exc, FileNotFoundError):
+            hint = (
+                "<p>This usually means <code>scored_manifest.json</code> still points at an "
+                "old absolute path (e.g. after the project directory was renamed or moved) and "
+                "the image no longer lives there. Re-pointing or regenerating the manifest's "
+                "<code>file</code> paths should fix it.</p>"
+            )
+        body = f"""<div style="font-family:sans-serif;max-width:48rem;margin:2rem auto;line-height:1.5">
+<h1 style="color:#b91c1c">Something went wrong</h1>
+<p><strong>{html.escape(message)}</strong></p>
+{hint}
+<details>
+<summary style="cursor:pointer">Show stack trace</summary>
+<pre style="white-space:pre-wrap;font-family:monospace;background:#f3f4f6;padding:1rem;border-radius:4px">{html.escape(detail)}</pre>
+</details>
+<p><a href="/">&larr; back to status page</a></p>
+</div>""".encode()
+        try:
+            self.send_response(500)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception:
+            pass  # client already gone; nothing left to send
+
+    def _send_status_page(self):
+        try:
+            manifest = load_manifest()
+            n_entries = len(manifest)
+            n_present = sum(1 for m in manifest if os.path.exists(m["file"]))
+            manifest_summary = f"{n_present}/{n_entries} manifest images present on disk"
+            has_data = n_present > 0
+        except Exception as e:
+            manifest_summary = f"could not read manifest: {e}"
+            has_data = False
+
+        if has_data:
+            body = self._status_page_data_body(manifest_summary)
+        else:
+            body = self._status_page_empty_body(manifest_summary)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _status_page_data_body(self, manifest_summary):
+        links = " &middot; ".join(f'<a href="{path}">{label}</a>' for path, label in _ROUTES)
+        return f"""<!doctype html><html><head><meta charset="utf-8">
+<title>clawmarks curation server</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
+  --text-dim:#9a9aa4; --accent:#7c9eff; }}
+body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
+h1 {{ font-size:18px; margin:0 0 4px; }}
+p {{ color:var(--text-dim); font-size:13px; line-height:1.6; }}
+code {{ color:var(--text); }}
+a {{ color:var(--accent); }}
+</style></head><body>
+<h1>clawmarks curation server</h1>
+<p>sweep dir: <code>{html.escape(str(SWEEP_DIR))}</code></p>
+<p>{html.escape(manifest_summary)}</p>
+<p>{links}</p>
+</body></html>""".encode()
+
+    def _status_page_empty_body(self, manifest_summary):
+        return f"""<!doctype html><html><head><meta charset="utf-8">
+<title>clawmarks curation server</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
+  --text-dim:#9a9aa4; --accent:#7c9eff; --down:#e0605e; }}
+body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
+h1 {{ font-size:18px; margin:0 0 4px; }}
+p {{ color:var(--text-dim); font-size:13px; line-height:1.6; }}
+p.sub {{ max-width:640px; }}
+code {{ color:var(--text); }}
+a {{ color:var(--accent); }}
+.panel {{ background:var(--panel); border:1px solid var(--border); border-radius:8px;
+  padding:16px; margin-top:16px; max-width:640px; }}
+.launchrow {{ display:flex; gap:12px; margin-top:12px; }}
+button {{ font-size:13px; padding:8px 16px; border-radius:6px; border:1px solid var(--border);
+  background:var(--accent); color:#0b0b0d; font-weight:600; cursor:pointer; }}
+button:disabled {{ opacity:0.4; cursor:not-allowed; }}
+#launchError {{ color:var(--down); font-size:12.5px; margin-top:8px; }}
+#launchNote {{ font-size:12.5px; margin-top:8px; }}
+.tools {{ margin-top:20px; font-size:12.5px; }}
+</style></head><body>
+<h1>clawmarks curation server</h1>
+<p>sweep dir: <code>{html.escape(str(SWEEP_DIR))}</code></p>
+<div class="panel">
+<p class="sub">No search data yet. Launch a search round to start generating and scoring
+images &mdash; this backs up the round's out_dir, verifies the backup, checks the RunPod
+balance floor, and launches <code>search/driver.py</code> detached.</p>
+<div class="launchrow">
+<button id="launch1">Launch Round 1</button>
+<button id="launch2">Launch Round 2</button>
+</div>
+<div id="launchError"></div>
+<div id="launchNote"></div>
+</div>
+<p class="tools">or browse tools once a round has produced images:
+{" &middot; ".join(f'<a href="{path}">{label}</a>' for path, label in _ROUTES)}</p>
+<script>
+function launch(round, btn) {{
+  document.getElementById('launchError').textContent = '';
+  document.getElementById('launchNote').textContent = '';
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Backing up and launching...';
+  fetch('/api/searchrun/launch', {{
+    method: 'POST', headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{round: round}}),
+  }}).then(async r => {{
+    const d = await r.json();
+    if (!r.ok) {{
+      document.getElementById('launchError').textContent = d.error || 'launch failed';
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }} else {{
+      document.getElementById('launchNote').innerHTML =
+        'Launched. Track progress on <a href="/runs.html">the runs page</a>.';
+      btn.textContent = originalText;
+    }}
+  }}).catch(e => {{
+    document.getElementById('launchError').textContent = String(e);
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }});
+}}
+document.getElementById('launch1').addEventListener('click', e => launch(1, e.target));
+document.getElementById('launch2').addEventListener('click', e => launch(2, e.target));
+</script>
+</body></html>""".encode()
+
+    def _do_GET(self):
         if self.path == "/api/searchrun/status":
             self._json_response(200, run_manager.status())
             return
@@ -717,7 +900,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(400, {"error": f"unknown round {round_num!r}"})
                 return
             cfg = ROUND_CONFIGS[round_num]
-            out_dir = SWEEP_DIR if cfg.out_dir_name == "uncanny_sweep" else SWEEP2_DIR
+            out_dir = SWEEP_DIR if cfg.out_dir_name == "uncanny_round1" else SWEEP2_DIR
             favorites = load_store(FAVORITES_FILE)
             self._json_response(200, run_manager.build_report(out_dir, favorites=favorites))
             return
@@ -753,9 +936,7 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200, {"trials": sorted(trials.values(), key=lambda t: t["created_at"])})
             return
         if self.path == "/":
-            self.send_response(302)
-            self.send_header("Location", "/scan.html")
-            self.end_headers()
+            self._send_status_page()
             return
 
         if self.path in ("/favicon.ico", "/favicon.png"):
@@ -1124,7 +1305,7 @@ class Handler(SimpleHTTPRequestHandler):
         # Use this module's own SWEEP_DIR/SWEEP2_DIR (both overridable via CLAWMARKS_SWEEP_DIR
         # for tests) rather than driver._out_dir, which resolves against clawmarks.config
         # directly and would ignore a monkeypatch made only on this module.
-        out_dir = SWEEP_DIR if cfg.out_dir_name == "uncanny_sweep" else SWEEP2_DIR
+        out_dir = SWEEP_DIR if cfg.out_dir_name == "uncanny_round1" else SWEEP2_DIR
         try:
             info = run_manager.launch_run(
                 round_num, out_dir, api_key,
@@ -1471,12 +1652,42 @@ def _reconcile_stuck_trials():
             save_store(COCKPIT_QUEUE_FILE, trials)
 
 
+def _check_manifest_images():
+    """Sanity-check that scored_manifest.json's file paths actually resolve, so a stale-path
+    manifest (e.g. after the project directory was renamed or moved) fails at startup instead
+    of hanging or 500ing on the first page that tries to open an image."""
+    manifest_path = f"{SWEEP_DIR}/scored_manifest.json"
+    if not os.path.exists(manifest_path):
+        print(f"warning: no scored_manifest.json at {manifest_path}, skipping image check", flush=True)
+        return
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    n_total = len(manifest)
+    if n_total == 0:
+        return
+    n_present = sum(1 for m in manifest if os.path.exists(m["file"]))
+    if n_present == 0:
+        example = manifest[0]["file"]
+        print(
+            f"FATAL: none of {n_total} images in {manifest_path} exist on disk "
+            f"(e.g. {example!r} is missing). This usually means the manifest's paths are "
+            "stale, most likely from the project directory being renamed or moved. Fix the "
+            "manifest's 'file' paths (or point CLAWMARKS_SWEEP_DIR at wherever the images "
+            "actually live) before starting the server.",
+            file=sys.stderr, flush=True,
+        )
+        sys.exit(1)
+    if n_present < n_total:
+        print(f"warning: only {n_present}/{n_total} manifest images found on disk", flush=True)
+
+
 def main(argv=None):
     port = DEFAULT_PORT
     if argv is None:
         argv = sys.argv[1:]
     if argv:
         port = int(argv[0])
+    _check_manifest_images()
     _reconcile_stuck_trials()
     host = os.environ.get("CLAWMARKS_HOST") or tailscale_ip()
     server = ThreadingHTTPServer((host, port), Handler)
