@@ -97,10 +97,10 @@ import uuid
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
-from clawmarks.config import ROOT, SEEDS_FILE, SWEEP2_DIR, SWEEP_DIR
+from clawmarks import config
+from clawmarks.config import ROOT
 from clawmarks.runpod_client import runpod_balance
 from clawmarks.search import run_manager
-from clawmarks.search.driver import ROUND_CONFIGS
 from clawmarks.search.score_manifest import REAL_DIR
 from clawmarks.search.seed_pool import merge as seed_pool_merge
 from clawmarks.search import comparison_sampler, preference_settings, preference_pairwise_model
@@ -119,6 +119,36 @@ with open(os.path.join(os.path.dirname(__file__), "static", "favicon.png"), "rb"
     _FAVICON_PNG = _f.read()
 
 _live_cache = LiveCache()
+
+from clawmarks.atomic_io import atomic_json_write
+
+_active_selection = {"expedition": None, "leg": None}
+
+
+def _load_active_selection():
+    if config.ACTIVE_LEG_FILE.exists():
+        with open(config.ACTIVE_LEG_FILE) as f:
+            data = json.load(f)
+        _active_selection["expedition"] = data.get("expedition")
+        _active_selection["leg"] = data.get("leg")
+
+
+_load_active_selection()
+
+
+def _active_out_dir():
+    if _active_selection["expedition"] is None:
+        return None
+    return config.leg_dir(_active_selection["expedition"], _active_selection["leg"])
+
+
+def _set_active_selection(expedition, leg):
+    expedition_file = config.EXPEDITIONS_DIR / expedition / "expedition.json"
+    if not expedition_file.exists():
+        raise ValueError(f"unknown expedition {expedition!r}")
+    _active_selection["expedition"] = expedition
+    _active_selection["leg"] = leg
+    atomic_json_write(config.ACTIVE_LEG_FILE, dict(_active_selection))
 
 
 def _manifest_path():
@@ -886,6 +916,9 @@ document.getElementById('launch2').addEventListener('click', e => launch(2, e.ta
 </body></html>""".encode()
 
     def _do_GET(self):
+        if self.path == "/api/active-leg":
+            self._json_response(200, dict(_active_selection))
+            return
         if self.path == "/api/searchrun/status":
             self._json_response(200, run_manager.status())
             return
@@ -1166,6 +1199,20 @@ document.getElementById('launch2').addEventListener('click', e => launch(2, e.ta
             payload = json.loads(raw)
         except json.JSONDecodeError:
             self._json_response(400, {"error": "invalid JSON body"})
+            return
+
+        if self.path == "/api/active-leg":
+            expedition = payload.get("expedition")
+            leg = payload.get("leg")
+            if not expedition or not leg:
+                self._json_response(400, {"error": "'expedition' and 'leg' are required"})
+                return
+            try:
+                _set_active_selection(expedition, leg)
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
+            self._json_response(200, dict(_active_selection))
             return
 
         if self.path == "/api/compare":
