@@ -12,6 +12,10 @@ never directly compared: it only depends on the image's own embedding, not a per
 tally. Mirroring every row also guarantees exact class balance automatically, unlike the old
 yes/no labels, so there's no balance-gate check needed here.
 
+Repeated judgments on the same underlying pair (whether resubmitted or resampled) are
+consolidated into a single majority-vote verdict before training (_consolidate_pairs), so
+resampling the same pair never counts as independent evidence.
+
 Refuses to train below MIN_COMPARISONS: with only a handful of comparisons, any model would be
 overfitting noise, not learning taste. Run compare.html (via `clawmarks serve`) until this floor
 is cleared.
@@ -32,7 +36,7 @@ from datetime import datetime, timezone
 import joblib
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import LeaveOneOut, StratifiedKFold, cross_val_score, permutation_test_score
+from sklearn.model_selection import GroupKFold, LeaveOneGroupOut, cross_val_score, permutation_test_score
 
 from clawmarks.config import SWEEP_DIR
 from clawmarks.search import embed_cache
@@ -43,13 +47,47 @@ MODEL_FILE = SWEEP_DIR / "preference_pairwise_model.joblib"
 MODEL_META_FILE = SWEEP_DIR / "preference_pairwise_model_meta.json"
 
 
-def _iter_usable_comparisons(tags, embeddings, comparisons):
-    """Yields (winner, loser, winner_embedding, loser_embedding) for every comparison whose
-    winner and loser tags are both present in the embedding cache. The single filtering pass
-    both build_training_set and comparisons_fingerprint rely on, so they can't drift apart."""
-    tag_to_row = {t: i for i, t in enumerate(tags)}
+def _consolidate_pairs(comparisons):
+    """Collapses every judgment on the same underlying (unordered) pair into a single verdict by
+    majority vote, so a pair judged N times counts as one piece of evidence instead of N
+    independent training rows. Without this, resubmitting (or resampling) the same pair inflates
+    apparent model accuracy and permutation-test significance on what is really repeated, not
+    independent, evidence. A tied pair (equal wins each way) is dropped as ambiguous."""
+    tally = {}
     for c in comparisons:
         winner, loser = c.get("winner"), c.get("loser")
+        if not winner or not loser or winner == loser:
+            continue
+        votes = tally.setdefault(frozenset((winner, loser)), {})
+        votes[winner] = votes.get(winner, 0) + 1
+    consolidated = []
+    for key, votes in tally.items():
+        a, b = sorted(key)
+        wins_a, wins_b = votes.get(a, 0), votes.get(b, 0)
+        if wins_a == wins_b:
+            continue
+        winner, loser = (a, b) if wins_a > wins_b else (b, a)
+        consolidated.append((winner, loser))
+    return consolidated
+
+
+def n_consolidated_pairs(comparisons):
+    """Count of distinct pairs left after majority-vote consolidation, before filtering by
+    embedding-cache presence. Lets a caller like curation_server's retrain gate tell whether an
+    under-floor usable count is caused by missing embeddings (n_consolidated_pairs clears the
+    floor but n_usable from build_training_set doesn't) or by duplicate-judgment consolidation
+    itself (n_consolidated_pairs is already below the floor, so refreshing the embedding cache
+    wouldn't help)."""
+    return len(_consolidate_pairs(comparisons))
+
+
+def _iter_usable_comparisons(tags, embeddings, comparisons):
+    """Yields (winner, loser, winner_embedding, loser_embedding) for every consolidated pair
+    (see _consolidate_pairs) whose winner and loser tags are both present in the embedding cache.
+    The single filtering pass both build_training_set and comparisons_fingerprint rely on, so
+    they can't drift apart."""
+    tag_to_row = {t: i for i, t in enumerate(tags)}
+    for winner, loser in _consolidate_pairs(comparisons):
         if winner not in tag_to_row or loser not in tag_to_row:
             continue
         yield winner, loser, embeddings[tag_to_row[winner]], embeddings[tag_to_row[loser]]
@@ -57,9 +95,11 @@ def _iter_usable_comparisons(tags, embeddings, comparisons):
 
 def build_training_set(tags, embeddings, comparisons):
     """`tags`/`embeddings` come from embed_cache.load_cache; `comparisons` is the loaded
-    user_comparisons.json list. Returns (X, y): a mirrored pair of rows per usable comparison
-    (embedding[winner] - embedding[loser] labeled 1, its negation labeled 0), skipping any
-    comparison whose winner or loser tag isn't in the embedding cache."""
+    user_comparisons.json list. Returns (X, y): a mirrored pair of rows per usable, consolidated
+    pair (embedding[winner] - embedding[loser] labeled 1, its negation labeled 0), skipping any
+    pair whose winner or loser tag isn't in the embedding cache. Repeated judgments on the same
+    pair are consolidated first (see _consolidate_pairs), so they contribute one row, not one
+    row per judgment."""
     diffs = [w - loser_emb for _, _, w, loser_emb in _iter_usable_comparisons(tags, embeddings, comparisons)]
     if not diffs:
         return np.zeros((0, 0), dtype=np.float32), np.zeros((0,), dtype=np.int64)
@@ -70,31 +110,63 @@ def build_training_set(tags, embeddings, comparisons):
 
 
 def comparisons_fingerprint(tags, embeddings, comparisons):
-    """A hash of the exact (winner, loser) pairs a train run would use. Two fingerprints matching
-    means retraining now would use identical data to last time. Unlike a bare comparison count,
-    this also catches a comparison being added and another (already-counted) one becoming
-    unusable, e.g. after an embedding cache rebuild drops a tag."""
+    """A hash of the exact consolidated (winner, loser) pairs a train run would use. Two
+    fingerprints matching means retraining now would use identical data to last time. Unlike a
+    bare comparison count, this also catches a comparison being added and another
+    (already-counted) one becoming unusable, e.g. after an embedding cache rebuild drops a tag.
+    Repeating an already-judged pair does not change the fingerprint, since it's consolidated
+    into the same single verdict rather than counted as a new row."""
     pairs = sorted((w, loser) for w, loser, _, _ in _iter_usable_comparisons(tags, embeddings, comparisons))
     return hashlib.sha256(json.dumps(pairs).encode()).hexdigest()
 
 
-def cross_validate(X, y):
+def _pair_groups(n_rows):
+    """Maps each of the n_rows training rows to the underlying comparison it came from, so a CV
+    split can be forced to keep both mirrored rows of a pair (embedding[winner]-embedding[loser]
+    and its negation) together in one fold. build_training_set always lays rows out as
+    [diffs..., -diffs...], so row i and row i + n_rows//2 share a pair index of i % (n_rows//2).
+    Without this, a fold can see one mirrored row at train time and its exact negation at test
+    time, letting the model "predict" by sign alone instead of learning real signal. Only valid
+    for rows produced by build_training_set's own layout; every current caller (cross_validate,
+    significance, both only ever called by train_and_save on build_training_set's output)
+    satisfies that, but a future caller passing some other row order/subset would get silently
+    wrong groups rather than an error."""
+    assert n_rows % 2 == 0, f"expected an even, mirrored row count from build_training_set, got {n_rows}"
+    n_pairs = n_rows // 2
+    return np.concatenate([np.arange(n_pairs), np.arange(n_pairs)])
+
+
+def cross_validate(X, y, groups=None):
     """Mean cross-validated accuracy at predicting which side of a mirrored pair is the winner.
-    Leave-one-out below MIN_COMPARISONS rows, since every row matters at that scale; 5-fold
-    StratifiedKFold at or above it."""
-    cv = LeaveOneOut() if len(y) < MIN_COMPARISONS else StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
-    scores = cross_val_score(LogisticRegression(max_iter=1000), X, y, cv=cv)
+    Grouped by underlying pair so both mirrored rows of a comparison always land in the same
+    fold; otherwise the model can exploit the leaked mirror rather than learning real signal.
+    Leave-one-group-out below MIN_COMPARISONS pairs, since every pair matters at that scale;
+    5-fold GroupKFold at or above it. Note this threshold is now counted in underlying pairs
+    (n_groups), not raw rows as it was before grouping: a comparison set with, say, 30 usable
+    pairs (60 rows) now gets LeaveOneGroupOut, whereas the pre-fix code would have already
+    switched such a set to 5-fold at 50 rows. This matches train_and_save's own MIN_COMPARISONS
+    gate, which was already counted in pairs."""
+    if groups is None:
+        groups = _pair_groups(len(y))
+    n_groups = len(np.unique(groups))
+    cv = LeaveOneGroupOut() if n_groups < MIN_COMPARISONS else GroupKFold(n_splits=5, shuffle=True, random_state=0)
+    scores = cross_val_score(LogisticRegression(max_iter=1000), X, y, cv=cv, groups=groups)
     return float(scores.mean())
 
 
-def significance(X, y, n_permutations=N_PERMUTATIONS, random_state=0):
+def significance(X, y, n_permutations=N_PERMUTATIONS, random_state=0, groups=None):
     """Permutation test: how often does a model trained on randomly shuffled labels score as
     well as the real one? A low p-value means the real accuracy is unlikely to be a fluke of
     this particular comparison set. baseline_accuracy is always 0.5 here because mirroring
-    guarantees exact class balance, unlike preference_model.py's yes/no labels."""
-    cv = LeaveOneOut() if len(y) < MIN_COMPARISONS else StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+    guarantees exact class balance, unlike preference_model.py's yes/no labels. Grouped by
+    underlying pair for the same reason as cross_validate: otherwise the permutation test also
+    reports significance on pure noise."""
+    if groups is None:
+        groups = _pair_groups(len(y))
+    n_groups = len(np.unique(groups))
+    cv = LeaveOneGroupOut() if n_groups < MIN_COMPARISONS else GroupKFold(n_splits=5, shuffle=True, random_state=0)
     _, _, p_value = permutation_test_score(
-        LogisticRegression(max_iter=1000), X, y, cv=cv,
+        LogisticRegression(max_iter=1000), X, y, cv=cv, groups=groups,
         n_permutations=n_permutations, random_state=random_state,
     )
     baseline_accuracy = max(np.bincount(y)) / len(y)

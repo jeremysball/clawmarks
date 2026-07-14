@@ -34,8 +34,13 @@ def bin_manifest(manifest):
     return grid
 
 
-def stratified_random_pair(manifest, seen=None, rng=random):
-    """Returns two distinct manifest items, or None if the manifest has fewer than 2 images.
+def _excluded(item_a, item_b, exclude):
+    return frozenset((item_a["tag"], item_b["tag"])) in exclude
+
+
+def stratified_random_pair(manifest, seen=None, rng=random, exclude=None):
+    """Returns two distinct manifest items, or None if fewer than two not-already-compared images
+    remain.
 
     `seen` maps a tag to how many past comparisons it appears in. Picking a bin uniformly and
     then an image within it (the original behavior) over-samples images in sparse bins: an image
@@ -44,10 +49,16 @@ def stratified_random_pair(manifest, seen=None, rng=random):
     To keep the grid spread without that skew, restrict each draw to the least-covered frontier:
     the bins whose least-shown image has the lowest seen-count, then the least-shown image inside
     the chosen bin (random tie-break). An image thus never reappears until every other bin's
-    least-shown image has been shown as often, which spreads coverage evenly across the archive."""
+    least-shown image has been shown as often, which spreads coverage evenly across the archive.
+
+    `exclude` is a set of frozenset({tag_a, tag_b}) pairs to skip, so an already-judged pair is
+    never resampled and double-counted as independent evidence. Coverage and exclusion compose:
+    the frontier picks the least-shown image, then the partner draw restricts to images that
+    image has not already been judged against."""
     if len(manifest) < 2:
         return None
     seen = seen or {}
+    exclude = exclude or set()
     grid = bin_manifest(manifest)
     nonempty = [items for items in grid.values() if items]
     if not nonempty:
@@ -56,8 +67,8 @@ def stratified_random_pair(manifest, seen=None, rng=random):
     def seen_of(item):
         return seen.get(item["tag"], 0)
 
-    def pick(exclude_tag=None):
-        pools = [[it for it in items if it["tag"] != exclude_tag] for items in nonempty]
+    def pick(allowed):
+        pools = [[it for it in items if allowed(it)] for items in nonempty]
         pools = [p for p in pools if p]
         if not pools:
             return None
@@ -67,40 +78,62 @@ def stratified_random_pair(manifest, seen=None, rng=random):
         least = min(seen_of(it) for it in chosen)
         return rng.choice([it for it in chosen if seen_of(it) == least])
 
-    item_a = pick()
-    if item_a is None:
-        return None
-    item_b = pick(exclude_tag=item_a["tag"])
-    if item_b is None:
-        return None
-    return (item_a, item_b)
+    # Draw the least-covered image, then its least-covered partner among images it has not
+    # already been judged against. Retry: a frontier image whose every partner is already judged
+    # would otherwise dead-end the draw while uncompared pairs still exist elsewhere.
+    for _ in range(20):
+        item_a = pick(lambda it: True)
+        if item_a is None:
+            return None
+        item_b = pick(lambda it, a=item_a: it["tag"] != a["tag"] and not _excluded(a, it, exclude))
+        if item_b is not None:
+            return (item_a, item_b)
+    # Coverage-balanced retries exhausted (small manifest, or most pairs already compared) -
+    # fall back to an exhaustive scan for any remaining uncompared pair.
+    for i, item_a in enumerate(manifest):
+        for item_b in manifest[i + 1:]:
+            if not _excluded(item_a, item_b, exclude):
+                return (item_a, item_b)
+    return None
 
 
-def most_uncertain_pair(manifest, model, score_fn, embeddings_for, rng=random):
+def most_uncertain_pair(manifest, model, score_fn, embeddings_for, rng=random, exclude=None):
     """Returns the two manifest items whose model scores are closest together, out of a random
     candidate set of up to CANDIDATE_POOL_SIZE images. `score_fn(model, embeddings) -> sequence`
     and `embeddings_for(items) -> sequence` let callers plug in
     preference_pairwise_model.score and an embedding lookup without this module importing the
-    embedding cache directly. Returns None if fewer than 2 candidates are available."""
+    embedding cache directly. `exclude` is a set of frozenset({tag_a, tag_b}) pairs to skip, so
+    an already-judged pair is never resampled. Returns None if fewer than 2 candidates are
+    available, or every candidate gap is excluded."""
     if len(manifest) < 2:
         return None
+    exclude = exclude or set()
     candidates = rng.sample(manifest, min(CANDIDATE_POOL_SIZE, len(manifest)))
     scores = score_fn(model, embeddings_for(candidates))
     ranked = sorted(zip(candidates, scores), key=lambda pair: pair[1])
-    best_gap, best_pair = None, None
+    gaps = []
     for i in range(len(ranked) - 1):
-        gap = abs(ranked[i][1] - ranked[i + 1][1])
-        if best_gap is None or gap < best_gap:
-            best_gap, best_pair = gap, (ranked[i][0], ranked[i + 1][0])
-    return best_pair
+        item_a, item_b = ranked[i][0], ranked[i + 1][0]
+        if _excluded(item_a, item_b, exclude):
+            continue
+        gaps.append((abs(ranked[i][1] - ranked[i + 1][1]), item_a, item_b))
+    if not gaps:
+        return None
+    gaps.sort(key=lambda g: g[0])
+    return (gaps[0][1], gaps[0][2])
 
 
 def pick_next_pair(manifest, n_comparisons, model=None, score_fn=None, embeddings_for=None,
-                   seen=None, rng=random):
+                   seen=None, rng=random, exclude=None):
     """Top-level entry point used by curation_server.py. Below MIN_COMPARISONS, or when no model
     is available yet, falls back to stratified_random_pair (coverage-balanced via `seen`, a
     tag->appearance-count map from the comparison history). At/above the floor with a model
-    available, uses most_uncertain_pair."""
+    available, uses most_uncertain_pair, falling back to stratified_random_pair if every candidate
+    gap it found is excluded. `exclude` is a set of frozenset({tag_a, tag_b}) pairs already judged,
+    so a pair is never shown to the user twice."""
     if n_comparisons < MIN_COMPARISONS or model is None:
-        return stratified_random_pair(manifest, seen=seen, rng=rng)
-    return most_uncertain_pair(manifest, model, score_fn, embeddings_for, rng=rng)
+        return stratified_random_pair(manifest, seen=seen, rng=rng, exclude=exclude)
+    pair = most_uncertain_pair(manifest, model, score_fn, embeddings_for, rng=rng, exclude=exclude)
+    if pair is None:
+        return stratified_random_pair(manifest, seen=seen, rng=rng, exclude=exclude)
+    return pair

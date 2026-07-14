@@ -198,12 +198,29 @@ def get_balance():
     return _gql("query { myself { clientBalance } }")["myself"]["clientBalance"]
 
 
+def _spent_or_none(start_balance):
+    """Returns spend-so-far, or None if the balance check itself failed. Fails closed: a caller
+    that can't verify how much has been spent must stop, not assume $0 spent and let further
+    paid batches start unchecked (the original bug this guards against)."""
+    try:
+        return start_balance - get_balance()
+    except Exception as e:
+        print(f"STOPPING: balance check failed ({e}); failing closed instead of assuming "
+              f"$0 spent, which would let further paid batches start unchecked", flush=True)
+        return None
+
+
 def _out_dir(cfg):
     return SWEEP_DIR if cfg.out_dir_name == "uncanny_sweep" else SWEEP2_DIR
 
 
 def _state_file(cfg):
-    return _out_dir(cfg) / f"allnight{cfg.round}_state.json"
+    """Round 1's original script (notes/run_uncanny_allnight.py) wrote its state to
+    allnight_state.json with no round-number suffix; round 2's (run_uncanny_allnight2.py) wrote
+    allnight2_state.json. Preserve those exact names so this merged driver resumes from the
+    state files that already exist on disk instead of silently starting over at generation 0."""
+    suffix = "" if cfg.round == 1 else str(cfg.round)
+    return _out_dir(cfg) / f"allnight{suffix}_state.json"
 
 
 def load_state(cfg):
@@ -221,6 +238,30 @@ def load_state(cfg):
 def save_state(cfg, state):
     with open(_state_file(cfg), "w") as f:
         json.dump(state, f, indent=1)
+
+
+def _load_resumable_manifest(out_dir):
+    """Loads this round's own already-persisted scored_manifest.json, if any, so restarting the
+    search resumes on top of prior generations instead of discarding them: the main loop used to
+    always start from an empty manifest and then overwrite scored_manifest.json with only the
+    new run's images, permanently losing every previously persisted record on every restart.
+    Falls back to an empty manifest (rather than crashing) if the file is truncated/corrupt, e.g.
+    from a process kill mid-write in an older build before the write became atomic (see the
+    tmp+os.replace pattern below): the prior run's images are still on disk even if this one
+    record of them is unreadable, so refusing to start is worse than losing the resume."""
+    manifest_path = out_dir / "scored_manifest.json"
+    if not manifest_path.exists():
+        return []
+    try:
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"WARNING: {manifest_path} is corrupt ({e}); starting this restart with an empty "
+              f"manifest instead of crashing. The file itself is left untouched for manual "
+              f"recovery.", flush=True)
+        return []
+    print(f"resuming with {len(manifest)} already-persisted images from {manifest_path}", flush=True)
+    return manifest
 
 
 def request_gpt55_subjects(cfg, existing_subjects, n=30):
@@ -309,7 +350,7 @@ def _predicted_preference_pool(manifest, model_path, embed_model, top_n=15):
 
 
 def _load_prev_round_state(cfg):
-    """Round 1's body still reads its own state file (allnight_state.json) and the
+    """Round 1's body still reads its own state file (see _state_file) and the
     first-run fixed-sweep manifest. Round 2 reads round 1's manifest as the exclusion set.
     Returns (manifest, prev_embs_or_None) tuple."""
     if cfg.exclude_prev_round:
@@ -322,7 +363,7 @@ def _load_prev_round_state(cfg):
 
 def submit_and_collect(cfg, jobs, out_dir, label, timeout_s=600):
     """Submit jobs to the ComfyUI serverless endpoint and poll for results."""
-    from clawmarks.compute.comfyui import api_post, api_get, build_workflow
+    from clawmarks.compute.comfyui import api_post, api_get, build_workflow, cancel_job
     job_ids = {}
     for j in jobs:
         wf = build_workflow(j["prompt"], j["seed"], j["strength"], j["cfg"], j["steps"], j["sampler"], j["negative"])
@@ -358,9 +399,18 @@ def submit_and_collect(cfg, jobs, out_dir, label, timeout_s=600):
                 pending.discard(jid)
         if pending:
             time.sleep(8)
+    cancel_failed = 0
     if pending:
-        print(f"[{label}] {len(pending)} jobs still pending after {timeout_s}s, giving up on them", flush=True)
-    print(f"[{label}] completed={completed} failed={failed} timed_out={len(pending)}", flush=True)
+        print(f"[{label}] {len(pending)} jobs still pending after {timeout_s}s, cancelling them "
+              f"so they stop billing on the provider side", flush=True)
+        for jid in pending:
+            try:
+                cancel_job(jid)
+            except Exception as e:
+                cancel_failed += 1
+                print(f"CANCEL_FAIL {jid}: {e}", flush=True)
+    print(f"[{label}] completed={completed} failed={failed} timed_out={len(pending)} "
+          f"cancel_failed={cancel_failed}", flush=True)
     return manifest
 
 
@@ -408,6 +458,14 @@ def cell_html(items, faith_edges, novelty_edges, fb, nb):
 
 
 def build_gallery(cfg, manifest, real_ref):
+    # A resumed manifest (see _load_resumable_manifest) can reference a PNG that no longer
+    # exists on disk; thumb_data_uri would crash the whole generation loop trying to open it.
+    # Filter here, mirroring score_batch's identical guard for the same reason. bin_edges
+    # indexes into an empty list if every entry got filtered out, so bail out the same way the
+    # caller already does for an empty manifest.
+    manifest = [m for m in manifest if os.path.exists(m["file"])]
+    if not manifest:
+        return 0.0
     faith_vals = sorted(m["centroid_sim"] for m in manifest)
     novelty_vals = sorted(m["novelty"] for m in manifest)
 
@@ -561,7 +619,7 @@ def main(argv=None):
     # style_subject_count=5 below.
     style_subject_count = 5 if cfg.round == 1 else 4
 
-    manifest = []
+    manifest = _load_resumable_manifest(out_dir)
 
     while True:
         elapsed_h = (time.time() - start_time) / 3600
@@ -571,12 +629,9 @@ def main(argv=None):
         if state["generation"] >= cfg.max_generations:
             print(f"STOPPING: hit MAX_GENERATIONS sanity ceiling ({cfg.max_generations})", flush=True)
             break
-        try:
-            balance_now = get_balance()
-            spent = state["start_balance"] - balance_now
-        except Exception as e:
-            print(f"balance check failed ({e})", flush=True)
-            spent = 0
+        spent = _spent_or_none(state["start_balance"])
+        if spent is None:
+            break
         if abs(spent) > (cfg.budget_usd_cap - cfg.budget_safety_margin):
             print(f"STOPPING: projected spend ${abs(spent):.2f} crossed the "
                   f"${cfg.budget_usd_cap - cfg.budget_safety_margin:.2f} safety threshold "
@@ -610,8 +665,14 @@ def main(argv=None):
         new_manifest = submit_and_collect(cfg, jobs, out_dir, f"gen{gen}")
         new_scored = score_batch(model, real_embs, real_centroid, new_manifest, prev_embs=prev_embs)
         manifest.extend(new_scored)
-        with open(out_dir / "scored_manifest.json", "w") as f:
+        # tmp+os.replace so a kill mid-write can never leave a truncated/corrupt
+        # scored_manifest.json behind for the next restart's _load_resumable_manifest to trip
+        # over -- matches preference_pairwise_model.train_and_save's existing atomic-write pattern.
+        manifest_path = out_dir / "scored_manifest.json"
+        manifest_tmp = f"{manifest_path}.tmp"
+        with open(manifest_tmp, "w") as f:
             json.dump(manifest, f, indent=1)
+        os.replace(manifest_tmp, manifest_path)
 
         best_novelty = build_gallery(cfg, manifest, real_ref) if manifest else 0.0
         state["novelty_history"].append(best_novelty)
