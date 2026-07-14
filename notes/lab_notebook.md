@@ -2081,3 +2081,10 @@ console errors; `cockpit.html`'s empty-state message renders correctly and links
 Did not click either launch button during verification, since a real launch spends RunPod money
 and takes hours. Full suite: 340 passing.
 
+### 2026-07-14 (session 4): isolated mutable defaults in `load_leg_config`
+
+Task 2 review found that `load_leg_config` shallow-copied its module-level defaults dictionary.
+The list-valued defaults, including `widened_textures`, were therefore shared by every leg that
+left those fields unset. A regression test reproduced the leak by appending to one loaded config
+and observing the mutation in a second config. `copy.deepcopy` now gives each load independent
+list objects. The new regression test and the five-test `load_leg_config` slice both pass.

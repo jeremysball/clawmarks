@@ -87,6 +87,27 @@ def test_load_leg_config_missing_leg_file_is_ok(tmp_path, monkeypatch):
     assert cfg.explore_fraction == 0.5
 
 
+def test_load_leg_config_does_not_share_mutable_default_lists(tmp_path, monkeypatch):
+    from clawmarks import config
+
+    expeditions_dir = tmp_path / "expeditions"
+    (expeditions_dir / "demo" / "legs").mkdir(parents=True)
+    (expeditions_dir / "demo" / "expedition.json").write_text(json.dumps({
+        "wall_clock_cap_hours": 1.0, "budget_usd_cap": 1.0, "budget_safety_margin": 0.1,
+        "gen_batch_size": 20, "explore_fraction": 0.5, "max_generations": 60,
+        "textures": [], "fallback_subjects": [], "seed_from_start": False,
+    }))
+    monkeypatch.setattr(config, "EXPEDITIONS_DIR", expeditions_dir)
+    monkeypatch.setattr(config, "STATE_DIR", tmp_path / "state")
+
+    cfg1 = driver.load_leg_config("demo", "leg1")
+    cfg2 = driver.load_leg_config("demo", "leg2")
+
+    cfg1.widened_textures.append("x")
+
+    assert cfg2.widened_textures == []
+
+
 def _manifest_entry(tag):
     return {
         "tag": tag,

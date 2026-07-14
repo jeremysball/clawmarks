@@ -13,6 +13,7 @@ Run with: uv run clawmarks run allnight --expedition <name> --leg <name>
 """
 import argparse
 import base64
+import copy
 import json
 import math
 import os
@@ -85,7 +86,7 @@ def load_leg_config(expedition, leg):
             leg_overrides = json.load(f)
         merged.update(leg_overrides)
 
-    fields = dict(_LEG_CONFIG_DEFAULTS)
+    fields = copy.deepcopy(_LEG_CONFIG_DEFAULTS)
     fields.update(merged)
     return LegConfig(
         expedition=expedition, leg=leg, dir=clawmarks_config.leg_dir(expedition, leg), **fields
