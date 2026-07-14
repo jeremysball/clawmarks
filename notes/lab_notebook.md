@@ -168,10 +168,19 @@ step exists because of that review, it says so.
    the paired deltas) rather than just checking "average beats the noise floor." Require both a
    real effect (most of the bootstrap mass positive) and a practically meaningful size (at least
    0.05 DINOv2 cosine, not just statistically nonzero). With ~10 probes tested per round, apply
-   a multiple-comparisons correction (Benjamini-Hochberg) or the equivalent discipline of
-   ranking every direction and only ever advancing the single best one, not the first to clear a
-   bar. Taking the first direction that clears a loose bar, with this many tested per round,
-   guarantees some spurious wins by chance alone.
+   a multiple-comparisons correction (Benjamini-Hochberg). Taking the first direction that
+   clears a loose bar, with this many tested per round, guarantees some spurious wins by chance
+   alone.
+
+   **Corrected, 2026-07-13:** the sentence above originally treated "rank every direction and
+   only ever advance the single best one" as an equivalent alternative to Benjamini-Hochberg.
+   It is not; see the external-review entry below ("'Advance only the single best direction' is
+   not a substitute for a real multiple-comparisons correction"). Taking the argmax of noisy
+   statistics controls no false-discovery rate and is subject to winner's curse. The corrected
+   rule: keep the significance-plus-effect-size gate first (screen every direction, advance
+   nothing if none pass), use "take the single best" only as a tie-break among directions that
+   already passed the gate, and reserve full BH correction for any whitepaper claim of the form
+   "we tested N, M improved."
 
    **Note on step 3 in practice: the noise floor has to be measured before it can be used.**
    "Beats the noise floor" only means something once the floor itself is a real number, not an
@@ -191,12 +200,20 @@ step exists because of that review, it says so.
 
    **Corrected, 2026-07-13** (see the lab log entry below for the reproducible results): the
    exact sign-flip test makes rejection impossible at alpha=0.05 for n=3 and n=4 because their
-    one-sided p-value floors are 0.125 and 0.0625. With the calibration-noise proxy, n=8 gives
-    79.90% power at a 0.05 effect, not the previously reported 84%, and
-   99.20% at 0.08. Round 1 therefore keeps the **eight canonical paired training seeds**, uses
-    0.05 as an exploratory practical threshold, and prespecifies 0.08 as the effect size for an
-    80%-power per-direction screening claim. A 0.05 result cannot be presented as confirmatory
-    evidence under this planning model.
+    one-sided p-value floors are 0.125 and 0.0625. With the calibration-noise proxy, the
+   sign-flip test itself (p<=alpha, ignoring effect size) gives n=8 a power of 79.90% at a 0.05
+   effect and 99.20% at 0.08.
+
+   **Corrected again, 2026-07-13:** those two numbers describe the sign-flip test's own power,
+   not round 1's actual decision rule, which requires p<=alpha **and** an observed mean delta
+   >= 0.05 (see the Selection rule above). Requiring both is strictly more conservative. The
+   full gate's power at n=8 is **49.42%** at a 0.05 effect (not 79.90%) and **95.34%** at 0.08
+   (not 99.20%), reproducible via `probe_power.py`'s "Round-1 gate power" table. Round 1
+   therefore keeps the **eight canonical paired training seeds**, uses 0.05 as an exploratory
+   practical threshold, and prespecifies 0.08 as the effect size for an 80%-power
+   per-direction screening claim, since 0.08 is the effect size where the full gate, not just
+   the test, clears 80% power. A result at the 0.05 threshold has only coin-flip power to be
+   detected at all and cannot be presented as confirmatory evidence under this planning model.
 
    **Note added 2026-07-09: paired seeds make a separately-measured noise floor optional, not
    required.** A sign-flip permutation test builds its null distribution from the very deltas
@@ -1897,3 +1914,15 @@ model, and the lack of a multiplicity correction for the full set of directions.
 fixes finite-sample arithmetic but does not make MMD a style verdict. The overnight novelty
 trajectory remains descriptive and selection-biased until a per-generation cohort statistic or an
 untouched replay comparison is run.
+
+**Second review pass, same day.** The table above reports the sign-flip test's own power
+(p<=alpha only), which is not round 1's actual decision rule; see the "Corrected again,
+2026-07-13" note earlier in this section for the real gate numbers (49.42% at 0.05, 95.34% at
+0.08). `probe_power.py` and `mmd_score.py` also gained input validation this pass: non-finite
+MMD statistics, groups under 2 members, and zero/non-finite kernel bandwidth now raise instead
+of silently producing a misleadingly small p-value or a division-by-zero. One limitation is
+still open, not yet fixed: the image-level permutation test in `mmd_score.py` treats every
+generated image as an independent exchangeable unit, which does not hold if images share a
+prompt, seed, or checkpoint in a way that correlates their embeddings. Until that is checked
+(or the claim is scoped down to "these two fixed image collections"), treat the MMD p-value as
+suggestive, not a rigorously calibrated significance level.

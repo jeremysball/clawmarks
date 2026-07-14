@@ -43,6 +43,10 @@ def monte_carlo_p_value(observed, shuffled):
         raise ValueError("shuffled statistics must be one-dimensional")
     if not len(shuffled):
         raise ValueError("at least one shuffled statistic is required")
+    if not np.isfinite(observed):
+        raise ValueError(f"observed statistic must be finite, got {observed!r}")
+    if not np.all(np.isfinite(shuffled)):
+        raise ValueError("shuffled statistics must all be finite")
     b = np.count_nonzero(shuffled >= observed)
     return (b + 1) / (len(shuffled) + 1)
 
@@ -64,6 +68,11 @@ def embed_images(model, paths, batch_size=16):
 
 def mmd2_unbiased(K, idx_a, idx_b):
     a, b = len(idx_a), len(idx_b)
+    if a < 2 or b < 2:
+        raise ValueError(
+            f"mmd2_unbiased needs at least 2 items per group (the unbiased "
+            f"estimator excludes the diagonal), got a={a}, b={b}"
+        )
     Kaa = K[idx_a][:, idx_a]
     Kbb = K[idx_b][:, idx_b]
     Kab = K[idx_a][:, idx_b]
@@ -102,6 +111,12 @@ def main():
     off_diag_mask = ~torch.eye(N, dtype=torch.bool)
     median_sq_dist = sq_dist[off_diag_mask].median().item()
     sigma2 = median_sq_dist
+    if not np.isfinite(sigma2) or sigma2 <= 0:
+        raise ValueError(
+            f"median-heuristic bandwidth is degenerate (sigma^2={sigma2!r}); this happens "
+            "when most embeddings are near-identical, and the RBF kernel below would divide "
+            "by zero or produce non-finite values"
+        )
     print(f"\nbandwidth (median heuristic): sigma^2={sigma2:.4f}")
 
     K = torch.exp(-sq_dist / (2 * sigma2))
@@ -117,6 +132,8 @@ def main():
     print(f"\nMMD^2 = {mmd2:.4f}  (0 = indistinguishable distributions, larger = more different)")
 
     # Permutation test: reshuffle labels and recompute MMD^2 from the fixed K.
+    # Assumes every image is an exchangeable unit; not yet checked for images that share a
+    # prompt, seed, or checkpoint, which would correlate their embeddings and bias the p-value.
     rng = np.random.default_rng(0)
     perm_scores = np.empty(N_PERMUTATIONS)
     all_idx = np.arange(N)
