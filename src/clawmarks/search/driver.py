@@ -341,7 +341,7 @@ def request_gpt55_subjects(cfg, existing_subjects, n=30):
     """Plateau escalation / seed-from-start: hand creative-idea generation to GPT-5.5 via
     opencode, so fresh prompt variety doesn't depend on this script's own fixed vocabulary
     or on the Claude session that launched it staying alive."""
-    out_dir = _out_dir(cfg)
+    out_dir = cfg.dir
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "gpt55_subjects.json"
     prompt = (
@@ -358,7 +358,7 @@ def request_gpt55_subjects(cfg, existing_subjects, n=30):
     )
     try:
         result = subprocess.run(
-            ["opencode", "run", "--dir", str(SWEEP_DIR.parent), "--dangerously-skip-permissions",
+            ["opencode", "run", "--dir", str(clawmarks_config.ROOT), "--dangerously-skip-permissions",
              "-m", "openai/gpt-5.5", "--", prompt],
             capture_output=True, text=True, timeout=300,
         )
@@ -378,14 +378,14 @@ def request_gpt55_subjects(cfg, existing_subjects, n=30):
     return []
 
 
-def _load_favorited_images():
+def _load_favorited_images(out_dir):
     """Favorites supersede raw novelty for what the exploit step mutates near, the same role
     yes/no ratings used to play before head-to-head comparisons replaced them (see
     docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md). Unlike the old ratings
     store, user_favorites.json already holds a full item object per tag (tag, prompt_name,
     prompt, strength, cfg, ...), so favorited items can be returned directly without joining
     against scored_manifest.json."""
-    favorites_path = SWEEP_DIR / "user_favorites.json"
+    favorites_path = out_dir / "user_favorites.json"
     if not favorites_path.exists():
         return []
     with open(favorites_path) as f:
@@ -422,16 +422,23 @@ def _predicted_preference_pool(manifest, model_path, embed_model, top_n=15):
     return [m for m, _ in ranked[:top_n]]
 
 
-def _load_prev_round_state(cfg):
-    """Round 1's body still reads its own state file (see _state_file) and the
-    first-run fixed-sweep manifest. Round 2 reads round 1's manifest as the exclusion set.
-    Returns (manifest, prev_embs_or_None) tuple."""
-    if cfg.exclude_prev_round:
-        prev_manifest_path = SWEEP_DIR / "scored_manifest.json"
-        if prev_manifest_path.exists():
-            with open(prev_manifest_path) as f:
-                return json.load(f), None  # actual embeddings computed inside main()
-    return [], None
+def _load_sibling_leg_manifests(cfg):
+    """Every *other* leg directory within cfg's own expedition, concatenated, as the
+    "already explored" exclusion pool -- generalizes round 2's one-off "exclude round 1"
+    special case to any number of sibling legs. A brand-new expedition (or a leg with no
+    sibling that has produced a manifest yet) returns []."""
+    expedition_root = cfg.dir.parent
+    manifests = []
+    if not expedition_root.exists():
+        return manifests
+    for sibling_dir in sorted(expedition_root.iterdir()):
+        if not sibling_dir.is_dir() or sibling_dir.name == cfg.leg:
+            continue
+        manifest_path = sibling_dir / "scored_manifest.json"
+        if manifest_path.exists():
+            with open(manifest_path) as f:
+                manifests.extend(json.load(f))
+    return manifests
 
 
 def submit_and_collect(cfg, jobs, out_dir, label, timeout_s=600):
@@ -567,14 +574,8 @@ def build_gallery(cfg, manifest, real_ref):
         f'<figcaption>{m["prompt_name"]} | faith={m["centroid_sim"]:.3f} novelty={m["novelty"]:.3f}</figcaption></figure>'
         for m in top
     )
-    title = f"CLAWMARKS uncanny frontier atlas (round {cfg.round})"
-    intro = {
-        1: "Round 1: staged-escalation plateau handling (widen vocabulary first, then GPT-5.5), "
-           "50/50 explore/exploit. Novelty scored against the real training set only.",
-        2: "Round 2: explore-heavy rerun (85% fresh recombination, 15% mutation), GPT-5.5-seeded "
-           "from generation 1, novelty scored against both the real training set and round 1's "
-           "3392 images, so retreading round 1's already-explored region no longer counts as novel.",
-    }[cfg.round]
+    title = f"CLAWMARKS uncanny frontier atlas: {cfg.expedition}/{cfg.leg}"
+    intro = cfg.description or f"Leg {cfg.leg} of expedition {cfg.expedition}."
     html = f"""<!doctype html><html><head><meta charset="utf-8"><title>{title}</title>
 <style>
 body {{ background:#111; color:#eee; font-family: -apple-system, sans-serif; margin:0; padding:24px; }}
@@ -605,16 +606,18 @@ body {{ background:#111; color:#eee; font-family: -apple-system, sans-serif; mar
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--round", type=int, choices=list(ROUND_CONFIGS.keys()), required=True)
+    parser.add_argument("--expedition", required=True)
+    parser.add_argument("--leg", required=True)
     parser.add_argument(
         "--use-predicted-preference", action="store_true", default=False,
-        help="Stage 5b (opt-in, requires notes/uncanny_sweep/preference_pairwise_model.joblib "
-             "and human validation via preference_rank.html first): rank the exploit pool by "
-             "the trained model's predicted preference instead of favorited images. Defaults "
-             "off; do not enable without having browsed preference_rank.html first.",
+        help="Stage 5b (opt-in, requires a trained preference_pairwise_model.joblib in this "
+             "leg's directory and human validation via preference_rank.html first): rank the "
+             "exploit pool by the trained model's predicted preference instead of favorited "
+             "images. Defaults off; do not enable without having browsed preference_rank.html "
+             "first.",
     )
     args = parser.parse_args(argv)
-    cfg = ROUND_CONFIGS[args.round]
+    cfg = load_leg_config(args.expedition, args.leg)
 
     import torch
     from clawmarks.search.score_manifest import (
@@ -622,18 +625,12 @@ def main(argv=None):
     )
     from transformers import AutoModel
 
-    out_dir = _out_dir(cfg)
+    out_dir = cfg.dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     state = load_state(cfg)
     manifest = _load_resumable_manifest(out_dir)
-    _validate_resume_agreement(
-        state,
-        manifest,
-        _state_file(cfg),
-        out_dir / "scored_manifest.json",
-        allow_legacy_round1_baseline=cfg.round == 1,
-    )
+    _validate_resume_agreement(state, manifest, _state_file(cfg), out_dir / "scored_manifest.json")
     if state["start_balance"] is None:
         state["start_balance"] = get_balance()
         save_state(cfg, state)
@@ -655,28 +652,20 @@ def main(argv=None):
     real_ref = (sum(loo_sims) / len(loo_sims), min(loo_sims), max(loo_sims))
     print(f"real-image reference band: {real_ref}", flush=True)
 
-    # Round 2's prior-round exclusion embeddings: embed round 1's already-explored images so
-    # novelty for a new image can be measured against the union of (real set, round 1 set).
-    # Round 1 has no prior round, so it skips this entirely.
-    prev_embs = None
-    if cfg.exclude_prev_round:
-        print("embedding the prior round's already-explored images as the exclusion set...", flush=True)
-        prev_manifest, _ = _load_prev_round_state(cfg)
-        prev_paths = [m["file"] for m in prev_manifest if os.path.exists(m["file"])]
-        if prev_paths:
-            prev_embs = embed_images(prev_paths, model=model)
-            print(f"embedded {len(prev_paths)} prior-round images as the exclusion set", flush=True)
-        else:
-            print("no prior-round manifest found; running without exclusion embeddings", flush=True)
-            prev_embs = None
+    print("embedding every sibling leg's already-explored images as the exclusion set...", flush=True)
+    prev_manifest = _load_sibling_leg_manifests(cfg)
+    prev_paths = [m["file"] for m in prev_manifest if os.path.exists(m["file"])]
+    prev_embs = embed_images(prev_paths, model=model) if prev_paths else None
+    print(f"embedded {len(prev_paths)} sibling-leg images as the exclusion set" if prev_paths
+          else "no sibling-leg manifests found yet; running without exclusion embeddings", flush=True)
 
     # Round 2: seed the subject pool from the shared candidate_seeds.json pool AND from
     # GPT-5.5 at startup (no plateau wait). Round 1: just start with the base vocabulary
     # and let the plateau-detection stage logic widen it later.
     if cfg.seed_from_start:
-        shared_pool_dict = seed_pool_load(SEEDS_FILE)
+        shared_pool_dict = seed_pool_load(out_dir / "seed_pool.json")
         shared_pool = list(shared_pool_dict.keys())
-        print(f"loaded {len(shared_pool)} subjects from the shared candidate seed pool ({SEEDS_FILE})", flush=True)
+        print(f"loaded {len(shared_pool)} subjects from this leg's seed pool ({out_dir / 'seed_pool.json'})", flush=True)
         if not state["gpt55_subjects"]:
             print("seeding subject pool with GPT-5.5 from generation 1 (no plateau wait)...", flush=True)
             gpt_subjects = request_gpt55_subjects(cfg, cfg.fallback_subjects + shared_pool, n=30)
@@ -684,9 +673,10 @@ def main(argv=None):
             if gpt_subjects:
                 updated, _added = seed_pool_merge(
                     shared_pool_dict, gpt_subjects,
-                    source=f"gpt5.5-round{cfg.round}", created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    source=f"gpt5.5-{cfg.expedition}-{cfg.leg}",
+                    created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 )
-                seed_pool_save(SEEDS_FILE, updated)
+                seed_pool_save(out_dir / "seed_pool.json", updated)
             save_state(cfg, state)
         subjects = cfg.fallback_subjects + state["gpt55_subjects"] + shared_pool
         if not state["gpt55_subjects"]:
@@ -694,12 +684,6 @@ def main(argv=None):
     else:
         subjects = list(cfg.fallback_subjects)
     textures = list(cfg.textures)
-    # round 1's main loop indexes the first 5 base subjects to decide style-vs-conflict
-    # tagging; round 2 uses the first 4. The tests exercise the round 2 path with
-    # style_subject_count=4 by default. Round 1's main loop calls the function with
-    # style_subject_count=5 below.
-    style_subject_count = 5 if cfg.round == 1 else 4
-
     while True:
         elapsed_h = (time.time() - start_time) / 3600
         if elapsed_h > cfg.wall_clock_cap_hours:
@@ -721,18 +705,18 @@ def main(argv=None):
         gen = state["generation"]
         liminal_band_all = [m for m in manifest if real_ref[1] <= m["centroid_sim"] <= real_ref[2]]
         elites = sorted(liminal_band_all, key=lambda m: -m["novelty"])[:15]
-        if not elites and cfg.round == 1:
+        if not elites and not cfg.seed_from_start:
             elites = manifest[-30:] if manifest else []
-        user_picks = _load_favorited_images() if cfg.seed_from_start else []
+        user_picks = _load_favorited_images(out_dir) if cfg.seed_from_start else []
         if args.use_predicted_preference:
             predicted_pool = _predicted_preference_pool(
-                manifest, SWEEP_DIR / "preference_pairwise_model.joblib", model,
+                manifest, out_dir / "preference_pairwise_model.joblib", model,
             )
             if predicted_pool:
                 user_picks = predicted_pool
             else:
                 print("--use-predicted-preference set but no trained model found yet "
-                       "(or nothing generated so far this round); using favorited images "
+                       "(or nothing generated so far this leg); using favorited images "
                        "instead", flush=True)
 
         print(f"\n=== generation {gen} | elapsed {elapsed_h:.2f}h | spend ${abs(spent):.3f} | "
@@ -740,7 +724,7 @@ def main(argv=None):
 
         jobs = build_generation_jobs(gen, subjects, textures, elites, user_picks,
                                       cfg.gen_batch_size, cfg.explore_fraction,
-                                      style_subject_count=style_subject_count)
+                                      style_subject_count=cfg.style_subject_count)
         new_manifest = submit_and_collect(cfg, jobs, out_dir, f"gen{gen}")
         new_scored = score_batch(model, real_embs, real_centroid, new_manifest, prev_embs=prev_embs)
         manifest.extend(new_scored)
@@ -787,15 +771,15 @@ def main(argv=None):
                     if more:
                         subjects = subjects + more
                         state["gpt55_subjects"] = state["gpt55_subjects"] + more
-                        shared_dict = seed_pool_load(SEEDS_FILE)
+                        shared_dict = seed_pool_load(out_dir / "seed_pool.json")
                         updated, _added = seed_pool_merge(
-                            shared_dict, more, source=f"gpt5.5-round{cfg.round}",
+                            shared_dict, more, source=f"gpt5.5-{cfg.expedition}-{cfg.leg}",
                             created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                         )
-                        seed_pool_save(SEEDS_FILE, updated)
+                        seed_pool_save(out_dir / "seed_pool.json", updated)
         save_state(cfg, state)
 
-    print(f"\nROUND {cfg.round} RUN ENDED at generation {state['generation']}, "
+    print(f"\nLEG {cfg.expedition}/{cfg.leg} RUN ENDED at generation {state['generation']}, "
           f"{len(manifest)} total images, gallery at {out_dir / 'gallery.html'}", flush=True)
 
 

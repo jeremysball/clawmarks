@@ -351,7 +351,6 @@ def test_build_gallery_skips_manifest_entries_whose_file_no_longer_exists(tmp_pa
         gen_batch_size=60, explore_fraction=0.5, max_generations=400,
         textures=[], fallback_subjects=[], seed_from_start=False,
     )
-    cfg.round = 1
     best_novelty = driver.build_gallery(cfg, manifest, real_ref=(0.5, 0.0, 1.0))
     assert best_novelty == 0.4
     assert (tmp_path / "gallery.html").exists()
@@ -384,7 +383,6 @@ def test_build_gallery_returns_zero_when_every_file_is_missing(tmp_path):
         gen_batch_size=60, explore_fraction=0.5, max_generations=400,
         textures=[], fallback_subjects=[], seed_from_start=False,
     )
-    cfg.round = 1
     assert driver.build_gallery(cfg, manifest, real_ref=(0.5, 0.0, 1.0)) == 0.0
 
 
