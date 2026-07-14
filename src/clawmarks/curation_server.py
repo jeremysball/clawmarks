@@ -717,7 +717,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self._json_response(400, {"error": f"unknown round {round_num!r}"})
                 return
             cfg = ROUND_CONFIGS[round_num]
-            out_dir = SWEEP_DIR if cfg.out_dir_name == "uncanny_sweep" else SWEEP2_DIR
+            out_dir = SWEEP_DIR if cfg.out_dir_name == "uncanny_round1" else SWEEP2_DIR
             favorites = load_store(FAVORITES_FILE)
             self._json_response(200, run_manager.build_report(out_dir, favorites=favorites))
             return
@@ -1124,7 +1124,7 @@ class Handler(SimpleHTTPRequestHandler):
         # Use this module's own SWEEP_DIR/SWEEP2_DIR (both overridable via CLAWMARKS_SWEEP_DIR
         # for tests) rather than driver._out_dir, which resolves against clawmarks.config
         # directly and would ignore a monkeypatch made only on this module.
-        out_dir = SWEEP_DIR if cfg.out_dir_name == "uncanny_sweep" else SWEEP2_DIR
+        out_dir = SWEEP_DIR if cfg.out_dir_name == "uncanny_round1" else SWEEP2_DIR
         try:
             info = run_manager.launch_run(
                 round_num, out_dir, api_key,

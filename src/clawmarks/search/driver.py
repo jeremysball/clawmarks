@@ -101,7 +101,7 @@ ROUND_CONFIGS = {
             "elevator interior, doors closing on an empty hallway",
             "waiting room with rows of identical empty chairs",
         ],
-        seed_from_start=False, exclude_prev_round=False, out_dir_name="uncanny_sweep",
+        seed_from_start=False, exclude_prev_round=False, out_dir_name="uncanny_round1",
     ),
     2: RoundConfig(
         round=2, wall_clock_cap_hours=1.0, budget_usd_cap=1.00, budget_safety_margin=0.10,
@@ -124,7 +124,7 @@ ROUND_CONFIGS = {
             "abandoned playground, swing set mid-motion with no one on it",
             "waiting room with rows of identical empty chairs",
         ],
-        seed_from_start=True, exclude_prev_round=True, out_dir_name="uncanny_sweep2",
+        seed_from_start=True, exclude_prev_round=True, out_dir_name="uncanny_round2",
     ),
 }
 
@@ -214,7 +214,7 @@ def _spent_or_none(start_balance):
 
 
 def _out_dir(cfg):
-    return SWEEP_DIR if cfg.out_dir_name == "uncanny_sweep" else SWEEP2_DIR
+    return SWEEP_DIR if cfg.out_dir_name == "uncanny_round1" else SWEEP2_DIR
 
 
 def _state_file(cfg):

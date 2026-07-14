@@ -9,13 +9,21 @@ generated PNG in `notes/uncanny_sweep/` and `notes/uncanny_sweep2/` (see the lab
 surviving embeddings cache (`solution_map_final_embs.pt`) via a destructive
 cache-invalidate-by-`os.remove` pattern, saved only because a backup happened to exist.
 
+**2026-07-14 update:** both directories were deleted (after a verified complete-mirror backup)
+once their full-resolution PNGs were confirmed permanently gone with no copy anywhere. Sweep
+state now lives outside the repo entirely, at `$XDG_STATE_HOME/clawmarks/` (defaults to
+`~/.local/state/clawmarks/`, overridable via `CLAWMARKS_STATE_DIR`; see `src/clawmarks/config.py`),
+renamed `uncanny_round1/` and `uncanny_round2/` for clarity. The rule below still applies at the
+new location.
+
 - **Before any operation that writes to, deletes from, or reads-then-overwrites
-  `notes/uncanny_sweep/`, `notes/uncanny_sweep2/`, or any other directory holding irreplaceable
-  RunPod-billed generation output: take a complete-mirror backup first, and verify the backup
-  (file count, a content diff, or both) before proceeding.** A partial backup ("exclude the big
-  files to save space") plus a full-mirror restore is the exact pattern that caused the Task 12
-  loss. Never narrow backup scope without re-checking every later step that assumes the backup is
-  complete.
+  `$XDG_STATE_HOME/clawmarks/uncanny_round1/`, `$XDG_STATE_HOME/clawmarks/uncanny_round2/`,
+  `$XDG_STATE_HOME/clawmarks/probe_uncanny/`, `$XDG_STATE_HOME/clawmarks/probe_strength/`, or any
+  other directory holding irreplaceable RunPod-billed generation output: take a complete-mirror
+  backup first, and verify the backup (file count, a content diff, or both) before proceeding.**
+  A partial backup ("exclude the big files to save space") plus a full-mirror restore is the exact
+  pattern that caused the Task 12 loss. Never narrow backup scope without re-checking every later
+  step that assumes the backup is complete.
 - **Treat any code that deletes a file to invalidate a cache as suspect**, especially caches
   derived from source data that might not be regenerable (embeddings computed from images that
   could later be deleted, for instance). Prefer overwriting on success over deleting-then-maybe-
@@ -28,11 +36,14 @@ cache-invalidate-by-`os.remove` pattern, saved only because a backup happened to
 
 ## `fd` and `rg` hide gitignored files: the image data is invisible to them
 
-`fd` and `rg` skip `.gitignore`d and hidden files by default, and nearly every generated image
-on this project lives under a gitignored glob (`*.png`, `*.jpg`, `notes/uncanny_sweep/*.html`,
-and more). So `fd -e png notes/uncanny_seedrun1` reports zero PNGs while `ls` shows all 100. This
+`fd` and `rg` skip `.gitignore`d and hidden files by default, and generated images under
+`notes/` (e.g. `notes/uncanny_seedrun1/`) live under a gitignored glob (`*.png`, `*.jpg`, and
+more). So `fd -e png notes/uncanny_seedrun1` reports zero PNGs while `ls` shows all 100. This
 already cost real confusion once: a directory of 100 full-resolution 1024x1024 PNGs looked empty
-and got mistaken for missing data.
+and got mistaken for missing data. The production sweep/probe directories moved out of `notes/`
+to `$XDG_STATE_HOME/clawmarks/` as of 2026-07-14 (see the data-integrity section above), which
+sidesteps this specific gotcha for them since they're outside the repo entirely now, but the
+lesson still applies to anything still under `notes/`.
 
 - To find generation output, disable the filtering: `fd -I` (include ignored), `fd -HI` (also
   hidden), or `rg -uu`. Plain `ls`, `find`, and `grep` never filter, so they always see the
