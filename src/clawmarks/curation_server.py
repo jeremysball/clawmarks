@@ -989,10 +989,14 @@ class Handler(SimpleHTTPRequestHandler):
                         self._json_response(400, {"error": gate_error})
                         return
                     comparisons = load_comparisons()
-                    result = preference_pairwise_model.train_and_save(comparisons)
-                    if result is None:
-                        self._json_response(500, {"error": "preference retrain failed: no usable comparisons"})
-                        return
+                # Fit outside _lock: a full model fit can take a while, and every other route
+                # (favorites, compare, cockpit) shares this same lock, so holding it here blocks
+                # them for the fit's whole duration instead of just the state swap below.
+                result = preference_pairwise_model.train_and_save(comparisons)
+                if result is None:
+                    self._json_response(500, {"error": "preference retrain failed: no usable comparisons"})
+                    return
+                with _lock:
                     _pairwise_model_cache["model"] = result["model"]
             except Exception as e:
                 self._json_response(500, {"error": f"preference retrain crashed: {e}"})
