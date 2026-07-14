@@ -81,6 +81,7 @@ Docker sidecar topology where tailscale0 lives in a different container's
 netns and auto-detection would otherwise fall back to 0.0.0.0 anyway).
 """
 import base64
+import html
 import json
 import os
 import random
@@ -89,6 +90,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import urllib.parse
 import urllib.request
 import uuid
@@ -703,6 +705,58 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        try:
+            self._do_GET()
+        except Exception as e:
+            if self._wants_json():
+                self._send_json_error(e)
+            else:
+                self._send_error_page(e, traceback.format_exc())
+
+    def _wants_json(self):
+        path = self.path.split("?")[0]
+        return path.startswith("/api/") or path.endswith(".json")
+
+    def _send_json_error(self, exc):
+        no_manifest = isinstance(exc, FileNotFoundError) and "scored_manifest.json" in str(exc)
+        try:
+            self._json_response(500, {
+                "error": f"{type(exc).__name__}: {exc}",
+                "no_manifest": no_manifest,
+            })
+        except Exception:
+            pass  # client already gone; nothing left to send
+
+    def _send_error_page(self, exc, detail):
+        message = f"{type(exc).__name__}: {exc}"
+        hint = ""
+        if isinstance(exc, FileNotFoundError):
+            hint = (
+                "<p>This usually means <code>scored_manifest.json</code> still points at an "
+                "old absolute path (e.g. after the project directory was renamed or moved) and "
+                "the image no longer lives there. Re-pointing or regenerating the manifest's "
+                "<code>file</code> paths should fix it.</p>"
+            )
+        body = f"""<div style="font-family:sans-serif;max-width:48rem;margin:2rem auto;line-height:1.5">
+<h1 style="color:#b91c1c">Something went wrong</h1>
+<p><strong>{html.escape(message)}</strong></p>
+{hint}
+<details>
+<summary style="cursor:pointer">Show stack trace</summary>
+<pre style="white-space:pre-wrap;font-family:monospace;background:#f3f4f6;padding:1rem;border-radius:4px">{html.escape(detail)}</pre>
+</details>
+<p><a href="/">&larr; back to status page</a></p>
+</div>""".encode()
+        try:
+            self.send_response(500)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception:
+            pass  # client already gone; nothing left to send
+
+    def _do_GET(self):
         if self.path == "/api/searchrun/status":
             self._json_response(200, run_manager.status())
             return
@@ -1471,12 +1525,42 @@ def _reconcile_stuck_trials():
             save_store(COCKPIT_QUEUE_FILE, trials)
 
 
+def _check_manifest_images():
+    """Sanity-check that scored_manifest.json's file paths actually resolve, so a stale-path
+    manifest (e.g. after the project directory was renamed or moved) fails at startup instead
+    of hanging or 500ing on the first page that tries to open an image."""
+    manifest_path = f"{SWEEP_DIR}/scored_manifest.json"
+    if not os.path.exists(manifest_path):
+        print(f"warning: no scored_manifest.json at {manifest_path}, skipping image check", flush=True)
+        return
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    n_total = len(manifest)
+    if n_total == 0:
+        return
+    n_present = sum(1 for m in manifest if os.path.exists(m["file"]))
+    if n_present == 0:
+        example = manifest[0]["file"]
+        print(
+            f"FATAL: none of {n_total} images in {manifest_path} exist on disk "
+            f"(e.g. {example!r} is missing). This usually means the manifest's paths are "
+            "stale, most likely from the project directory being renamed or moved. Fix the "
+            "manifest's 'file' paths (or point CLAWMARKS_SWEEP_DIR at wherever the images "
+            "actually live) before starting the server.",
+            file=sys.stderr, flush=True,
+        )
+        sys.exit(1)
+    if n_present < n_total:
+        print(f"warning: only {n_present}/{n_total} manifest images found on disk", flush=True)
+
+
 def main(argv=None):
     port = DEFAULT_PORT
     if argv is None:
         argv = sys.argv[1:]
     if argv:
         port = int(argv[0])
+    _check_manifest_images()
     _reconcile_stuck_trials()
     host = os.environ.get("CLAWMARKS_HOST") or tailscale_ip()
     server = ThreadingHTTPServer((host, port), Handler)
