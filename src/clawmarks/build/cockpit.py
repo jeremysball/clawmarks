@@ -446,7 +446,14 @@ function renderCoverageBox(c){{
 }}
 
 function fetchTargetCells(){{
-  fetch('/api/cockpit/target_cells').then(r=>r.json()).then(d=>{{
+  fetch('/api/cockpit/target_cells').then(r=>r.json().then(d=>({{ok:r.ok,d}}))).then(({{ok,d}})=>{{
+    if(!ok){{
+      $('targetCards').innerHTML = d.no_manifest
+        ? '<div class="target-empty">No search data yet. <a href="/">Launch a search round</a> to get started.</div>'
+        : '<div class="target-empty">Could not load frontier cells.</div>';
+      frontierCells=[]; selectedCell=null;
+      return;
+    }}
     frontierCells=d.cells||[];
     selectedCell=frontierCells.length?0:null;
     renderTargetCards();

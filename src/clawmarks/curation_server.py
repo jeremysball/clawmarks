@@ -682,6 +682,24 @@ def manifest_entry_by_tag(tag):
     return _manifest_cache["by_tag"].get(tag)
 
 
+_ROUTES = [
+    ("/scan.html", "scan gallery"),
+    ("/map.html", "solution map"),
+    ("/redundancy.html", "redundancy clustering"),
+    ("/coverage.html", "coverage map"),
+    ("/novelty_decay.html", "novelty decay"),
+    ("/lineage.html", "lineage view"),
+    ("/archive.html", "archive"),
+    ("/preference_rank.html", "preference ranking"),
+    ("/preference_status.html", "preference status"),
+    ("/explore.html", "explore"),
+    ("/seeds.html", "seed browser"),
+    ("/compare.html", "compare"),
+    ("/cockpit.html", "cockpit"),
+    ("/runs.html", "runs"),
+]
+
+
 class Handler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"  # keep-alive, so 3392 grid thumbnails don't reopen a
                                      # connection per image
@@ -756,6 +774,117 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception:
             pass  # client already gone; nothing left to send
 
+    def _send_status_page(self):
+        try:
+            manifest = load_manifest()
+            n_entries = len(manifest)
+            n_present = sum(1 for m in manifest if os.path.exists(m["file"]))
+            manifest_summary = f"{n_present}/{n_entries} manifest images present on disk"
+            has_data = n_present > 0
+        except Exception as e:
+            manifest_summary = f"could not read manifest: {e}"
+            has_data = False
+
+        if has_data:
+            body = self._status_page_data_body(manifest_summary)
+        else:
+            body = self._status_page_empty_body(manifest_summary)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _status_page_data_body(self, manifest_summary):
+        links = " &middot; ".join(f'<a href="{path}">{label}</a>' for path, label in _ROUTES)
+        return f"""<!doctype html><html><head><meta charset="utf-8">
+<title>clawmarks curation server</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
+  --text-dim:#9a9aa4; --accent:#7c9eff; }}
+body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
+h1 {{ font-size:18px; margin:0 0 4px; }}
+p {{ color:var(--text-dim); font-size:13px; line-height:1.6; }}
+code {{ color:var(--text); }}
+a {{ color:var(--accent); }}
+</style></head><body>
+<h1>clawmarks curation server</h1>
+<p>sweep dir: <code>{html.escape(str(SWEEP_DIR))}</code></p>
+<p>{html.escape(manifest_summary)}</p>
+<p>{links}</p>
+</body></html>""".encode()
+
+    def _status_page_empty_body(self, manifest_summary):
+        return f"""<!doctype html><html><head><meta charset="utf-8">
+<title>clawmarks curation server</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
+  --text-dim:#9a9aa4; --accent:#7c9eff; --down:#e0605e; }}
+body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
+h1 {{ font-size:18px; margin:0 0 4px; }}
+p {{ color:var(--text-dim); font-size:13px; line-height:1.6; }}
+p.sub {{ max-width:640px; }}
+code {{ color:var(--text); }}
+a {{ color:var(--accent); }}
+.panel {{ background:var(--panel); border:1px solid var(--border); border-radius:8px;
+  padding:16px; margin-top:16px; max-width:640px; }}
+.launchrow {{ display:flex; gap:12px; margin-top:12px; }}
+button {{ font-size:13px; padding:8px 16px; border-radius:6px; border:1px solid var(--border);
+  background:var(--accent); color:#0b0b0d; font-weight:600; cursor:pointer; }}
+button:disabled {{ opacity:0.4; cursor:not-allowed; }}
+#launchError {{ color:var(--down); font-size:12.5px; margin-top:8px; }}
+#launchNote {{ font-size:12.5px; margin-top:8px; }}
+.tools {{ margin-top:20px; font-size:12.5px; }}
+</style></head><body>
+<h1>clawmarks curation server</h1>
+<p>sweep dir: <code>{html.escape(str(SWEEP_DIR))}</code></p>
+<div class="panel">
+<p class="sub">No search data yet. Launch a search round to start generating and scoring
+images &mdash; this backs up the round's out_dir, verifies the backup, checks the RunPod
+balance floor, and launches <code>search/driver.py</code> detached.</p>
+<div class="launchrow">
+<button id="launch1">Launch Round 1</button>
+<button id="launch2">Launch Round 2</button>
+</div>
+<div id="launchError"></div>
+<div id="launchNote"></div>
+</div>
+<p class="tools">or browse tools once a round has produced images:
+{" &middot; ".join(f'<a href="{path}">{label}</a>' for path, label in _ROUTES)}</p>
+<script>
+function launch(round, btn) {{
+  document.getElementById('launchError').textContent = '';
+  document.getElementById('launchNote').textContent = '';
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Backing up and launching...';
+  fetch('/api/searchrun/launch', {{
+    method: 'POST', headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{round: round}}),
+  }}).then(async r => {{
+    const d = await r.json();
+    if (!r.ok) {{
+      document.getElementById('launchError').textContent = d.error || 'launch failed';
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }} else {{
+      document.getElementById('launchNote').innerHTML =
+        'Launched. Track progress on <a href="/runs.html">the runs page</a>.';
+      btn.textContent = originalText;
+    }}
+  }}).catch(e => {{
+    document.getElementById('launchError').textContent = String(e);
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }});
+}}
+document.getElementById('launch1').addEventListener('click', e => launch(1, e.target));
+document.getElementById('launch2').addEventListener('click', e => launch(2, e.target));
+</script>
+</body></html>""".encode()
+
     def _do_GET(self):
         if self.path == "/api/searchrun/status":
             self._json_response(200, run_manager.status())
@@ -807,9 +936,7 @@ class Handler(SimpleHTTPRequestHandler):
             self._json_response(200, {"trials": sorted(trials.values(), key=lambda t: t["created_at"])})
             return
         if self.path == "/":
-            self.send_response(302)
-            self.send_header("Location", "/scan.html")
-            self.end_headers()
+            self._send_status_page()
             return
 
         if self.path in ("/favicon.ico", "/favicon.png"):
