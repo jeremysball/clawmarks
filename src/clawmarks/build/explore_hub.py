@@ -8,12 +8,17 @@ Run: python3 -m clawmarks.build.explore_hub
 
 from clawmarks.shared_ui import MOBILE_BASE_CSS, INFOTIP_CSS, info_btn
 
+# Order mirrors shared_ui.NAV_OPTIONS (minus explore.html, which is this hub) so the home page
+# and the jump-to dropdown list the same tools in the same order.
 TOOLS = [
+    ("cockpit.html", "Generation cockpit", "Pick a mission, target a real coverage gap, draft a prompt against live evidence, queue a trial, and run it as a real generation batch scored into the archive."),
+    ("compare.html", "Compare images (head-to-head)", "Pick the better of two images, over and over. Trains a preference model that learns your taste, ranks the whole pool from it, and steers which pairs to show next."),
     ("scan.html", "Scan gallery", "Every image, sortable/filterable/searchable, with a lightbox, similarity browsing, and the pick-as-winner curation control that feeds round 2."),
-    ("gallery.html", "Binned atlas", "The original faithfulness x novelty grid, up to 12 thumbnails per bin."),
     ("map.html", "Solution map", "Interactive UMAP scatter of the full embedding space (real images + every generation), with a generation slider/play control and a nearest-real-image mode-collapse chart."),
     ("coverage.html", "Coverage / void map", "Fine-grained faithfulness x novelty heatmap by image count, with frontier cells (empty but adjacent to dense ones) called out."),
     ("archive.html", "Elite archive", "One image per occupied cell: the actual MAP-Elites archive, human picks preferred over the automated novelty ranking."),
+    ("preference_rank.html", "Predicted preference", "The trained preference model's ranking of every image, most-preferred first: what it predicts you'd pick, including images you never directly compared."),
+    ("preference_status.html", "Preference status", "Training status for the preference model: comparison count, cross-validated accuracy, a permutation-test significance check, and controls to retrain or enable predicted preference."),
     ("redundancy.html", "Redundancy clusters", "Near-duplicate clustering by DINOv2 similarity at an adjustable threshold, to see the population's true effective diversity."),
     ("novelty_decay.html", "Novelty decay watchlist", "Per-prompt-family novelty over generations, to see which prompts are exhausted vs. still yielding new territory."),
     ("lineage.html", "Lineage tree", "Exploit chains showing whether mutating near a parent actually improves on it. Needs parent-tracking data that only starts accumulating after 2026-07-09."),

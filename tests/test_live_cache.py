@@ -1,7 +1,6 @@
 import os
 import time
 
-import pytest
 
 from clawmarks.live_cache import LiveCache
 

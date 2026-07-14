@@ -18,7 +18,10 @@ so a future round 3 merge only re-embeds round 3's images, same pattern.
 Run: python3 -m clawmarks.build.merge_round2
 Then rebuild every tool against the merged data (this script does that at the end automatically).
 """
-import json, os, sys, shutil
+import json
+import os
+import sys
+import shutil
 import torch
 from transformers import AutoModel
 
@@ -40,8 +43,6 @@ def main(argv=None):
         print("round 2 already merged into scored_manifest.json, nothing to do", flush=True)
         sys.exit(0)
 
-    # Guard against double-running on a manifest that's already been merged once and re-saved.
-    already_merged_tags = {m["tag"] for m in manifest1}
     manifest2 = []
     for m in manifest2_raw:
         m = dict(m)
@@ -101,7 +102,6 @@ def main(argv=None):
     # curation_server.py computes both live (similarity_index.compute_data /
     # solution_map.compute_data) from scored_manifest.json and solution_map_final_embs.pt,
     # neither of which any code still reads these two files for.
-    tags = [m["tag"] for m in merged_manifest]
     assert [m["file"] for m in merged_manifest] == merged_paths, "manifest/embedding order mismatch after merge"
 
     # UMAP is no longer refit and written here either: solution_map.compute_data() refits it

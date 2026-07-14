@@ -448,7 +448,7 @@ def _torch_maximum(a, b):
 def cell_html(items, faith_edges, novelty_edges, fb, nb):
     if not items:
         return '<div class="cell empty"></div>'
-    from clawmarks.build.uncanny_gallery import thumb_data_uri
+    from clawmarks.build.thumbnails import thumb_data_uri
     thumbs = "".join(
         f'<img style="border:2px solid {TYPE_COLOR[m["prompt_type"]]}" '
         f'src="{thumb_data_uri(m["file"])}" title="{m["tag"]} faith={m["centroid_sim"]:.3f} novelty={m["novelty"]:.3f}">'
@@ -483,12 +483,12 @@ def build_gallery(cfg, manifest, real_ref):
     top.sort(key=lambda m: -m["centroid_sim"])
 
     rows = "".join(
-        f'<div class="row">' + "".join(
+        '<div class="row">' + "".join(
             cell_html(grid.get((fb, nb), []), faith_edges, novelty_edges, fb, nb) for nb in range(N_BINS)
         ) + '</div>'
         for fb in range(N_BINS)
     )
-    from clawmarks.build.uncanny_gallery import thumb_data_uri
+    from clawmarks.build.thumbnails import thumb_data_uri
     highlight_html = "".join(
         f'<figure><img style="border:2px solid {TYPE_COLOR[m["prompt_type"]]}" src="{thumb_data_uri(m["file"])}">'
         f'<figcaption>{m["prompt_name"]} | faith={m["centroid_sim"]:.3f} novelty={m["novelty"]:.3f}</figcaption></figure>'
@@ -568,7 +568,8 @@ def main(argv=None):
     loo_sims = []
     for i in range(real_embs.shape[0]):
         others = torch.cat([real_embs[:i], real_embs[i + 1:]], dim=0)
-        loo_c = others.mean(dim=0); loo_c = loo_c / loo_c.norm()
+        loo_c = others.mean(dim=0)
+        loo_c = loo_c / loo_c.norm()
         loo_sims.append((real_embs[i] @ loo_c).item())
     real_ref = (sum(loo_sims) / len(loo_sims), min(loo_sims), max(loo_sims))
     print(f"real-image reference band: {real_ref}", flush=True)

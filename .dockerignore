@@ -1,0 +1,15 @@
+# Never bake irreplaceable RunPod-billed generation output or real training images into a
+# Docker layer (CLAUDE.md Section 1's standing rule). curation_server.py reads these at runtime
+# from bind-mounted volumes instead; see docker-compose.yml.
+notes/
+corrected_dataset_extract/
+
+.git/
+.venv/
+__pycache__/
+*.pyc
+src/clawmarks.egg-info/
+.pytest_cache/
+TODO.txt
+.envrc
+.env

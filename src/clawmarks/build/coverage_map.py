@@ -11,7 +11,8 @@ occupied-cell count) called out separately from ordinary empty cells.
 
 Run after scored_manifest.json exists: python3 -m clawmarks.build.coverage_map
 """
-import json, os
+import json
+import os
 
 from clawmarks.shared_ui import nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, INFOTIP_CSS, info_btn
 
@@ -87,6 +88,67 @@ def compute_data(sweep_dir):
             })
 
     return {"cells": cells_json, "max_count": max_count}
+
+
+def _fmt_range(lo, hi, decimals=2):
+    lo_s = f"{lo:.{decimals}f}" if lo is not None else "0"
+    hi_s = f"{hi:.{decimals}f}" if hi is not None else "1"
+    return f"{lo_s}-{hi_s}"
+
+
+def top_frontier_cells(data, n=3):
+    """Picks the `n` most attractive frontier cells (empty, but bordering well-populated
+    territory) for the generation cockpit's target-cell picker. "Most attractive" means densest
+    adjacent territory: the total image count summed across the cell's occupied 4-neighbors,
+    since a frontier cell bordering many images is more reachable than one bordering few. Each
+    result is shaped for the picker's card UI, including a representative thumbnail/faith/novelty
+    pulled from the single best (highest-novelty) neighboring image, not the empty cell itself."""
+    cells = data["cells"]
+    by_coord = {(c["fb"], c["nb"]): c for c in cells}
+    frontier = [c for c in cells if c["frontier"]]
+
+    shaped = []
+    for c in frontier:
+        fb, nb = c["fb"], c["nb"]
+        neighbor_coords = [(fb + 1, nb), (fb - 1, nb), (fb, nb + 1), (fb, nb - 1)]
+        neighbors = [by_coord[nc] for nc in neighbor_coords if nc in by_coord and by_coord[nc]["count"] > 0]
+        if not neighbors:
+            continue
+        adjacent = sum(nb_cell["count"] for nb_cell in neighbors)
+        # Each cell's "items" is already sorted descending by novelty (see compute_data), so
+        # items[0] is that cell's own best; the single best across all neighbors is the max of
+        # those per-cell bests, not just the item from the most populous neighbor.
+        neighbor_bests = [nb_cell["items"][0] for nb_cell in neighbors if nb_cell["items"]]
+        best_item = max(neighbor_bests, key=lambda item: item["novelty"]) if neighbor_bests else None
+        shaped.append({
+            "fb": fb, "nb": nb,
+            "range": f"Faith {_fmt_range(c['faith_lo'], c['faith_hi'])}, "
+                     f"novelty {_fmt_range(c['novelty_lo'], c['novelty_hi'])}",
+            "adjacent": adjacent,
+            "thumb": best_item["thumb"] if best_item else None,
+            "near_faith": best_item["faith"] if best_item else None,
+            "near_novelty": best_item["novelty"] if best_item else None,
+            "faith_lo": c["faith_lo"], "faith_hi": c["faith_hi"],
+            "novelty_lo": c["novelty_lo"], "novelty_hi": c["novelty_hi"],
+        })
+
+    shaped.sort(key=lambda s: -s["adjacent"])
+    return shaped[:n]
+
+
+def neighbor_tags(data, fb, nb):
+    """Tags of every item in the occupied 4-neighbors of cell (fb, nb). A frontier/gap cell is
+    empty by definition (see top_frontier_cells), so its own items are always []; the 4-neighbor
+    territory is the closest 'nearby work' the cockpit's evidence panel can show for a gap-mission
+    target cell."""
+    by_coord = {(c["fb"], c["nb"]): c for c in data["cells"]}
+    neighbor_coords = [(fb + 1, nb), (fb - 1, nb), (fb, nb + 1), (fb, nb - 1)]
+    tags = set()
+    for nc in neighbor_coords:
+        cell = by_coord.get(nc)
+        if cell and cell["count"] > 0:
+            tags.update(item["tag"] for item in cell["items"])
+    return tags
 
 
 def render_html(data):

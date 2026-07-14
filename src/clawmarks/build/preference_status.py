@@ -88,8 +88,8 @@ def render_html(data):
                      f'<tr><td>cross-validated accuracy</td><td>{m["cv_accuracy"]}</td></tr>'
                      f'{stats_rows}</table>')
     else:
-        meta_html = (f'<p class="meta-empty">no model trained yet. Once enough comparisons exist, run '
-                     f'<code>python -m clawmarks.search.preference_pairwise_model</code>.</p>')
+        meta_html = ('<p class="meta-empty">no model trained yet. Once enough comparisons exist, run '
+                     '<code>python -m clawmarks.search.preference_pairwise_model</code>.</p>')
 
     staleness_html = ""
     if data["comparisons_changed_since_train"]:

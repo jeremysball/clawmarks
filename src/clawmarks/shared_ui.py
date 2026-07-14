@@ -11,10 +11,10 @@ with `<script src="lightbox.js"></script>` and opens images via `Lightbox.open(t
 `window.open('scan.html?open=...')`: no new tab, no page load, works from any page because the
 module fetches scan_data.json itself.
 """
-import os
 
 NAV_OPTIONS = [
     ("explore.html", "all tools (hub)"),
+    ("cockpit.html", "generation cockpit"),
     ("compare.html", "compare images (head-to-head)"),
     ("scan.html", "scan gallery"),
     ("map.html", "solution map (UMAP)"),
@@ -26,7 +26,6 @@ NAV_OPTIONS = [
     ("novelty_decay.html", "novelty decay watchlist"),
     ("lineage.html", "lineage tree"),
     ("seeds.html", "candidate seeds"),
-    ("gallery.html", "binned atlas (original)"),
 ]
 
 

@@ -100,7 +100,7 @@ def build_training_set(tags, embeddings, comparisons):
     pair whose winner or loser tag isn't in the embedding cache. Repeated judgments on the same
     pair are consolidated first (see _consolidate_pairs), so they contribute one row, not one
     row per judgment."""
-    diffs = [w - l for _, _, w, l in _iter_usable_comparisons(tags, embeddings, comparisons)]
+    diffs = [w - loser_emb for _, _, w, loser_emb in _iter_usable_comparisons(tags, embeddings, comparisons)]
     if not diffs:
         return np.zeros((0, 0), dtype=np.float32), np.zeros((0,), dtype=np.int64)
     diffs = np.stack(diffs)
@@ -116,7 +116,7 @@ def comparisons_fingerprint(tags, embeddings, comparisons):
     (already-counted) one becoming unusable, e.g. after an embedding cache rebuild drops a tag.
     Repeating an already-judged pair does not change the fingerprint, since it's consolidated
     into the same single verdict rather than counted as a new row."""
-    pairs = sorted((w, l) for w, l, _, _ in _iter_usable_comparisons(tags, embeddings, comparisons))
+    pairs = sorted((w, loser) for w, loser, _, _ in _iter_usable_comparisons(tags, embeddings, comparisons))
     return hashlib.sha256(json.dumps(pairs).encode()).hexdigest()
 
 
