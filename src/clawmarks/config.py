@@ -19,14 +19,20 @@ def repo_root() -> Path:
 
 ROOT = repo_root()
 NOTES_DIR = ROOT / "notes"
+# Runtime state (generated images, manifests, checkpoints) lives outside the repo per the
+# XDG Base Directory spec, not under notes/, so it survives a repo re-clone and doesn't
+# tempt anyone into committing gitignored generation output. CLAWMARKS_STATE_DIR overrides
+# the XDG default entirely; XDG_STATE_HOME overrides only the ~/.local/state root.
+STATE_DIR = Path(os.environ["CLAWMARKS_STATE_DIR"]) if os.environ.get("CLAWMARKS_STATE_DIR") \
+    else Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "clawmarks"
 # Every build/serve/search module reads SWEEP_DIR, so pointing the whole toolchain at a
-# one-off batch (e.g. a seed run that isn't the production notes/uncanny_sweep) only needs
-# this env var, not a full CLAWMARKS_ROOT-style fake repo checkout.
+# one-off batch (e.g. a seed run that isn't the production sweep) only needs this env var,
+# not a full CLAWMARKS_ROOT-style fake repo checkout.
 SWEEP_DIR = Path(os.environ["CLAWMARKS_SWEEP_DIR"]) if os.environ.get("CLAWMARKS_SWEEP_DIR") \
-    else NOTES_DIR / "uncanny_sweep"
-SWEEP2_DIR = NOTES_DIR / "uncanny_sweep2"
-PROBE_DIR = NOTES_DIR / "probe_uncanny"
-PROBE_STRENGTH_DIR = NOTES_DIR / "probe_strength"
+    else STATE_DIR / "uncanny_round1"
+SWEEP2_DIR = STATE_DIR / "uncanny_round2"
+PROBE_DIR = STATE_DIR / "probe_uncanny"
+PROBE_STRENGTH_DIR = STATE_DIR / "probe_strength"
 SEEDS_FILE = SWEEP_DIR / "candidate_seeds.json"
 USER_PICKS_FILE = SWEEP_DIR / "user_picks.json"
 USER_RATINGS_FILE = SWEEP_DIR / "user_ratings.json"
