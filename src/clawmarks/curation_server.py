@@ -341,7 +341,8 @@ def _maybe_retrain_pairwise_model(comparisons):
               file=sys.stderr, flush=True)
         return
     if result is not None:
-        _pairwise_model_cache["model"] = result["model"]
+        with _lock:
+            _pairwise_model_cache["model"] = result["model"]
 
 
 def _compared_pair_keys(comparisons):
@@ -999,7 +1000,10 @@ class Handler(SimpleHTTPRequestHandler):
                 comparisons = load_comparisons()
                 comparisons = record_comparison(comparisons, winner, loser, datetime.now(timezone.utc).isoformat())
                 save_comparisons(comparisons)
-                _maybe_retrain_pairwise_model(comparisons)
+            # Outside _lock: a full model fit can take a while, and every other route (favorites,
+            # compare, cockpit) shares this same lock, so retraining here would block them for the
+            # fit's whole duration instead of just the comparison write above.
+            _maybe_retrain_pairwise_model(comparisons)
             self._json_response(200, {"ok": True, "count": len(comparisons)})
             return
 
