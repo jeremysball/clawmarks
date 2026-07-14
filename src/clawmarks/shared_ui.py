@@ -195,9 +195,20 @@ _LIGHTBOX_JS = r"""(function(){
     ensureProgressiveCss();
     imgEl.src = thumbSrc;
     imgEl.classList.add('progressive-loading');
-    const full = new Image();
-    full.onload = () => {
+    // imgEl is the shared lightbox <img>, reused across navigations, so a stale full-res load
+    // from a previous mountProgressive call can still be in flight when the user navigates
+    // again. Stamp a per-call token and check it before mutating imgEl in either callback, or
+    // the old image's full-res clobbers whatever the user has since navigated to.
+    const my = (imgEl._mpToken = (imgEl._mpToken || 0) + 1);
+    const clearBlur = () => {
+      if (imgEl._mpToken !== my) return;
       imgEl.src = fullSrc;
+      imgEl.classList.remove('progressive-loading');
+    };
+    const full = new Image();
+    full.onload = clearBlur;
+    full.onerror = () => {
+      if (imgEl._mpToken !== my) return;
       imgEl.classList.remove('progressive-loading');
     };
     full.src = fullSrc;
@@ -426,9 +437,15 @@ _LIGHTBOX_JS = r"""(function(){
       mainImg.src = d.file;
     }
     prefetchNeighbors();
-    el.querySelector('.lb-info').textContent =
-      `${d.tag} | gen ${d.gen} | ${d.category} | type=${d.prompt_type} | prompt=${d.prompt_name} | ` +
-      `strength=${d.strength} cfg=${d.cfg} | faith=${d.faith} novelty=${d.novelty}`;
+    // Counterfactual records (jumped into via the cf result grid) carry origin_tag/strength/cfg
+    // but none of a search-manifest entry's gen/category/prompt_type/faith/novelty fields, so
+    // the two need separate info-line formats rather than one that prints "undefined" for half
+    // of them.
+    el.querySelector('.lb-info').textContent = ('origin_tag' in d)
+      ? `${d.tag} | counterfactual of ${d.origin_tag} | prompt=${d.prompt} | ` +
+        `strength=${d.strength} cfg=${d.cfg} seed=${d.seed}`
+      : `${d.tag} | gen ${d.gen} | ${d.category} | type=${d.prompt_type} | prompt=${d.prompt_name} | ` +
+        `strength=${d.strength} cfg=${d.cfg} | faith=${d.faith} novelty=${d.novelty}`;
     const isFav = !!favorites[d.tag];
     const favBtn = el.querySelector('.lb-favorite');
     favBtn.textContent = isFav ? '♥ favorited (click to remove)' : '♡ favorite';

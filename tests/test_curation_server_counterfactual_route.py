@@ -121,10 +121,12 @@ def test_counterfactual_balance_checked_once_regardless_of_n(running_server, mon
     assert calls["submit"] == 4
 
 
-def test_counterfactual_pinned_seed_reused_for_every_job_in_batch(running_server, monkeypatch):
+def test_counterfactual_pinned_seed_forces_a_single_job_even_if_n_is_higher(running_server, monkeypatch):
+    """A pinned seed makes every job in a batch byte-identical (same prompt/strength/cfg too),
+    so honoring n>1 would just pay RunPod for n copies of the same image."""
     server, tmp_path = running_server
     port = server.server_address[1]
-    _stub_immediate_completion(monkeypatch)
+    calls = _stub_immediate_completion(monkeypatch)
 
     status, data = _post_json(
         f"http://127.0.0.1:{port}/api/counterfactual",
@@ -132,8 +134,9 @@ def test_counterfactual_pinned_seed_reused_for_every_job_in_batch(running_server
     )
 
     assert status == 200
-    assert len(data["results"]) == 3
-    assert all(r["seed"] == 42 for r in data["results"])
+    assert len(data["results"]) == 1
+    assert data["results"][0]["seed"] == 42
+    assert calls["submit"] == 1
 
 
 def test_counterfactual_partial_batch_failure_returns_what_succeeded(running_server, monkeypatch):

@@ -95,7 +95,10 @@ import uuid
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
-from clawmarks.config import ROOT, SEEDS_FILE, SWEEP_DIR
+from clawmarks.config import ROOT, SEEDS_FILE, SWEEP2_DIR, SWEEP_DIR
+from clawmarks.runpod_client import runpod_balance
+from clawmarks.search import run_manager
+from clawmarks.search.driver import ROUND_CONFIGS
 from clawmarks.search.score_manifest import REAL_DIR
 from clawmarks.search.seed_pool import merge as seed_pool_merge
 from clawmarks.search import comparison_sampler, preference_settings, preference_pairwise_model
@@ -234,7 +237,6 @@ DEFAULT_PORT = 8420
 
 COMFY_ENDPOINT_ID = "uix4vdb2cec7sb"  # same serverless endpoint the search uses
 COMFY_BASE = f"https://api.runpod.ai/v2/{COMFY_ENDPOINT_ID}"
-GRAPHQL_URL = "https://api.runpod.io/graphql"
 BALANCE_FLOOR_USD = 0.05  # refuse to submit below this rather than risk a silent stall
 GENERATION_TIMEOUT_S = 330  # a cold endpoint (scaled to zero) took ~215s to spin up a worker in testing
 SEED_GEN_TIMEOUT_S = 300  # matches search/driver.py's request_gpt55_subjects timeout
@@ -278,16 +280,6 @@ def comfy_get(path, api_key):
     req = urllib.request.Request(f"{COMFY_BASE}{path}", headers={"Authorization": f"Bearer {api_key}"})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read())
-
-
-def runpod_balance(api_key):
-    req = urllib.request.Request(
-        f"{GRAPHQL_URL}?api_key={api_key}",
-        data=json.dumps({"query": "query { myself { clientBalance } }"}).encode(),
-        headers={"Content-Type": "application/json", "User-Agent": "curl/8.0"}, method="POST")
-    with urllib.request.urlopen(req, timeout=30) as r:
-        res = json.loads(r.read())
-    return res["data"]["myself"]["clientBalance"]
 
 
 def load_store(path):
@@ -710,6 +702,9 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.path == "/api/searchrun/status":
+            self._json_response(200, run_manager.status())
+            return
         if self.path == "/api/compare/next":
             with _lock:
                 comparisons = load_comparisons()
@@ -1072,7 +1067,51 @@ class Handler(SimpleHTTPRequestHandler):
             self._handle_seed_generate(payload)
             return
 
+        if self.path == "/api/searchrun/launch":
+            self._handle_searchrun_launch(payload)
+            return
+
+        if self.path == "/api/searchrun/stop":
+            self._json_response(200, run_manager.stop_run())
+            return
+
         self._json_response(404, {"error": "unknown endpoint"})
+
+    def _handle_searchrun_launch(self, payload):
+        try:
+            round_num = int(payload.get("round"))
+        except (TypeError, ValueError):
+            self._json_response(400, {"error": "'round' must be an integer"})
+            return
+        if round_num not in ROUND_CONFIGS:
+            self._json_response(400, {"error": f"unknown round {round_num!r}"})
+            return
+
+        api_key = os.environ.get("RUNPOD_API_KEY")
+        if not api_key:
+            self._json_response(400, {"error": "RUNPOD_API_KEY not set in server environment"})
+            return
+
+        cfg = ROUND_CONFIGS[round_num]
+        # Use this module's own SWEEP_DIR/SWEEP2_DIR (both overridable via CLAWMARKS_SWEEP_DIR
+        # for tests) rather than driver._out_dir, which resolves against clawmarks.config
+        # directly and would ignore a monkeypatch made only on this module.
+        out_dir = SWEEP_DIR if cfg.out_dir_name == "uncanny_sweep" else SWEEP2_DIR
+        try:
+            info = run_manager.launch_run(
+                round_num, out_dir, api_key,
+                popen_fn=subprocess.Popen, balance_fn=run_manager.runpod_balance,
+            )
+        except run_manager.LaunchError as e:
+            message = str(e)
+            if "already in progress" in message:
+                self._json_response(409, {"error": message})
+            elif "below floor" in message:
+                self._json_response(402, {"error": message})
+            else:
+                self._json_response(400, {"error": message})
+            return
+        self._json_response(200, {"ok": True, **info})
 
     def _handle_cockpit_evidence(self):
         query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -1175,7 +1214,10 @@ class Handler(SimpleHTTPRequestHandler):
         strength = float(payload.get("strength", 1.0))
         cfg = float(payload.get("cfg", 7.5))
         pinned_seed = payload.get("seed")
-        seeds = [int(pinned_seed)] * n if pinned_seed else [random.randint(1, 999999) for _ in range(n)]
+        # A pinned seed makes every job in the batch byte-identical (same prompt/strength/cfg
+        # too), so honoring n>1 here would just pay for n copies of one image. Only n's random-
+        # seed path benefits from batching.
+        seeds = [int(pinned_seed)] if pinned_seed else [random.randint(1, 999999) for _ in range(n)]
         steps = int(payload.get("steps", 28))
         sampler = payload.get("sampler", "ddim")
         negative = payload.get("negative", NEG_DEFAULT)
@@ -1217,7 +1259,9 @@ class Handler(SimpleHTTPRequestHandler):
                 images = res.get("output", {}).get("images", [])
                 if not images:
                     raise RuntimeError("job completed with no image output")
-                new_tag = f"cf_{int(time.time())}_{batch_index}_{origin_tag[:30]}"
+                # uuid suffix (not just batch_index) avoids two concurrent requests for the same
+                # origin_tag racing on the same filename and corrupting each other's PNG.
+                new_tag = f"cf_{int(time.time())}_{batch_index}_{uuid.uuid4().hex[:8]}_{origin_tag[:30]}"
                 fname = f"{COUNTERFACTUALS_DIR}/{new_tag}.png"
                 with open(fname, "wb") as f:
                     f.write(base64.b64decode(images[0]["data"]))
