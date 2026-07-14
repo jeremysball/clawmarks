@@ -1064,7 +1064,9 @@ document.getElementById('launch2').addEventListener('click', e => launch(2, e.ta
             return
 
         if self.path.startswith("/archive.html"):
-            use_predicted = preference_settings.load()["use_predicted_preference"]
+            out_dir = _active_out_dir()
+            use_predicted = (out_dir is not None
+                             and preference_settings.load(out_dir)["use_predicted_preference"])
             target_name = "archive_predicted" if use_predicted else "archive_actual"
             watched = _prediction_watched_files() if use_predicted else [_manifest_path()]
             data = _live_cache.get(
@@ -1251,11 +1253,13 @@ document.getElementById('launch2').addEventListener('click', e => launch(2, e.ta
                 self._json_response(400, {"error": "missing or non-boolean 'enabled'"})
                 return
             out_dir = _active_out_dir()
-            if enabled and (out_dir is None or not os.path.exists(
-                    preference_pairwise_model.model_file(out_dir))):
+            if out_dir is None:
+                self._json_response(400, {"error": "no active leg selected"})
+                return
+            if enabled and not os.path.exists(preference_pairwise_model.model_file(out_dir)):
                 self._json_response(400, {"error": "no trained model yet; cannot enable predicted preference"})
                 return
-            preference_settings.save(enabled)
+            preference_settings.save(enabled, out_dir)
             self._json_response(200, _get_preference_status_data())
             return
 

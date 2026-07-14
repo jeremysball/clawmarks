@@ -18,6 +18,7 @@ Run after scored_manifest.json exists: python3 -m clawmarks.build.elite_archive
 """
 import json
 import os
+from pathlib import Path
 
 from clawmarks.search import preference_pairwise_model
 from clawmarks.search.manifest_index import item_summary
@@ -45,6 +46,7 @@ def build_item_summary(m, sweep_dir, predicted_scores):
 
 
 def compute_data(sweep_dir, use_predicted_preference=False):
+    sweep_dir = Path(sweep_dir)
     with open(f"{sweep_dir}/scored_manifest.json") as f:
         manifest = json.load(f)
 

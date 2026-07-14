@@ -10,6 +10,7 @@ Served live at /preference_rank.html by curation_server.py.
 """
 import json
 import os
+from pathlib import Path
 
 import joblib
 
@@ -33,6 +34,7 @@ def build_ranked_items(by_tag, tags, scores, sweep_dir, limit=500):
 
 
 def compute_data(sweep_dir):
+    sweep_dir = Path(sweep_dir)
     model_path = preference_pairwise_model.model_file(sweep_dir)
     if not os.path.exists(model_path):
         return {"has_model": False, "model_file": model_path}

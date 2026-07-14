@@ -8,12 +8,14 @@ Served live at /preference_status.html by curation_server.py.
 """
 import json
 import os
+from pathlib import Path
 
 from clawmarks.search import embed_cache, preference_pairwise_model, preference_settings
 from clawmarks.shared_ui import INFOTIP_CSS, MOBILE_BASE_CSS, TOPNAV_CSS, info_btn, nav_bar_html
 
 
 def compute_data(sweep_dir):
+    sweep_dir = Path(sweep_dir)
     comparisons_path = f"{sweep_dir}/user_comparisons.json"
     if os.path.exists(comparisons_path):
         with open(comparisons_path) as f:
@@ -68,7 +70,7 @@ def compute_data(sweep_dir):
         "model_meta": model_meta,
         "new_comparisons_since_train": new_comparisons_since_train,
         "comparisons_changed_since_train": comparisons_changed_since_train,
-        "use_predicted_preference": preference_settings.load()["use_predicted_preference"],
+        "use_predicted_preference": preference_settings.load(sweep_dir)["use_predicted_preference"],
     }
 
 
