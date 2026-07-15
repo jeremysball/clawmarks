@@ -42,7 +42,7 @@ NAV_OPTIONS = [
 ]
 
 
-def nav_bar_html(current, active_expedition=None, active_leg=None):
+def nav_bar_html(current, active_expedition=None, active_leg=None, running=None):
     opts = "".join(
         f'<option value="{href}"{" selected" if href == current else ""}>{label}</option>'
         for href, label in NAV_OPTIONS
@@ -53,10 +53,17 @@ def nav_bar_html(current, active_expedition=None, active_leg=None):
             f'<span id="nav-activeleg" class="nav-activeleg" '
             f'title="active workspace">{active_expedition}/{active_leg}</span>'
         )
+    running_label = ""
+    if running:
+        r_exp, r_leg = running
+        running_label = (
+            f'<span id="nav-running" class="nav-running" '
+            f'title="an overnight search run is live">RUNNING: {r_exp}/{r_leg}</span>'
+        )
     return (
         '<div id="topnav" class="topnav" data-autohide>'
         '<a class="navlink" href="explore.html">&larr; all tools</a>'
-        f'{active_label}'
+        f'{active_label}{running_label}'
         '<select onchange="if(this.value) location.href=this.value;">'
         f'<option value="">jump to...</option>{opts}</select></div>'
     )
@@ -71,6 +78,8 @@ TOPNAV_CSS = """
   border-radius:6px; padding:5px 9px; font-size:12.5px; max-width:220px; }
 .topnav .nav-activeleg { color:var(--text-dim,#9a9aa4); font-size:12px; font-family:monospace;
   padding:2px 8px; background:rgba(154,154,164,0.12); border-radius:5px; white-space:nowrap; }
+.topnav .nav-running { color:#0b0b0d; font-size:11.5px; font-weight:700; padding:2px 8px;
+  background:var(--up,#5ec98a); border-radius:5px; white-space:nowrap; letter-spacing:0.02em; }
 @media (max-width: 640px) {
   .topnav { padding:8px 10px; gap:8px; font-size:12px; }
   .topnav select { flex:1; min-width:0; max-width:none; }

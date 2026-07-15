@@ -44,3 +44,15 @@ def test_nav_bar_shows_active_leg():
 def test_nav_bar_omits_label_when_no_selection():
     html = nav_bar_html("compare.html")
     assert "nav-activeleg" not in html
+
+
+def test_nav_bar_shows_running_indicator():
+    html = nav_bar_html("runs.html", running=("trent_v3_epoch4", "freeform1"))
+    assert "RUNNING" in html
+    assert "trent_v3_epoch4/freeform1" in html
+
+
+def test_nav_bar_omits_running_indicator_when_none():
+    html = nav_bar_html("runs.html")
+    assert "nav-running" not in html
+    assert "RUNNING" not in html
