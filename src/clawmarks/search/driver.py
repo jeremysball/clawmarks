@@ -393,7 +393,7 @@ def _load_favorited_images(out_dir):
     return list(favorites.values())
 
 
-def _predicted_preference_pool(manifest, model_path, embed_model, top_n=15):
+def _predicted_preference_pool(manifest, model_path, embed_model, out_dir, top_n=15):
     """Stage 5b (opt-in via --use-predicted-preference): ranks this round's own generated
     images by the trained preference model's score instead of favorite membership. Extends the
     shared embedding cache with any new images first, so an image is never re-embedded across
@@ -712,7 +712,7 @@ def main(argv=None):
         user_picks = _load_favorited_images(out_dir) if cfg.seed_from_start else []
         if args.use_predicted_preference:
             predicted_pool = _predicted_preference_pool(
-                manifest, out_dir / "preference_pairwise_model.joblib", model,
+                manifest, out_dir / "preference_pairwise_model.joblib", model, out_dir,
             )
             if predicted_pool:
                 user_picks = predicted_pool
