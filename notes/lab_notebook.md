@@ -2276,3 +2276,39 @@ definitions in `curation_server.py` (git merged them without flagging a conflict
 didn't textually overlap); kept the expedition/leg-aware one, deleted the `SWEEP_DIR`-based
 duplicate it shadowed. `rg -n "SWEEP_DIR|SWEEP2_DIR|ROUND_CONFIGS|RoundConfig" src/ tests/`
 confirms nothing remains.
+
+### 2026-07-15 (session 13): UX shard-review plan, Phases 1-5 shipped as stacked PRs
+
+Started closing findings from a 10-shard UX review of the curation server
+(`docs/superpowers/plans/design-shards/*.md`), tracked by
+`docs/superpowers/plans/2026-07-15-ui-design-shard-findings.md` across 8 phases. Delivered each
+phase as its own PR, stacked on the previous phase's branch rather than on `main`, so review stays
+scoped per phase: Phase 1 (active expedition/leg visibility, PR #34), Phase 2 (confirm
+destructive/paid actions, PR #35), Phase 3 (compare.html judgment-workflow correctness, PR #36),
+Phase 4 (visual design-token consolidation, PR #37), Phase 5 (gallery/archive at scale, PR #38).
+
+Phase 5's most significant finding was unplanned: while porting `scan_gallery.py`'s
+pagination pattern into `elite_archive.py`'s "view all" modal, a page rendered with `CELLS` and
+`openModal()` undefined in the browser, no console error. Root cause was a copy-pasted comment
+containing a literal `</script>` substring inside a `<script>` block. The browser's HTML tokenizer
+closes a `<script>` element on the *first* `</script`-prefixed text it sees, including inside a
+JS comment, since it's not JS-aware at that point in parsing, only scanning for the literal
+closing tag. Everything after that point, including the real code and the real closing tag,
+gets dropped from the script and parsed as plain markup instead. This bit six pages that all
+carried the same comment (archive, coverage, map, redundancy, novelty-decay, preference-rank):
+every one of them has had a completely dead grid, no click handlers, no data loading, for as long
+as that comment existed, with nothing in server logs or the browser console to flag it. Fixed by
+escaping it as `<\/script>` (backslash before the slash defeats the tokenizer's literal match) in
+all six files, and added a regression test per module asserting the rendered `<script>` body never
+contains a bare `</script` substring.
+
+Also fixed a second, smaller regression this same phase introduced: persisting scan.html's
+filter/sort state in the URL (`history.replaceState`) meant `/scan.html?sortKey=...` requests
+started hitting the server, but the route matched only the bare path (`self.path ==
+"/scan.html"`) and 404'd on anything with a query string. Widened the match to
+`self.path.startswith("/scan.html?")` as well, same pattern `archive.html`'s route already used
+for its own `?cell=` query param.
+
+Remaining phases (6: error/empty-state legibility, 7: DINOv2-similarity explainability, 8:
+remaining IA/nav/hygiene) not yet started; each gets its own worktree stacked on the prior phase's
+branch, following the same one-PR-per-phase pattern.
