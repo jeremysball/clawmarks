@@ -83,14 +83,16 @@ p.sub {{ color:var(--text-dim); max-width:760px; font-size:13px; line-height:1.6
 .cell .meta {{ padding:6px 8px; font-size:11px; color:var(--text-dim); }}
 .cell .review {{ display:flex; gap:4px; padding:0 8px 8px; }}
 .cell .review button {{ font-size:10px; background:transparent; color:var(--text-dim); border:1px solid var(--border); border-radius:4px; cursor:pointer; }}
+.cell .review button.selected {{ color:var(--text); border-color:var(--text); background:var(--border); }}
 #review-controls {{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:12.5px; color:var(--text-dim); }}
+.flag-error {{ color:#f28b82; min-height:1em; }}
 {INFOTIP_CSS}
 </style></head><body>
 
 {nav_bar_html('preference_rank.html', active_expedition, active_leg)}
 <h1>Predicted preference{rank_tip}</h1>
 <p class="sub">Top {len(items)} images by predicted preference score, highest first.</p>
-<div id="review-controls"><label><input id="reviewMode" type="checkbox"> Review top, middle, and bottom</label><span id="reviewCount"></span></div>
+<div id="review-controls"><label><input id="reviewMode" type="checkbox"> Review top, middle, and bottom</label><span id="reviewCount"></span><span id="flagError" class="flag-error" role="alert" aria-live="polite"></span></div>
 <div id="grid"></div>
 <script>
 // json_script() only protects this declaration from a </script> breakout; it does not
@@ -118,9 +120,25 @@ function openItem(i) {{
   Lightbox.open(ITEMS[i].tag);
 }}
 
+function flagSelected(tag, flag) {{
+  return flags[tag]?.flag === flag ? 'selected' : '';
+}}
+
 function saveFlag(tag, flag) {{
   fetch('/api/preference_rank/flag', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{tag, flag}})}})
-    .then(r => r.json()).then(() => {{ flags[tag] = flag; }});
+    .then(r => {{
+      if (!r.ok) throw new Error('flag save failed');
+      return r.json();
+    }})
+    .then(result => {{
+      if (result.ok !== true) throw new Error('flag save failed');
+      flags[tag] = {{flag: flag, flagged_at: flags[tag]?.flagged_at ?? null}};
+      document.getElementById('flagError').textContent = '';
+      render();
+    }})
+    .catch(() => {{
+      document.getElementById('flagError').textContent = 'Could not save this flag.';
+    }});
 }}
 
 function render() {{
@@ -131,7 +149,7 @@ function render() {{
    <div class="cell">
      <img src="${{escHtml(it.thumb)}}" loading="lazy" data-tag="${{escHtml(it.tag)}}" onclick="openItem(${{i}})">
     <div class="meta">Rank #${{i + 1}} | p=${{it.predicted_preference}} | f=${{it.faith}} n=${{it.novelty}}</div>
-    ${{reviewMode ? `<div class="review"><button data-review-index="${{i}}" data-flag="matches">matches my taste</button><button data-review-index="${{i}}" data-flag="questionable">questionable</button></div>` : ''}}
+     ${{reviewMode ? `<div class="review"><button class="flag-button ${{flagSelected(it.tag, 'matches')}}" aria-pressed="${{flags[it.tag]?.flag === 'matches'}}" data-review-index="${{i}}" data-flag="matches">matches my taste</button><button class="flag-button ${{flagSelected(it.tag, 'questionable')}}" aria-pressed="${{flags[it.tag]?.flag === 'questionable'}}" data-review-index="${{i}}" data-flag="questionable">questionable</button></div>` : ''}}
    </div>`).join('');
   document.querySelectorAll('[data-review-index]').forEach(button => button.addEventListener('click', () => {{
     saveFlag(ITEMS[Number(button.dataset.reviewIndex)].tag, button.dataset.flag);

@@ -26,3 +26,31 @@ def test_rank_page_has_bounded_review_mode_and_rank_ordinals():
     assert "Review top, middle, and bottom" in html
     assert "Rank #" in html
     assert "/api/preference_rank/flag" in html
+
+
+def test_rank_page_renders_persisted_flag_objects_as_selected_buttons():
+    data = {"has_model": True, "items": [
+        {"tag": "model-controlled<tag>", "thumb": "a.jpg", "faith": 0.5, "novelty": 0.4,
+         "predicted_preference": 0.8},
+    ]}
+
+    html = preference_rank.render_html(data)
+
+    assert "flags[tag]?.flag === flag" in html
+    assert "aria-pressed=\"${flags[it.tag]?.flag === 'matches'}\"" in html
+    assert "class=\"flag-button ${flagSelected(it.tag, 'matches')}\"" in html
+    assert "flags[tag] = flag" not in html
+
+
+def test_rank_page_reports_flag_save_failures_without_mutating_state():
+    data = {"has_model": True, "items": [
+        {"tag": "a", "thumb": "a.jpg", "faith": 0.5, "novelty": 0.4,
+         "predicted_preference": 0.8},
+    ]}
+
+    html = preference_rank.render_html(data)
+
+    assert "if (!r.ok) throw new Error('flag save failed')" in html
+    assert "flags[tag] = {flag: flag, flagged_at: flags[tag]?.flagged_at ?? null}" in html
+    assert "Could not save this flag." in html
+    assert "id=\"flagError\"" in html
