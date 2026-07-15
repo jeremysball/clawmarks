@@ -46,6 +46,7 @@ p.sub {{ color:var(--text-dim); max-width:640px; font-size:13px; line-height:1.6
 .pane {{ position:relative; flex:1 1 420px; max-width:520px; cursor:pointer; border-radius:10px;
   border:2px solid transparent; transition:border-color .12s ease; }}
 .pane:hover {{ border-color:var(--pick); }}
+.pane.submitting {{ pointer-events:none; opacity:0.6; }}
 .pane img {{ display:block; width:100%; max-height:70vh; object-fit:contain; border-radius:8px;
   background:var(--panel); user-select:none; -webkit-user-drag:none; }}
 .zoom-icon {{ position:absolute; top:8px; right:8px; width:30px; height:30px; border-radius:50%;
@@ -125,6 +126,7 @@ a corner to inspect that image at full resolution; tap again to close.</p>
 let current = null;
 let comparedThisSession = 0;
 let totalCount = 0;
+let rawCount = 0;
 let lastAccuracy = null;
 let modelMeta = null;
 
@@ -152,7 +154,9 @@ function renderProgress() {{
     const left = MIN_COMPARISONS - totalCount;
     labelText.textContent = `Model unlocks in ${{left}} vote${{left === 1 ? '' : 's'}}`;
     fill.style.width = (totalCount / MIN_COMPARISONS * 100) + '%';
-    sub.textContent = `${{totalCount}} / ${{MIN_COMPARISONS}} comparisons`;
+    sub.textContent = rawCount !== totalCount
+      ? `${{totalCount}} / ${{MIN_COMPARISONS}} usable comparisons (${{rawCount}} submitted)`
+      : `${{totalCount}} / ${{MIN_COMPARISONS}} comparisons`;
   }} else if (lastAccuracy == null) {{
     labelText.textContent = 'Model unlocked. Training on your picks…';
     fill.style.width = '0%';
@@ -194,7 +198,9 @@ function renderWork(work) {{
 function fetchStatus(after) {{
   fetch('/api/preference_status').then(r => r.ok ? r.json() : null).then(d => {{
     if (d) {{
-      if (typeof d.n_comparisons === 'number') totalCount = d.n_comparisons;
+      if (typeof d.n_usable === 'number') totalCount = d.n_usable;
+      else if (typeof d.n_comparisons === 'number') totalCount = d.n_comparisons;
+      rawCount = typeof d.n_comparisons === 'number' ? d.n_comparisons : totalCount;
       if (d.model_meta && typeof d.model_meta.cv_accuracy === 'number') {{
         lastAccuracy = d.model_meta.cv_accuracy;
         modelMeta = d.model_meta;
@@ -232,8 +238,13 @@ function loadNext() {{
   }});
 }}
 
+let submitting = false;
+
 function choose(side) {{
-  if (!current) return;
+  if (!current || submitting) return;
+  submitting = true;
+  document.getElementById('pane1').classList.add('submitting');
+  document.getElementById('pane2').classList.add('submitting');
   const winner = side === 1 ? current.img1.tag : current.img2.tag;
   const loser = side === 1 ? current.img2.tag : current.img1.tag;
   fetch('/api/compare', {{method:'POST', headers:{{'Content-Type':'application/json'}},
@@ -245,18 +256,21 @@ function choose(side) {{
     .then((res) => {{
       comparedThisSession++;
       document.getElementById('count').textContent = `${{comparedThisSession}} compared this session`;
-      if (res && typeof res.count === 'number') totalCount = res.count;
-      // The server retrains on every RETRAIN_EVERY-th comparison past the floor, synchronously
-      // before this response returns, so fresh cv_accuracy is already on disk at a boundary.
-      const crossedRetrain = totalCount >= MIN_COMPARISONS && totalCount % RETRAIN_EVERY === 0;
-      if (crossedRetrain) {{
-        fetchStatus(bumpBar);
-      }} else {{
-        renderProgress();
-        if (totalCount < MIN_COMPARISONS) bumpBar();
-      }}
+      // res.count is the raw store size, not the usable (deduplicated) pair count the retrain
+      // gate actually uses, so re-derive totalCount from /api/preference_status rather than
+      // trusting it directly.
+      fetchStatus(() => {{
+        const crossedRetrain = totalCount >= MIN_COMPARISONS && totalCount % RETRAIN_EVERY === 0;
+        if (crossedRetrain || totalCount < MIN_COMPARISONS) bumpBar();
+      }});
       loadNext();
+      submitting = false;
+      document.getElementById('pane1').classList.remove('submitting');
+      document.getElementById('pane2').classList.remove('submitting');
     }}).catch(() => {{
+      submitting = false;
+      document.getElementById('pane1').classList.remove('submitting');
+      document.getElementById('pane2').classList.remove('submitting');
       document.getElementById('done').textContent =
         "Couldn't reach the server. Check your connection and try again.";
       document.getElementById('done').style.display = 'block';
@@ -267,8 +281,8 @@ document.getElementById('pane1').addEventListener('click', () => choose(1));
 document.getElementById('pane2').addEventListener('click', () => choose(2));
 
 document.addEventListener('keydown', e => {{
-  if (e.key === 'ArrowLeft') choose(1);
-  if (e.key === 'ArrowRight') choose(2);
+  if (e.key === 'ArrowLeft') {{ e.preventDefault(); choose(1); }}
+  if (e.key === 'ArrowRight') {{ e.preventDefault(); choose(2); }}
 }});
 
 // --- zoom overlay: opens on a zoom-icon tap, closes on any tap, drag to pan while open ---
