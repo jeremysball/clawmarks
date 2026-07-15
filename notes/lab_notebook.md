@@ -2189,3 +2189,69 @@ expedition and returned `{"ok": true, ...}`, `POST /api/active-leg` switched to 
 
 The expedition/leg migration (Tasks 1-17) is done. `main` still has the old `SWEEP_DIR`/
 round1/round2 model; merging this branch is the next step, not yet done as of this entry.
+
+### 2026-07-15 (session 11): GLM-5.2 review of PR #33, fixed 5 confirmed regressions before merge
+
+Ran a 4-shard opencode/GLM-5.2 code review of PR #33's full diff (56 files, ~6100 changed lines)
+via the `delegate-code-review` skill, dispatched over the `taskferry` MCP tools. All 4 shards
+(angles A/B, C, D/E, F/G/H) completed cleanly. Merged their candidate lists, hand-verified every
+one against the actual worktree code, and posted both the raw finder output and the verified
+findings as PR comments for the record.
+
+Five findings were CONFIRMED as real bugs distinct from the two no-leg-selected crashes already
+fixed in session 10, and all five got fixed before merging:
+
+1. **`docker-compose.yml`** set a dead `CLAWMARKS_SWEEP_DIR` env var and never mounted or set
+   `CLAWMARKS_STATE_DIR`, so a docker-composed deployment would write every generated PNG and
+   manifest to unmounted, ephemeral container storage, lost on the next `watchtower` recreate.
+   This is a real, live deployment path (confirmed via this notebook's own docker-compose
+   reference entries), not dead code, so it was a genuine data-integrity risk per this project's
+   #1 rule. Fixed: set `CLAWMARKS_STATE_DIR=/app/state/clawmarks` and bind-mount `./state`.
+2. **Seed pool split**: the curation server's "Generate seeds" UI wrote to
+   `candidate_seeds.json`, while `search/driver.py` reads/writes `seed_pool.json` for the same
+   per-leg subject pool. These used to be one shared file; the migration silently split them, so
+   seeds a user topped up from the UI never reached a run. Fixed by pointing `_seeds_file()` at
+   `seed_pool.json` (both stores use the same dict-of-subject shape, confirmed by reading
+   `search/seed_pool.py`'s `load`/`save` against `curation_server.py`'s `load_store`/`save_store`).
+3. **`runs_page.py` never migrated**: the only UI for launching/monitoring searches still posted
+   `{round: int}` and fetched `?round=N` against endpoints that now hard-require
+   `expedition`+`leg` and return 400. Rewrote the page to fetch `/api/expeditions` and populate
+   expedition/leg `<select>`s, matching the pattern the status page already uses. Verified live
+   with Playwright: pickers populate from the real `uncanny_frontier` expedition's three legs, no
+   console errors.
+4. **`/api/searchrun/report`** read favorites via `_favorites_file()` (the globally *active* leg)
+   instead of the leg named in the `?expedition=&leg=` query, so a report for a non-active leg
+   silently computed pick-rate-by-category against the wrong leg's favorites. Fixed to load
+   favorites from the queried `out_dir` directly.
+5. **No-leg-selected crashes, siblings of the two already fixed in session 10**: `load_manifest()`
+   and half a dozen `*_file()` helpers, the `/thumbs/`+`/real_thumbs/` handlers, `_embeddings_for`,
+   and `_handle_cockpit_run` all dereferenced `_active_out_dir()` with no `None` guard, each
+   raising a raw `TypeError` (500, confusing stack trace) instead of a clean "no leg selected"
+   response. Rather than patch each call site individually, added a single `_require_out_dir()`
+   helper (raises `NoActiveLegError`) and a matching top-level `except NoActiveLegError` in both
+   `do_GET` and `do_POST` (the latter previously had no top-level exception handler at all) that
+   returns a clean 400. Every one of these call sites now routes through it.
+
+One CONFIRMED finding was deliberately *not* fixed the way the review suggested: `GET
+/cockpit.html` silently switches the globally active leg to `(expedition, "cockpit")` on page
+load, which can redirect a concurrently open tab's writes to the wrong leg. Every cockpit route
+(queue, target_cells, evidence, run) resolves its working directory off that same global active
+leg, so the switch is load-bearing, not accidental; removing it without also decoupling every
+cockpit route from global active-leg state would trade a UX surprise for a functional break, and
+that decoupling is a bigger structural change than this pass's scope. Documented the coupling
+in a code comment instead and left it as a known tradeoff for a future, dedicated pass.
+
+Two of the fixes (`EMBEDDINGS_FILE` AttributeError in `preference_rank.py`/`elite_archive.py`,
+`_manifest_path`/`*_file()` None-guards) had zero prior test coverage; added regression tests for
+both classes (`test_preference_rank.py`, `test_elite_archive_predicted_preference.py`,
+`test_curation_server_startup.py`) confirmed RED before the fix, GREEN after. Full suite: 363
+passed (up from 357). `ruff check` clean. Live smoke check against the real
+`$XDG_STATE_HOME/clawmarks/` state (read-only GETs and one active-leg switch, restored to
+"none selected" afterward) confirmed the no-leg-selected paths now return clean 400s instead of
+500s, and that the remaining 500s on the real `cockpit`/`round1` legs are genuine
+`FileNotFoundError`s from those legs never having been run (no `scored_manifest.json` yet) rather
+than the None-guard bug class, i.e. expected behavior, not a regression.
+
+Posted the raw finder-stage output and the hand-verified findings as two separate comments on
+PR #33 per the `delegate-code-review` skill's posting convention. Next: merge PR #33 and retire
+the worktree.

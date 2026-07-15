@@ -1,5 +1,6 @@
 import threading
 from http.server import HTTPServer
+import urllib.error
 import urllib.request
 
 import pytest
@@ -47,3 +48,51 @@ def test_status_page_shows_no_leg_selected_without_error_string(running_server_n
     assert resp.status == 200
     assert "no expedition/leg selected" in body
     assert "could not read manifest" not in body
+
+
+# Regression tests for the None-guard crash class: _require_out_dir() (curation_server.py) turns
+# a bare _active_out_dir() dereference (a NoneType/str TypeError -> 500 stack trace) into a clean
+# 400 with a "no expedition/leg selected" message. These three routes were confirmed to 500
+# before the fix: a page-render route (scan.html), a JSON API route (favorites), and the /thumbs/
+# static-file route, which together cover every response shape _do_GET can produce.
+
+def test_scan_html_returns_a_clean_400_with_no_active_leg(running_server_no_leg):
+    port = running_server_no_leg.server_address[1]
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/scan.html")
+    assert exc_info.value.code == 400
+    body = exc_info.value.read().decode()
+    assert "no expedition/leg selected" in body
+    assert "Something went wrong" not in body
+
+
+def test_favorites_api_returns_a_clean_400_with_no_active_leg(running_server_no_leg):
+    port = running_server_no_leg.server_address[1]
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/api/favorites")
+    assert exc_info.value.code == 400
+    body = exc_info.value.read().decode()
+    assert "no expedition/leg selected" in body
+
+
+def test_thumbs_route_returns_a_clean_400_with_no_active_leg(running_server_no_leg):
+    port = running_server_no_leg.server_address[1]
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/thumbs/some_tag.jpg")
+    assert exc_info.value.code == 400
+    body = exc_info.value.read().decode()
+    assert "no expedition/leg selected" in body
+
+
+def test_cockpit_run_post_returns_a_clean_400_with_no_active_leg(running_server_no_leg, monkeypatch):
+    monkeypatch.setenv("RUNPOD_API_KEY", "fake-key-for-this-test")
+    port = running_server_no_leg.server_address[1]
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/api/cockpit/queue/some-trial-id/run",
+        data=b"{}", headers={"Content-Type": "application/json"}, method="POST",
+    )
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(req)
+    assert exc_info.value.code == 400
+    body = exc_info.value.read().decode()
+    assert "no expedition/leg selected" in body

@@ -38,7 +38,8 @@ if" comparison tool, not part of the MAP-Elites archive. A RunPod balance check 
 submission and refuses below a safety floor rather than risk the silent-stall failure mode this
 project hit once already with a negative balance.
 
-Candidate seeds (notes/uncanny_sweep/candidate_seeds.json) are the pool of subject/texture
+Candidate seeds (the active leg's out_dir/seed_pool.json, shared with search/driver.py) are the
+pool of subject/texture
 descriptions "explore" jobs draw from. The search driver (search/driver.py) escalates to
 GPT-5.5 for fresh ones on plateau, via a subprocess call to `opencode run`; this server exposes
 the same mechanism on demand so the pool can be reviewed and topped up between runs, not just
@@ -142,6 +143,20 @@ def _active_out_dir():
     return config.leg_dir(_active_selection["expedition"], _active_selection["leg"])
 
 
+class NoActiveLegError(Exception):
+    """Raised by _require_out_dir() so do_GET/do_POST's catch-all can turn it into a clean 400
+    instead of a 500 TypeError stack trace. _active_out_dir() legitimately returns None at call
+    sites that already check for it (the status page, the picker); _require_out_dir() is for the
+    many call sites that don't make sense without a leg selected at all."""
+
+
+def _require_out_dir():
+    out_dir = _active_out_dir()
+    if out_dir is None:
+        raise NoActiveLegError("no expedition/leg selected")
+    return out_dir
+
+
 def _set_active_selection(expedition, leg):
     expedition_file = config.EXPEDITIONS_DIR / expedition / "expedition.json"
     if not expedition_file.exists():
@@ -191,7 +206,7 @@ def _create_expedition(payload):
 
 
 def _manifest_path():
-    return str(_active_out_dir() / "scored_manifest.json")
+    return str(_require_out_dir() / "scored_manifest.json")
 
 
 def _get_scan_items():
@@ -291,7 +306,7 @@ def _preference_retrain_gate_error():
     a different fix, and pointing someone at the wrong one wastes their time."""
     comparisons = load_comparisons()
     n_raw_comparisons = len(comparisons)
-    tags, embeddings = embed_cache.load_cache(embed_cache.embeddings_file(_active_out_dir()))
+    tags, embeddings = embed_cache.load_cache(embed_cache.embeddings_file(_require_out_dir()))
     _, y = preference_pairwise_model.build_training_set(tags, embeddings, comparisons)
     n_usable = len(y) // 2
     if n_usable < preference_pairwise_model.MIN_COMPARISONS:
@@ -310,27 +325,30 @@ def _preference_retrain_gate_error():
     return ""
 
 def _favorites_file():
-    return _active_out_dir() / "user_favorites.json"
+    return _require_out_dir() / "user_favorites.json"
 
 
 def _comparisons_file():
-    return _active_out_dir() / "user_comparisons.json"
+    return _require_out_dir() / "user_comparisons.json"
 
 
 def _counterfactuals_dir():
-    return _active_out_dir() / "counterfactuals"
+    return _require_out_dir() / "counterfactuals"
 
 
 def _counterfactuals_file():
-    return _active_out_dir() / "user_counterfactuals.json"
+    return _require_out_dir() / "user_counterfactuals.json"
 
 
 def _cockpit_queue_file():
-    return _active_out_dir() / "cockpit_queue.json"
+    return _require_out_dir() / "cockpit_queue.json"
 
 
 def _seeds_file():
-    return _active_out_dir() / "candidate_seeds.json"
+    # search/driver.py reads/writes this same file (out_dir / "seed_pool.json") as the shared
+    # subject pool a leg draws from on plateau; using a different filename here silently
+    # disconnects seeds topped up from this UI from anything the driver ever reads.
+    return _require_out_dir() / "seed_pool.json"
 
 
 DEFAULT_PORT = 8420
@@ -419,7 +437,7 @@ _pairwise_model_cache = {"model": None}
 
 
 def _embeddings_for(items):
-    tags, embeddings = embed_cache.load_cache(embed_cache.embeddings_file(_active_out_dir()))
+    tags, embeddings = embed_cache.load_cache(embed_cache.embeddings_file(_require_out_dir()))
     tag_to_row = {t: i for i, t in enumerate(tags)}
     idx = [tag_to_row[m["tag"]] for m in items if m["tag"] in tag_to_row]
     return embeddings[idx]
@@ -454,7 +472,7 @@ def next_compare_response(manifest, comparisons):
     model = _pairwise_model_cache["model"]
     candidate_manifest = manifest
     if model is not None:
-        tags, _ = embed_cache.load_cache(embed_cache.embeddings_file(_active_out_dir()))
+        tags, _ = embed_cache.load_cache(embed_cache.embeddings_file(_require_out_dir()))
         embedded = set(tags)
         embedded_manifest = [m for m in manifest if m["tag"] in embedded]
         if embedded_manifest:
@@ -845,6 +863,8 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         try:
             self._do_GET()
+        except NoActiveLegError as e:
+            self._send_no_active_leg_error(e)
         except Exception as e:
             if self._wants_json():
                 self._send_json_error(e)
@@ -854,6 +874,28 @@ class Handler(SimpleHTTPRequestHandler):
     def _wants_json(self):
         path = self.path.split("?")[0]
         return path.startswith("/api/") or path.endswith(".json")
+
+    def _send_no_active_leg_error(self, exc):
+        # A clean 400 for _require_out_dir()'s NoActiveLegError, instead of the generic 500
+        # "Something went wrong" page a raw NoneType/str TypeError would otherwise produce.
+        if self._wants_json():
+            try:
+                self._json_response(400, {"error": str(exc)})
+            except Exception:
+                pass  # client already gone; nothing left to send
+            return
+        body = f"""<div style="font-family:sans-serif;max-width:48rem;margin:2rem auto;line-height:1.5">
+<h1>No expedition/leg selected</h1>
+<p>{html.escape(str(exc))}. <a href="/">Pick one from the status page</a> first.</p>
+</div>""".encode()
+        try:
+            self.send_response(400)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception:
+            pass  # client already gone; nothing left to send
 
     def _send_json_error(self, exc):
         no_manifest = isinstance(exc, FileNotFoundError) and "scored_manifest.json" in str(exc)
@@ -1015,7 +1057,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
                 self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
                 return
             out_dir = config.leg_dir(expedition, leg)
-            favorites = load_store(_favorites_file())
+            favorites = load_store(out_dir / "user_favorites.json")
             self._json_response(200, run_manager.build_report(out_dir, favorites=favorites))
             return
         if self.path == "/api/compare/next":
@@ -1210,6 +1252,13 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/cockpit.html":
+            # Every cockpit route (queue, target_cells, evidence, run) resolves its working
+            # directory off the globally active leg, not an explicit cockpit-scoped path, so
+            # this switch is load-bearing: without it those routes would operate against
+            # whatever leg was last active elsewhere. That does mean opening this page from a
+            # second tab silently redirects the active leg out from under a first tab still
+            # curating a different leg; there is no cockpit-scoped directory resolution to fall
+            # back to instead. Known tradeoff, not accidental.
             if (_active_selection["expedition"] is not None
                     and _active_selection["leg"] != "cockpit"):
                 _set_active_selection(_active_selection["expedition"], "cockpit")
@@ -1253,7 +1302,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path.startswith("/thumbs/") and self.path.endswith(".jpg"):
-            thumb_path = str(_active_out_dir() / self.path.lstrip("/"))
+            thumb_path = str(_require_out_dir() / self.path.lstrip("/"))
             if not os.path.exists(thumb_path):
                 tag = os.path.basename(self.path)[: -len(".jpg")]
                 match = manifest_entry_by_tag(tag)
@@ -1269,7 +1318,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             # reference data): cache writes go to the active leg's real_thumbs/, never into REAL_DIR
             # itself. basename() strips any path traversal the same way /real/ does.
             name = os.path.basename(urllib.parse.unquote(self.path[len("/real_thumbs/"):]))
-            thumb_path = str(_active_out_dir() / "real_thumbs" / name)
+            thumb_path = str(_require_out_dir() / "real_thumbs" / name)
             if not name or not os.path.exists(thumb_path):
                 real_path = os.path.join(REAL_DIR, name) if name else ""
                 if not name or not os.path.isfile(real_path):
@@ -1282,6 +1331,14 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         super().do_GET()
 
     def do_POST(self):
+        try:
+            self._do_POST()
+        except NoActiveLegError as e:
+            self._send_no_active_leg_error(e)
+        except Exception as e:
+            self._send_json_error(e)
+
+    def _do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length) if length else b"{}"
         try:
@@ -1499,8 +1556,8 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
 
         expedition = _active_selection["expedition"]
         leg = _active_selection["leg"]
-        out_dir = config.leg_dir(expedition, leg)
-        queue_file = out_dir / "cockpit_queue.json"
+        out_dir = _require_out_dir()
+        queue_file = _cockpit_queue_file()
 
         with _lock:
             trials = load_store(queue_file)

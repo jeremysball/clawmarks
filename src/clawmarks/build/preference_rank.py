@@ -43,7 +43,7 @@ def compute_data(sweep_dir):
         manifest = json.load(f)
     by_tag = index_by_tag(manifest)
 
-    tags, embeddings = embed_cache.load_cache(embed_cache.EMBEDDINGS_FILE)
+    tags, embeddings = embed_cache.load_cache(embed_cache.embeddings_file(sweep_dir))
     model = joblib.load(model_path)
     scores = score(model, embeddings)
     items = build_ranked_items(by_tag, tags, scores, sweep_dir)

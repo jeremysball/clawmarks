@@ -64,7 +64,7 @@ def compute_data(sweep_dir, use_predicted_preference=False):
         from clawmarks.search import embed_cache
         from clawmarks.search.preference_pairwise_model import score as pairwise_score
 
-        tags, embeddings = embed_cache.load_cache(embed_cache.EMBEDDINGS_FILE)
+        tags, embeddings = embed_cache.load_cache(embed_cache.embeddings_file(sweep_dir))
         model = joblib.load(model_path)
         scores = pairwise_score(model, embeddings)
         predicted_scores = dict(zip(tags, scores))
