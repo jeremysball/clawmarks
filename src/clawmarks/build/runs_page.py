@@ -108,11 +108,23 @@ function populateLegs() {{
 }}
 
 function loadExpeditions() {{
-  return fetch('/api/expeditions').then(r => r.json()).then(d => {{
-    expeditionsData = d.expeditions || [];
+  return Promise.all([
+    fetch('/api/expeditions').then(r => r.json()),
+    fetch('/api/active-leg').then(r => r.ok ? r.json() : {{}}),
+    fetch('/api/searchrun/status').then(r => r.json()),
+  ]).then(([expeditionsResp, active, status]) => {{
+    expeditionsData = expeditionsResp.expeditions || [];
     expeditionSel.innerHTML = expeditionsData.map(e =>
       `<option value="${{escHtml(e.name)}}">${{escHtml(e.name)}}</option>`).join('');
+    const preferExp = status.running ? status.expedition : active.expedition;
+    const preferLeg = status.running ? status.leg : active.leg;
+    if (preferExp && expeditionsData.some(e => e.name === preferExp)) {{
+      expeditionSel.value = preferExp;
+    }}
     populateLegs();
+    if (preferLeg && Array.from(legSel.options).some(o => o.value === preferLeg)) {{
+      legSel.value = preferLeg;
+    }}
   }});
 }}
 
