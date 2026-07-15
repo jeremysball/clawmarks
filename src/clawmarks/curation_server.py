@@ -1127,7 +1127,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/map.html":
-            html = map_view.render_html(_get_map_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"])
+            html = map_view.render_html(_get_map_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1137,7 +1137,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/redundancy.html":
-            html = redundancy_view.render_html(_get_redundancy_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"])
+            html = redundancy_view.render_html(_get_redundancy_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1147,7 +1147,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/coverage.html":
-            html = coverage_map.render_html(_get_manifest_cached("coverage", coverage_map.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"])
+            html = coverage_map.render_html(_get_manifest_cached("coverage", coverage_map.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1157,7 +1157,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/novelty_decay.html":
-            html = novelty_decay.render_html(_get_manifest_cached("novelty_decay", novelty_decay.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"])
+            html = novelty_decay.render_html(_get_manifest_cached("novelty_decay", novelty_decay.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1167,7 +1167,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/lineage.html":
-            html = lineage_view.render_html(_get_manifest_cached("lineage", lineage_view.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"])
+            html = lineage_view.render_html(_get_manifest_cached("lineage", lineage_view.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1187,7 +1187,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
                 lambda sd: elite_archive.compute_data(sd, use_predicted_preference=use_predicted),
                 watched_files=watched, sweep_dir=str(_active_out_dir()),
             )
-            html = elite_archive.render_html(data, active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"])
+            html = elite_archive.render_html(data, active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1201,7 +1201,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
                 "preference_rank", preference_rank.compute_data,
                 watched_files=_prediction_watched_files(), sweep_dir=str(_active_out_dir()),
             )
-            html = preference_rank.render_html(data, active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"])
+            html = preference_rank.render_html(data, active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1211,7 +1211,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/preference_status.html":
-            html = preference_status.render_html(_get_preference_status_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"])
+            html = preference_status.render_html(_get_preference_status_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1234,7 +1234,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/seeds.html":
-            body = seed_browser.render_html(active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"]).encode()
+            body = seed_browser.render_html(active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))
@@ -1243,7 +1243,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/compare.html":
-            body = compare_page.render_html(active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"]).encode()
+            body = compare_page.render_html(active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))
@@ -1267,6 +1267,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
                 current_expedition=_active_selection["expedition"],
                 active_expedition=_active_selection["expedition"],
                 active_leg=_active_selection["leg"],
+                running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None,
             ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1276,7 +1277,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/runs.html":
-            body = runs_page.render_html(active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"]).encode()
+            body = runs_page.render_html(active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))
