@@ -984,16 +984,12 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
         if self.path.startswith("/api/searchrun/report"):
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            try:
-                round_num = int((query.get("round") or ["1"])[0])
-            except ValueError:
-                self._json_response(400, {"error": "'round' must be an integer"})
+            expedition = (query.get("expedition") or [None])[0]
+            leg = (query.get("leg") or [None])[0]
+            if not expedition or not leg:
+                self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
                 return
-            if round_num not in ROUND_CONFIGS:
-                self._json_response(400, {"error": f"unknown round {round_num!r}"})
-                return
-            cfg = ROUND_CONFIGS[round_num]
-            out_dir = _active_out_dir()
+            out_dir = config.leg_dir(expedition, leg)
             favorites = load_store(_favorites_file())
             self._json_response(200, run_manager.build_report(out_dir, favorites=favorites))
             return
@@ -1409,13 +1405,18 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         self._json_response(404, {"error": "unknown endpoint"})
 
     def _handle_searchrun_launch(self, payload):
-        try:
-            round_num = int(payload.get("round"))
-        except (TypeError, ValueError):
-            self._json_response(400, {"error": "'round' must be an integer"})
+        expedition = payload.get("expedition")
+        leg = payload.get("leg")
+        if not expedition or not leg:
+            self._json_response(400, {"error": "'expedition' and 'leg' are required"})
             return
-        if round_num not in ROUND_CONFIGS:
-            self._json_response(400, {"error": f"unknown round {round_num!r}"})
+        leg_file = config.EXPEDITIONS_DIR / expedition / "legs" / f"{leg}.json"
+        expedition_file = config.EXPEDITIONS_DIR / expedition / "expedition.json"
+        if not expedition_file.exists():
+            self._json_response(400, {"error": f"unknown expedition {expedition!r}"})
+            return
+        if not leg_file.exists() and leg != "cockpit":
+            self._json_response(400, {"error": f"unknown leg {leg!r} in expedition {expedition!r}"})
             return
 
         api_key = os.environ.get("RUNPOD_API_KEY")
@@ -1423,11 +1424,10 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self._json_response(400, {"error": "RUNPOD_API_KEY not set in server environment"})
             return
 
-        cfg = ROUND_CONFIGS[round_num]
-        out_dir = _active_out_dir()
+        out_dir = config.leg_dir(expedition, leg)
         try:
             info = run_manager.launch_run(
-                round_num, out_dir, api_key,
+                expedition, leg, out_dir, api_key,
                 popen_fn=subprocess.Popen, balance_fn=run_manager.runpod_balance,
             )
         except run_manager.LaunchError as e:
