@@ -2321,3 +2321,19 @@ The active-context badge introduced in session 14 linked to `/?expedition=...&le
 server serves the status page only at the exact `/` path and persists the active selection itself.
 The badge now links to `/` while preserving its expedition/leg label. Focused tests passed (69
 tests), and Ruff passed on the changed files.
+
+### 2026-07-15 (session 16): completed Sol review fixes for Phase 8 PR #41
+
+Resolved all four medium-severity findings from the independent Sol review of PR #41. Live tool
+renderers now receive the active expedition and leg, and completed-run report links persist their
+own selection before opening scan, coverage, or novelty review. The compare page blocks a second
+choice while the first is pending and blocks keyboard choice while the full-size zoom is open.
+The bounded ranking review now renders a persisted flag as a selected, pressed button, updates
+that state only after a successful API response, and reports a save failure without changing the
+displayed state.
+
+The three review-fix commits are `d60feb2`, `ac03a51`, and `c72604e`. Focused tests passed for
+each task. Final CI-equivalent verification passed with 378 tests, Ruff, MyPy, and `git diff
+--check` clean. Playwright checked the active-leg badge and the no-model ranking page at desktop
+and 390px mobile widths without new console errors. The temporary isolated server was stopped
+after the check.
