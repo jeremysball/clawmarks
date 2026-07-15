@@ -585,13 +585,11 @@ def _sibling_leg_exclusion_embeddings(expedition, leg, model):
     return embed_images(paths, model=model)
 
 
-def score_cockpit_batch(results, trial):
+def score_cockpit_batch(results, trial, expedition, leg):
     from clawmarks.search.driver import score_batch
 
     model, real_embs, real_centroid = _cockpit_scoring_context()
-    prev_embs = _sibling_leg_exclusion_embeddings(
-        _active_selection["expedition"], _active_selection["leg"], model,
-    )
+    prev_embs = _sibling_leg_exclusion_embeddings(expedition, leg, model)
     scored = score_batch(model, real_embs, real_centroid, results, prev_embs=prev_embs)
     for m in scored:
         m["prompt_type"] = "cockpit"
@@ -602,30 +600,30 @@ def score_cockpit_batch(results, trial):
     return scored
 
 
-def _load_scored_manifest():
-    path = _active_out_dir() / "scored_manifest.json"
+def _load_scored_manifest(out_dir):
+    path = out_dir / "scored_manifest.json"
     if os.path.exists(path):
         with open(path) as f:
             return json.load(f)
     return []
 
 
-def _save_scored_manifest(manifest):
-    path = _active_out_dir() / "scored_manifest.json"
+def _save_scored_manifest(out_dir, manifest):
+    path = out_dir / "scored_manifest.json"
     tmp = f"{path}.tmp"
     with open(tmp, "w") as f:
         json.dump(manifest, f, indent=1)
     os.replace(tmp, path)
 
 
-def _run_cockpit_trial(trial_id, api_key):
+def _run_cockpit_trial(trial_id, api_key, out_dir, queue_file, expedition, leg):
     """Runs entirely in a background thread, spawned by _handle_cockpit_run after that request
     already returned a "running" response: submits every job, polls until each completes or the
     batch times out, scores and thumbnails the results, appends them to scored_manifest.json,
     and marks the trial completed or failed. Any exception here becomes the trial's stored
     error string rather than an unhandled thread crash, since nothing is left to catch it."""
     with _lock:
-        trials = load_store(_cockpit_queue_file())
+        trials = load_store(queue_file)
         trial = trials[trial_id]
 
     try:
@@ -653,7 +651,7 @@ def _run_cockpit_trial(trial_id, api_key):
                     images = res.get("output", {}).get("images", [])
                     if not images:
                         raise RuntimeError(f"job {tag} completed with no image output")
-                    fname = str(_active_out_dir() / f"{tag}.png")
+                    fname = str(out_dir / f"{tag}.png")
                     with open(fname, "wb") as f:
                         f.write(base64.b64decode(images[0]["data"]))
                     job["file"] = fname
@@ -666,25 +664,25 @@ def _run_cockpit_trial(trial_id, api_key):
         if pending:
             raise RuntimeError(f"{len(pending)} job(s) timed out after {GENERATION_TIMEOUT_S}s")
 
-        scored = score_cockpit_batch(results, trial)
+        scored = score_cockpit_batch(results, trial, expedition, leg)
         for m in scored:
-            generate_thumbnail(m["file"], _active_out_dir() / "thumbs" / f"{m['tag']}.jpg")
+            generate_thumbnail(m["file"], out_dir / "thumbs" / f"{m['tag']}.jpg")
 
         with _lock:
-            manifest = _load_scored_manifest()
+            manifest = _load_scored_manifest(out_dir)
             manifest.extend(scored)
-            _save_scored_manifest(manifest)
+            _save_scored_manifest(out_dir, manifest)
 
-            trials = load_store(_cockpit_queue_file())
+            trials = load_store(queue_file)
             trials[trial_id]["status"] = "completed"
             trials[trial_id]["result_tags"] = [m["tag"] for m in scored]
-            save_store(_cockpit_queue_file(), trials)
+            save_store(queue_file, trials)
     except Exception as e:
         with _lock:
-            trials = load_store(_cockpit_queue_file())
+            trials = load_store(queue_file)
             trials[trial_id]["status"] = "failed"
             trials[trial_id]["error"] = str(e)
-            save_store(_cockpit_queue_file(), trials)
+            save_store(queue_file, trials)
 
 
 def build_autopilot_context(coverage_data, manifest, favorites, comparisons, n_cells=3):
@@ -1208,6 +1206,9 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/cockpit.html":
+            if (_active_selection["expedition"] is not None
+                    and _active_selection["leg"] != "cockpit"):
+                _set_active_selection(_active_selection["expedition"], "cockpit")
             body = cockpit.render_html(
                 expeditions=[e["name"] for e in _list_expeditions()],
                 current_expedition=_active_selection["expedition"],
@@ -1492,8 +1493,13 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self._json_response(400, {"error": "RUNPOD_API_KEY not set in server environment"})
             return
 
+        expedition = _active_selection["expedition"]
+        leg = _active_selection["leg"]
+        out_dir = config.leg_dir(expedition, leg)
+        queue_file = out_dir / "cockpit_queue.json"
+
         with _lock:
-            trials = load_store(_cockpit_queue_file())
+            trials = load_store(queue_file)
             trial = trials.get(trial_id)
             if trial is None:
                 self._json_response(404, {"error": f"no such trial {trial_id!r}"})
@@ -1504,14 +1510,14 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             prev_status = trial["status"]
             trial["status"] = "running"
             trial["error"] = None
-            save_store(_cockpit_queue_file(), trials)
+            save_store(queue_file, trials)
 
         def _revert(error):
             with _lock:
-                trials = load_store(_cockpit_queue_file())
+                trials = load_store(queue_file)
                 trials[trial_id]["status"] = prev_status
                 trials[trial_id]["error"] = error
-                save_store(_cockpit_queue_file(), trials)
+                save_store(queue_file, trials)
 
         try:
             balance = runpod_balance(api_key)
@@ -1531,7 +1537,11 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
 
         self._json_response(200, {"ok": True, "status": "running"})
 
-        threading.Thread(target=_run_cockpit_trial, args=(trial_id, api_key), daemon=True).start()
+        threading.Thread(
+            target=_run_cockpit_trial,
+            args=(trial_id, api_key, out_dir, queue_file, expedition, leg),
+            daemon=True,
+        ).start()
 
     def _handle_counterfactual(self, payload):
         api_key = os.environ.get("RUNPOD_API_KEY")
