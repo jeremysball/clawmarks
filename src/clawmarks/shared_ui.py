@@ -660,34 +660,38 @@ _LIGHTBOX_JS = r"""(function(){
   window.Lightbox = { open };
 
   // Thumbnail grids mark their <img> tags with data-tag="<tag>" (no other wiring needed).
-  // As each thumbnail scrolls into view, fire an async request for its full-size image too,
-  // so by the time a visible thumbnail gets tapped the lightbox already has it cached and
-  // opens instantly instead of showing its own loading spinner. Gated on visibility (not
-  // "every thumbnail on the page") since a filtered grid can hold thousands of entries and
-  // downloading all of their full-size files up front would be wasteful. Unlike a one-shot
-  // "load once visible" observer, this one keeps watching every thumbnail for as long as it
-  // stays in the DOM: scrolling a still-loading image off-screen aborts its prefetch so the
-  // bandwidth goes to whatever's actually on screen, and scrolling back re-starts it.
+  // On hover or keyboard focus, fire an async request for that thumbnail's full-size image
+  // too, so by the time it gets tapped the lightbox already has it cached and opens instantly
+  // instead of showing its own loading spinner. Gated on hover/focus intent, not raw viewport
+  // proximity: the previous IntersectionObserver-based version eagerly prefetched every
+  // thumbnail within 150px of the viewport, which on a dense grid meant dozens of concurrent
+  // 1-2.5MB full-res fetches from scrolling alone (gallery-archive-scale problem 3). A short
+  // hover delay (150ms) avoids firing on a fast mouse pass-through; moving off or blurring
+  // aborts an in-flight prefetch so bandwidth isn't wasted on images the user scrolled past.
   function wireThumbPrefetch(){
-    if (!('IntersectionObserver' in window)) return;
     const observed = new WeakSet();
-    const io = new IntersectionObserver(entries => {
-      entries.forEach(en => {
-        const tag = en.target.dataset.tag;
-        if (!tag) return;
-        if (en.isIntersecting) {
-          loadData().then(() => prefetchImage(byTag[tag])).catch(() => {});
-        } else {
-          abortPrefetch(tag);
-        }
+    const hoverTimers = new Map();
+    function start(tag){
+      loadData().then(() => prefetchImage(byTag[tag])).catch(() => {});
+    }
+    function wireOne(img){
+      if (observed.has(img)) return;
+      observed.add(img);
+      const tag = img.dataset.tag;
+      if (!tag) return;
+      img.addEventListener('mouseenter', () => {
+        clearTimeout(hoverTimers.get(tag));
+        hoverTimers.set(tag, setTimeout(() => start(tag), 150));
       });
-    }, {rootMargin: '150px'});
+      img.addEventListener('mouseleave', () => {
+        clearTimeout(hoverTimers.get(tag));
+        abortPrefetch(tag);
+      });
+      img.addEventListener('focus', () => start(tag));
+      img.addEventListener('blur', () => abortPrefetch(tag));
+    }
     function scan(){
-      document.querySelectorAll('img[data-tag]').forEach(img => {
-        if (observed.has(img)) return;
-        observed.add(img);
-        io.observe(img);
-      });
+      document.querySelectorAll('img[data-tag]').forEach(wireOne);
     }
     scan();
     // Grids re-render on filter changes / pagination / modal opens, so keep watching for
