@@ -26,6 +26,8 @@ def test_render_html_embeds_data_and_infobtn_tips():
     html = scan_gallery.render_html(items)
     assert '"tag": "a"' in html
     assert "infobtn" in html
+    assert 'id="topnav"' in html
+    assert 'More tools' not in html
 
 
 def test_render_html_escapes_close_script_in_model_generated_prompt_text():

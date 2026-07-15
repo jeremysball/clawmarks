@@ -91,6 +91,7 @@ a.navlink {{ color:#7c9eff; font-size:12.5px; text-decoration:none; }}
 </style></head><body>
 {nav_bar_html('lineage.html')}
 <h1>Lineage tree</h1>
+<p><a class="navlink" href="cockpit.html">Continue this lineage in cockpit</a></p>
 {tree_html}
 <script>
 document.querySelectorAll('.node[data-tag]').forEach(el => {{

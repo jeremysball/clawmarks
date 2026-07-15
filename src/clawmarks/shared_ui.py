@@ -11,7 +11,9 @@ with `<script src="lightbox.js"></script>` and opens images via `Lightbox.open(t
 `window.open('scan.html?open=...')`: no new tab, no page load, works from any page because the
 module fetches scan_data.json itself.
 """
+import html
 import json
+import urllib.parse
 
 
 def json_script(data):
@@ -24,32 +26,42 @@ def json_script(data):
     return json.dumps(data).replace("<", "\\u003c")
 
 
-NAV_OPTIONS = [
-    ("explore.html", "all tools (hub)"),
-    ("cockpit.html", "generation cockpit"),
-    ("runs.html", "search runs"),
-    ("compare.html", "compare images (head-to-head)"),
-    ("scan.html", "scan gallery"),
-    ("map.html", "solution map (UMAP)"),
-    ("coverage.html", "coverage / void map"),
-    ("archive.html", "elite archive"),
-    ("preference_rank.html", "predicted preference"),
-    ("preference_status.html", "preference status"),
-    ("redundancy.html", "redundancy clusters"),
-    ("novelty_decay.html", "novelty decay watchlist"),
-    ("lineage.html", "lineage tree"),
-    ("seeds.html", "candidate seeds"),
+NAV_GROUPS = [
+    ("Generate", [("cockpit.html", "generation cockpit"), ("runs.html", "search runs"),
+                  ("seeds.html", "candidate seeds")]),
+    ("Curate", [("compare.html", "compare images (head-to-head)"),
+                ("scan.html", "scan gallery"), ("archive.html", "elite archive")]),
+    ("Understand search", [("map.html", "solution map (UMAP)"),
+                           ("coverage.html", "coverage / void map"),
+                           ("redundancy.html", "redundancy clusters"),
+                           ("novelty_decay.html", "novelty decay watchlist"),
+                           ("lineage.html", "lineage tree")]),
+    ("Preference model", [("preference_status.html", "preference status"),
+                          ("preference_rank.html", "predicted preference")]),
+]
+NAV_OPTIONS = [("explore.html", "all tools (hub)")] + [
+    option for _group, options in NAV_GROUPS for option in options
 ]
 
 
-def nav_bar_html(current):
-    opts = "".join(
-        f'<option value="{href}"{" selected" if href == current else ""}>{label}</option>'
-        for href, label in NAV_OPTIONS
+def nav_bar_html(current, active_expedition=None, active_leg=None):
+    opts = '<option value="explore.html">all tools (hub)</option>' + "".join(
+        f'<optgroup label="{group}">' + "".join(
+            f'<option value="{href}"{" selected" if href == current else ""}>{label}</option>'
+            for href, label in options
+        ) + '</optgroup>'
+        for group, options in NAV_GROUPS
     )
+    active = ""
+    if active_expedition and active_leg:
+        label = html.escape(f"{active_expedition}/{active_leg}")
+        expedition = urllib.parse.quote(str(active_expedition), safe="")
+        leg = urllib.parse.quote(str(active_leg), safe="")
+        active = f'<a class="nav-activeleg" href="/?expedition={expedition}&amp;leg={leg}">{label}</a>'
     return (
         '<div id="topnav" class="topnav" data-autohide>'
         '<a class="navlink" href="explore.html">&larr; all tools</a>'
+        f'{active}'
         '<select onchange="if(this.value) location.href=this.value;">'
         f'<option value="">jump to...</option>{opts}</select></div>'
     )
@@ -61,7 +73,9 @@ TOPNAV_CSS = """
   transition: transform .18s ease; }
 .topnav.navhidden { transform: translateY(-100%); }
 .topnav select { background:var(--panel-2,#1d1d22); color:var(--text,#eaeaee); border:1px solid var(--border,#2a2a30);
-  border-radius:6px; padding:5px 9px; font-size:12.5px; max-width:220px; }
+   border-radius:6px; padding:5px 9px; font-size:12.5px; max-width:220px; }
+.topnav .nav-activeleg { color:var(--text-dim,#9a9aa4); font:12px monospace; text-decoration:none;
+  padding:2px 8px; background:rgba(154,154,164,0.12); border-radius:5px; white-space:nowrap; }
 @media (max-width: 640px) {
   .topnav { padding:8px 10px; gap:8px; font-size:12px; }
   .topnav select { flex:1; min-width:0; max-width:none; }

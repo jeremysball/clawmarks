@@ -10,6 +10,7 @@ def test_compute_data_reads_manifest(tmp_path):
     assert data is not None
     html = coverage_map.render_html(data)
     assert "<html>" in html.lower() or "<!doctype" in html.lower()
+    assert "Target this gap in cockpit" in html
 
 
 def _cell(fb, nb, count, frontier=False, items=None):

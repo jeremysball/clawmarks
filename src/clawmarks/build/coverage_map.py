@@ -200,6 +200,7 @@ p.sub {{ color:var(--text-dim); max-width:760px; font-size:13px; line-height:1.6
 #panel .viewall {{ display:none; margin-top:10px; background:var(--panel); color:var(--text);
   border:1px solid var(--border); border-radius:7px; padding:7px 14px; font-size:12.5px; cursor:pointer; }}
 #panel .viewall:hover {{ border-color:#4a4a54; }}
+#panel .cockpit-link {{ display:none; margin-top:8px; color:var(--accent,#7c9eff); font-size:12.5px; }}
 a.navlink {{ color:#7c9eff; font-size:12.5px; text-decoration:none; }}
 
 #modal {{ position:fixed; inset:0; background:rgba(8,8,10,0.94); backdrop-filter:blur(6px);
@@ -239,6 +240,7 @@ all. Click a cell to preview its top image, or "view all" to see every image in 
     <img id="panelImg">
     <div class="info" id="panelInfo">Click a cell to see its highest-novelty image.</div>
     <button class="viewall" id="viewAllBtn">view all images in this cell</button>
+    <a class="cockpit-link" id="cockpitLink" href="cockpit.html">Target this gap in cockpit</a>
   </div>
 </div>
 <div id="legend"></div>
@@ -308,6 +310,7 @@ function showCell(c) {{
     + `<b>count</b> ${{c.count}}${{c.frontier ? ' &mdash; frontier cell' : ''}}<br>`
     + (c.best_tag ? `<b>top image</b> ${{escHtml(c.best_tag)}}` : 'no images in this cell yet');
   viewAllBtn.style.display = c.count > 0 ? 'block' : 'none';
+  document.getElementById('cockpitLink').style.display = c.frontier ? 'inline-block' : 'none';
 }}
 
 document.getElementById('viewAllBtn').addEventListener('click', () => {{
