@@ -18,6 +18,21 @@ def test_check_manifest_images_is_a_noop_with_no_active_leg(monkeypatch, tmp_pat
     cs._check_manifest_images()  # should not raise, print a warning, or sys.exit
 
 
+def test_missing_manifest_warning_names_the_leg_and_next_steps(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(config, "EXPEDITIONS_DIR", tmp_path / "expeditions")
+    monkeypatch.setattr(config, "STATE_DIR", tmp_path / "state")
+    cs._active_selection["expedition"] = "uncanny_frontier"
+    cs._active_selection["leg"] = "cockpit"
+
+    cs._check_manifest_images()
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "uncanny_frontier/cockpit" in captured.err
+    assert "select a different expedition/leg" in captured.err.lower()
+    assert "launch a round" in captured.err.lower()
+
+
 def test_reconcile_stuck_trials_is_a_noop_with_no_active_leg(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "EXPEDITIONS_DIR", tmp_path / "expeditions")
     monkeypatch.setattr(config, "STATE_DIR", tmp_path / "state")

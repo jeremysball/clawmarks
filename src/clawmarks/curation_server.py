@@ -911,14 +911,23 @@ class Handler(SimpleHTTPRequestHandler):
         message = f"{type(exc).__name__}: {exc}"
         hint = ""
         if isinstance(exc, FileNotFoundError):
-            hint = (
-                "<p>This usually means <code>scored_manifest.json</code> still points at an "
-                "old absolute path (e.g. after the project directory was renamed or moved) and "
-                "the image no longer lives there. Re-pointing or regenerating the manifest's "
-                "<code>file</code> paths should fix it.</p>"
-            )
+            missing_path = exc.filename or ""
+            if missing_path.endswith("scored_manifest.json"):
+                hint = (
+                    "<p>The active leg has no scored manifest yet. "
+                    '<a href="/">Pick a leg that has completed a search round</a>, or '
+                    '<a href="/runs.html">launch a new round for this leg</a>.</p>'
+                )
+            else:
+                hint = (
+                    "<p>This usually means <code>scored_manifest.json</code> still points at an "
+                    "old absolute path (e.g. after the project directory was renamed or moved) and "
+                    "the image no longer lives there. Re-pointing or regenerating the manifest's "
+                    "<code>file</code> paths should fix it.</p>"
+                )
         body = f"""<div style="font-family:sans-serif;max-width:48rem;margin:2rem auto;line-height:1.5">
 <h1 style="color:#b91c1c">Something went wrong</h1>
+<p>Route: <code>{html.escape(self.path)}</code></p>
 <p><strong>{html.escape(message)}</strong></p>
 {hint}
 <details>
@@ -935,6 +944,30 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
         except Exception:
             pass  # client already gone; nothing left to send
+
+    def _send_404_page(self, path):
+        body = f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nothing here</title>
+<style>body{{background:#0b0b0d;color:#eaeaee;font-family:-apple-system,sans-serif;
+max-width:48rem;margin:2rem auto;padding:0 24px;line-height:1.5}}p{{color:#9a9aa4}}
+a{{color:#7c9eff}}code{{color:#eaeaee}}</style></head><body>
+<h1>Nothing here</h1>
+<p>Route: <code>{html.escape(path)}</code></p>
+<p>Check the address, or return to the tools to choose another page.</p>
+<p><a href="/explore.html">&larr; all tools</a></p>
+</body></html>""".encode()
+        self.send_response(404)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_error(self, code, message=None, explain=None):
+        if code == 404:
+            self._send_404_page(self.path)
+            return
+        super().send_error(code, message, explain)
 
     def _send_status_page(self):
         selection = _active_selection
@@ -1949,7 +1982,14 @@ def _check_manifest_images():
         return  # nothing selected yet; the empty-state hub handles this case
     manifest_path = active_dir / "scored_manifest.json"
     if not manifest_path.exists():
-        print(f"warning: no scored_manifest.json at {manifest_path}, skipping image check", flush=True)
+        selection = _active_selection
+        print(
+            f"warning: {selection['expedition']}/{selection['leg']} has no scored manifest at "
+            f"{manifest_path}. Select a different expedition/leg with completed data, or launch "
+            "a round for this leg from /runs.html.",
+            file=sys.stderr,
+            flush=True,
+        )
         return
     with open(manifest_path) as f:
         manifest = json.load(f)

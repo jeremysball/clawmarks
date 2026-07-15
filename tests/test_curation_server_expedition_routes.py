@@ -1,5 +1,6 @@
 import json
 import threading
+import urllib.error
 import urllib.request
 from http.server import HTTPServer
 
@@ -84,6 +85,19 @@ def test_status_page_shows_selected_leg_with_no_data(running_server_with_leg):
     assert b"uncanny_frontier" in body
     assert b"cockpit" in body
     assert b"no scored" in body.lower() or b"no search data" in body.lower()
+
+
+def test_error_page_missing_manifest_points_to_leg_selection(running_server_with_leg):
+    port = running_server_with_leg.server_address[1]
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/scan.html")
+
+    body = exc_info.value.read().decode()
+    assert "The active leg has no scored manifest yet." in body
+    assert "Pick a leg that has completed a search round" in body
+    assert "Re-pointing or regenerating the manifest" not in body
+    assert "Route: <code>/scan.html</code>" in body
 
 
 @pytest.fixture

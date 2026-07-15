@@ -76,6 +76,10 @@ def test_real_thumb_404s_for_missing_real_image(running_server):
     with pytest.raises(urllib.error.HTTPError) as exc_info:
         urllib.request.urlopen(f"http://127.0.0.1:{port}/real_thumbs/does_not_exist.jpg")
     assert exc_info.value.code == 404
+    body = exc_info.value.read().decode()
+    assert "Nothing here" in body
+    assert "background:#0b0b0d" in body
+    assert "<code>/real_thumbs/does_not_exist.jpg</code>" in body
 
 
 def test_real_thumb_route_serves_only_basenames_from_real_dir(running_server):
