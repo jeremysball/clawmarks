@@ -170,6 +170,9 @@ launchBtn.addEventListener('click', () => {{
     launchError.textContent = 'pick an expedition and leg first';
     return;
   }}
+  const msg = `Launch a search round for ${{expeditionSel.value}}/${{legSel.value}}?\n\n` +
+    `This backs up and file-count-verifies the leg's out_dir first, then starts search.driver.`;
+  if (!confirm(msg)) return;
   launchBtn.disabled = true;
   launchBtn.textContent = 'Backing up and launching...';
   fetch('/api/searchrun/launch', {{
@@ -188,6 +191,11 @@ launchBtn.addEventListener('click', () => {{
 }});
 
 stopBtn.addEventListener('click', () => {{
+  const msg = statusLine.textContent.startsWith('Running')
+    ? `Stop this search run?\n\n${{statusLine.textContent}}\n\nAlready-written files are preserved; ` +
+      `the driver process is sent SIGTERM, then SIGKILL if it doesn't exit.`
+    : 'Stop the running search?';
+  if (!confirm(msg)) return;
   stopBtn.disabled = true;
   fetch('/api/searchrun/stop', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: '{{}}'}})
     .then(() => refreshStatus());
