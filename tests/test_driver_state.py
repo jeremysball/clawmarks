@@ -56,6 +56,26 @@ def test_load_leg_config_empty_leg_file_inherits_everything(tmp_path, monkeypatc
     assert cfg.seed_from_start is True
 
 
+def test_load_leg_config_ignores_expedition_metadata_fields(tmp_path, monkeypatch):
+    from clawmarks import config
+
+    expeditions_dir = tmp_path / "expeditions"
+    (expeditions_dir / "demo" / "legs").mkdir(parents=True)
+    (expeditions_dir / "demo" / "expedition.json").write_text(json.dumps({
+        "trigger_word": "trentbuckle style, ",
+        "negative_prompt": "low quality, blurry, watermark",
+        "wall_clock_cap_hours": 1.0, "budget_usd_cap": 1.0, "budget_safety_margin": 0.1,
+        "gen_batch_size": 20, "explore_fraction": 0.5, "max_generations": 60,
+        "textures": [], "fallback_subjects": [], "seed_from_start": False,
+    }))
+    monkeypatch.setattr(config, "EXPEDITIONS_DIR", expeditions_dir)
+    monkeypatch.setattr(config, "STATE_DIR", tmp_path / "state")
+
+    cfg = driver.load_leg_config("demo", "leg1")
+
+    assert cfg.explore_fraction == 0.5
+
+
 def test_load_leg_config_missing_expedition_is_a_clear_error(tmp_path, monkeypatch):
     from clawmarks.search import driver
     from clawmarks import config

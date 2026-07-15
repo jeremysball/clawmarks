@@ -87,7 +87,7 @@ def load_leg_config(expedition, leg):
         merged.update(leg_overrides)
 
     fields = copy.deepcopy(_LEG_CONFIG_DEFAULTS)
-    fields.update(merged)
+    fields.update({key: value for key, value in merged.items() if key in fields})
     return LegConfig(
         expedition=expedition, leg=leg, dir=clawmarks_config.leg_dir(expedition, leg), **fields
     )
