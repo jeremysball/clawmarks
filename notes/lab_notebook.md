@@ -2276,3 +2276,31 @@ definitions in `curation_server.py` (git merged them without flagging a conflict
 didn't textually overlap); kept the expedition/leg-aware one, deleted the `SWEEP_DIR`-based
 duplicate it shadowed. `rg -n "SWEEP_DIR|SWEEP2_DIR|ROUND_CONFIGS|RoundConfig" src/ tests/`
 confirms nothing remains.
+
+### 2026-07-15 (session 13): Phase 8 navigation and review-workflow improvements
+
+Grouped the shared tool menu and the tools hub into Generate, Curate, Understand search, and
+Preference model. The scan page now uses that shared navigation contract. Added next-step links
+between high-traffic pages: compare links to model status and ranking, the status page links back
+to comparison and forward to ranking, completed runs link to scan, coverage, and novelty review,
+coverage links frontier gaps to the cockpit, and lineage links back to the cockpit.
+
+The comparison task now works with keyboard and screen-reader controls. Each image pane and its
+magnifier receives focus, Enter and Space activate it, Escape closes the full-size view and
+returns focus, and faithfulness and novelty stay hidden until after a choice. This prevents the
+numeric scores from anchoring a judgment before the researcher has looked at the images.
+
+The predicted-preference page now provides a bounded review mode with the top 20, middle 10, and
+bottom 10 ranked images. Every cell shows its rank. Researchers can mark an image as matching
+their taste or questionable; the server stores those flags separately in
+`preference_rank_flags.json`, so they do not become training comparisons. The no-model state now
+uses the normal navigation shell. The preference-status controls wrap on narrow screens instead
+of clipping.
+
+Playwright smoke testing on an empty, newly selected leg found that the live ranking page raised
+an internal-server error before its first manifest existed. `LiveCache` now records a missing
+watched file as absent rather than failing, and the ranking cache watches the model and metadata
+paths before they exist. The page can therefore render its no-model state immediately and refresh
+after the manifest or model is created. Focused tests passed (40 tests); the Playwright desktop
+and mobile checks showed the tools hub, shared navigation, no-model page, and root Tools link
+without console errors.

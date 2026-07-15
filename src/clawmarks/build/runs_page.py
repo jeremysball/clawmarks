@@ -86,6 +86,7 @@ already running.</p>
     <svg id="spark" viewBox="0 0 100 40" preserveAspectRatio="none"></svg>
   </div>
   <div id="categoryBreakdown" style="margin-top:10px;"></div>
+  <p id="completedLinks" class="idle" style="display:none;"><a href="scan.html">Scan images</a> · <a href="coverage.html">Check coverage</a> · <a href="novelty_decay.html">Review novelty decay</a></p>
 </div>
 
 <script>
@@ -145,6 +146,7 @@ function refreshReport() {{
       `<div class="catrow"><span>${{escHtml(cat)}}</span><span>${{escHtml(d.explore_exploit_split[cat])}} images, ` +
       `${{escHtml((d.pick_rate_by_category[cat] * 100).toFixed(0))}}% picked</span></div>`
     ).join('') : '<span style="color:var(--text-dim);font-size:12.5px;">No images scored for this leg yet.</span>';
+    document.getElementById('completedLinks').style.display = d.total_images ? 'block' : 'none';
   }});
 }}
 

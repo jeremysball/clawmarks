@@ -133,7 +133,7 @@ table.meta {{ font-size:13px; border-collapse:collapse; }}
 table.meta td {{ padding:3px 10px 3px 0; color:var(--text-dim); }}
 table.meta td:first-child {{ color:var(--text); }}
 .interpretation {{ color:var(--text-dim); margin-left:6px; }}
-.toggle-row {{ margin-top:14px; display:flex; align-items:center; gap:8px; }}
+.toggle-row {{ margin-top:14px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; }}
 .secondary {{ background:#24242a; color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; cursor:pointer; }}
 #toggle-status, #retrain-status {{ font-size:12px; color:var(--text-dim); margin-left:8px; }}
 {INFOTIP_CSS}
@@ -142,6 +142,7 @@ table.meta td:first-child {{ color:var(--text); }}
 {nav_bar_html('preference_status.html')}
 <h1>Preference classifier status</h1>
 <p class="sub">Comparisons: {data["n_usable"]} usable of {data["n_comparisons"]} total (needs {data["min_comparisons"]}).</p>
+<p class="sub"><a href="compare.html">Compare more images</a> or <a href="preference_rank.html">review the ranking</a>.</p>
 <div class="panel">
 {gate_html}
 {staleness_html}

@@ -17,7 +17,7 @@ import json
 import os
 import re
 
-from clawmarks.shared_ui import MOBILE_BASE_CSS, INFOTIP_CSS, info_btn, json_script
+from clawmarks.shared_ui import MOBILE_BASE_CSS, INFOTIP_CSS, TOPNAV_CSS, info_btn, json_script, nav_bar_html
 
 
 def generation_of(tag):
@@ -121,6 +121,7 @@ body {{
   -webkit-font-smoothing: antialiased;
 }}
 {MOBILE_BASE_CSS}
+{TOPNAV_CSS}
 #bar {{
   position:sticky; top:0; z-index:10; background: rgba(22,22,26,0.92); backdrop-filter: blur(10px);
   border-bottom:1px solid var(--border); padding:12px 20px; display:flex; gap:18px;
@@ -183,19 +184,9 @@ body {{
 {INFOTIP_CSS}
 </style></head><body>
 
-<div id="bar" data-autohide>
-  <h1>CLAWMARKS <span>uncanny scan</span></h1>
-  <label>More tools <select id="toolNav" onchange="if(this.value) location.href=this.value;">
-    <option value="">jump to...</option>
-    <option value="explore.html">all tools (hub)</option>
-    <option value="map.html">solution map (UMAP)</option>
-    <option value="coverage.html">coverage / void map</option>
-    <option value="archive.html">elite archive</option>
-    <option value="redundancy.html">redundancy clusters</option>
-    <option value="novelty_decay.html">novelty decay watchlist</option>
-    <option value="lineage.html">lineage tree</option>
-    <option value="seeds.html">candidate seeds</option>
-  </select></label>
+{nav_bar_html('scan.html')}
+<div id="bar">
+   <h1>CLAWMARKS <span>uncanny scan</span></h1>
   <label>Sort{novelty_tip} <select id="sortKey">
     <option value="novelty_desc">Novelty (high to low)</option>
     <option value="faith_desc">Faithfulness (high to low)</option>

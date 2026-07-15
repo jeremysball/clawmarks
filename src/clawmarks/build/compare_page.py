@@ -46,6 +46,7 @@ p.sub {{ color:var(--text-dim); max-width:640px; font-size:13px; line-height:1.6
 .pane {{ position:relative; flex:1 1 420px; max-width:520px; cursor:pointer; border-radius:10px;
   border:2px solid transparent; transition:border-color .12s ease; }}
 .pane:hover {{ border-color:var(--pick); }}
+.pane:focus-visible, .zoom-icon:focus-visible {{ outline:3px solid #f5c542; outline-offset:3px; }}
 .pane img {{ display:block; width:100%; max-height:70vh; object-fit:contain; border-radius:8px;
   background:var(--panel); user-select:none; -webkit-user-drag:none; }}
 .zoom-icon {{ position:absolute; top:8px; right:8px; width:30px; height:30px; border-radius:50%;
@@ -89,6 +90,7 @@ table.work-table td:first-child {{ color:var(--text); }}
 <h1>Compare{compare_tip}</h1>
 <p class="sub">Tap or click the image you prefer (or press &larr;/&rarr;). Tap the magnifier in
 a corner to inspect that image at full resolution; tap again to close.</p>
+<p class="sub"><a href="preference_status.html">View preference status</a> or <a href="preference_rank.html">review the model's ranking</a>.</p>
 
 <div id="progress">
   <div id="prog-label"><span id="prog-label-text">&nbsp;</span>{accuracy_tip}</div>
@@ -102,14 +104,14 @@ a corner to inspect that image at full resolution; tap again to close.</p>
 
 <div id="stage">
   <div id="pair">
-    <div class="pane" id="pane1" data-side="1">
+    <div class="pane" id="pane1" data-side="1" role="button" tabindex="0" aria-label="Choose image A">
       <img id="img1" style="display:none;">
-      <div class="zoom-icon" id="zoom1">&#128269;</div>
+      <div class="zoom-icon" id="zoom1" role="button" tabindex="0" aria-label="Inspect image A at full resolution">&#128269;</div>
       <div class="cap" id="cap1"></div>
     </div>
-    <div class="pane" id="pane2" data-side="2">
+    <div class="pane" id="pane2" data-side="2" role="button" tabindex="0" aria-label="Choose image B">
       <img id="img2" style="display:none;">
-      <div class="zoom-icon" id="zoom2">&#128269;</div>
+      <div class="zoom-icon" id="zoom2" role="button" tabindex="0" aria-label="Inspect image B at full resolution">&#128269;</div>
       <div class="cap" id="cap2"></div>
     </div>
   </div>
@@ -134,6 +136,11 @@ const RETRAIN_EVERY = 10;
 function caption(img) {{
   // textContent (set by the caller) keeps model-controlled prompt_name from being parsed as HTML.
   return `${{img.prompt_name}} · faith ${{img.faith}} · novelty ${{img.novelty}}`;
+}}
+
+function revealSamplingDetails() {{
+  document.getElementById('cap1').textContent = caption(current.img1);
+  document.getElementById('cap2').textContent = caption(current.img2);
 }}
 
 function bumpBar() {{
@@ -223,8 +230,8 @@ function loadNext() {{
     const img2 = document.getElementById('img2');
     img1.src = d.img1.file; img1.style.display = 'block';
     img2.src = d.img2.file; img2.style.display = 'block';
-    document.getElementById('cap1').textContent = caption(d.img1);
-    document.getElementById('cap2').textContent = caption(d.img2);
+    document.getElementById('cap1').textContent = 'Image A';
+    document.getElementById('cap2').textContent = 'Image B';
   }}).catch(() => {{
     document.getElementById('done').textContent =
       "Couldn't reach the server. Check your connection and try again.";
@@ -255,7 +262,8 @@ function choose(side) {{
         renderProgress();
         if (totalCount < MIN_COMPARISONS) bumpBar();
       }}
-      loadNext();
+      revealSamplingDetails();
+      setTimeout(loadNext, 1000);
     }}).catch(() => {{
       document.getElementById('done').textContent =
         "Couldn't reach the server. Check your connection and try again.";
@@ -265,15 +273,23 @@ function choose(side) {{
 
 document.getElementById('pane1').addEventListener('click', () => choose(1));
 document.getElementById('pane2').addEventListener('click', () => choose(2));
+document.querySelectorAll('.pane').forEach(pane => pane.addEventListener('keydown', e => {{
+  if (e.target !== pane || (e.key !== 'Enter' && e.key !== ' ')) return;
+  e.preventDefault();
+  choose(Number(pane.dataset.side));
+}}));
 
 document.addEventListener('keydown', e => {{
-  if (e.key === 'ArrowLeft') choose(1);
-  if (e.key === 'ArrowRight') choose(2);
+  if (e.key === 'Escape' && zoomOpen) {{ closeZoom(); return; }}
+  if (zoomOpen) return;
+  if (e.key === 'ArrowLeft') {{ e.preventDefault(); choose(1); }}
+  if (e.key === 'ArrowRight') {{ e.preventDefault(); choose(2); }}
 }});
 
 // --- zoom overlay: opens on a zoom-icon tap, closes on any tap, drag to pan while open ---
 
 let zoomOpen = false;
+let zoomControl = null;
 let panX = 0, panY = 0, dragging = false, dragMoved = false, dragStartX = 0, dragStartY = 0;
 
 function clampOffset(offset, wrapSize, imgSize) {{
@@ -292,15 +308,22 @@ function openZoom(side, e) {{
   zimg.style.transform = 'translate(0px, 0px)';
   overlay.classList.add('open');
   zoomOpen = true;
+  zoomControl = e.currentTarget;
 }}
 
 function closeZoom() {{
   document.getElementById('zoom-overlay').classList.remove('open');
   zoomOpen = false;
+  if (zoomControl) zoomControl.focus();
 }}
 
 document.getElementById('zoom1').addEventListener('click', e => openZoom(1, e));
 document.getElementById('zoom2').addEventListener('click', e => openZoom(2, e));
+document.querySelectorAll('.zoom-icon').forEach(icon => icon.addEventListener('keydown', e => {{
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  e.preventDefault();
+  openZoom(icon.id === 'zoom1' ? 1 : 2, e);
+}}));
 
 const overlayEl = document.getElementById('zoom-overlay');
 overlayEl.addEventListener('mousedown', e => {{

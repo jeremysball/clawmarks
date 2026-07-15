@@ -69,3 +69,16 @@ def test_render_html_captions_avoid_innerhtml_injection():
     # prompt_name is model-controlled; captions must be set via textContent, never innerHTML.
     assert "cap1').textContent" in html
     assert "cap2').textContent" in html
+
+
+def test_render_html_supports_keyboard_choice_and_metric_blinding():
+    html = compare_page.render_html()
+
+    assert 'role="button"' in html
+    assert 'tabindex="0"' in html
+    assert "function revealSamplingDetails(" in html
+    assert "Image A" in html
+    assert "Image B" in html
+    assert "e.key !== 'Enter'" in html
+    assert "e.key !== ' '" in html
+    assert "e.key === 'Escape'" in html

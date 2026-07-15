@@ -269,9 +269,7 @@ def _prediction_watched_files():
         preference_pairwise_model.model_file(out_dir),
         preference_pairwise_model.model_meta_file(out_dir),
     ) if out_dir else ()
-    for f in model_files:
-        if os.path.exists(f):
-            files.append(str(f))
+    files.extend(str(f) for f in model_files)
     return files
 
 
@@ -330,6 +328,10 @@ def _favorites_file():
 
 def _comparisons_file():
     return _require_out_dir() / "user_comparisons.json"
+
+
+def _preference_rank_flags_file():
+    return _require_out_dir() / "preference_rank_flags.json"
 
 
 def _counterfactuals_dir():
@@ -978,6 +980,7 @@ a {{ color:var(--accent); }}
 <h1>clawmarks curation server</h1>
 <p>sweep dir: <code>{html.escape(str(_active_out_dir() or 'none selected'))}</code></p>
 <p>{html.escape(manifest_summary)}</p>
+<p><a href="/explore.html">Tools</a> · <a href="/compare.html">Compare images</a> · <a href="/preference_rank.html">Review ranking</a></p>
 <p>{links}</p>
 </body></html>""".encode()
 
@@ -1015,6 +1018,7 @@ button:disabled {{ opacity:0.4; cursor:not-allowed; }}
 </style></head><body>
 <h1>clawmarks curation server</h1>
 <p>{html.escape(manifest_summary)}</p>
+<p><a href="/explore.html">Tools</a></p>
 <div class="panel">
 <p class="sub">No expedition/leg selected. Pick an existing leg below, or create a new
 expedition first if this is a genuinely new line of work.</p>
@@ -1069,6 +1073,10 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         if self.path == "/api/favorites":
             with _lock:
                 self._json_response(200, load_store(_favorites_file()))
+            return
+        if self.path == "/api/preference_rank/flags":
+            with _lock:
+                self._json_response(200, load_store(_preference_rank_flags_file()))
             return
         if self.path == "/api/counterfactuals":
             with _lock:
@@ -1404,6 +1412,19 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
                 return
             preference_settings.save(enabled, out_dir)
             self._json_response(200, _get_preference_status_data())
+            return
+
+        if self.path == "/api/preference_rank/flag":
+            tag = payload.get("tag")
+            flag = payload.get("flag")
+            if not tag or flag not in {"matches", "questionable"}:
+                self._json_response(400, {"error": "'tag' and a valid 'flag' are required"})
+                return
+            with _lock:
+                flags = load_store(_preference_rank_flags_file())
+                flags[tag] = {"flag": flag, "flagged_at": datetime.now(timezone.utc).isoformat()}
+                save_store(_preference_rank_flags_file(), flags)
+            self._json_response(200, {"ok": True, "tag": tag, "flag": flag})
             return
 
         if self.path == "/api/preference_retrain":

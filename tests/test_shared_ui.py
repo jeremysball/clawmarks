@@ -20,6 +20,18 @@ def test_nav_bar_html_marks_preference_status_selected_when_current():
     assert 'value="preference_status.html" selected' in html
 
 
+def test_nav_bar_groups_tools_and_links_active_context_to_home():
+    html = nav_bar_html(
+        "compare.html", active_expedition="demo", active_leg="round1"
+    )
+
+    assert '<optgroup label="Generate">' in html
+    assert '<optgroup label="Curate">' in html
+    assert '<optgroup label="Understand search">' in html
+    assert '<optgroup label="Preference model">' in html
+    assert 'href="/?expedition=demo&amp;leg=round1"' in html
+
+
 def test_json_script_escapes_close_script_sequence():
     """Regression test for issue #17: model-generated text embedded in a page's <script> tag via
     raw json.dumps() could contain a literal "</script>", closing the script block early and
