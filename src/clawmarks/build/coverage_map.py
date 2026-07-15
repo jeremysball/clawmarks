@@ -14,7 +14,16 @@ Run after scored_manifest.json exists: python3 -m clawmarks.build.coverage_map
 import json
 import os
 
-from clawmarks.shared_ui import nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, INFOTIP_CSS, info_btn, json_script
+from clawmarks.shared_ui import (
+    BTN_CSS,
+    DARK_TOKENS,
+    INFOTIP_CSS,
+    MOBILE_BASE_CSS,
+    TOPNAV_CSS,
+    info_btn,
+    json_script,
+    nav_bar_html,
+)
 
 N_BINS = 8
 
@@ -169,11 +178,12 @@ def render_html(data, active_expedition=None, active_leg=None, running=None):
 <title>CLAWMARKS coverage map</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
-  --text-dim:#9a9aa4; --frontier:#f5c542; }}
+{DARK_TOKENS}
+:root {{ --frontier:#f5c542; }}
 body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
 {TOPNAV_CSS}
 {MOBILE_BASE_CSS}
+{BTN_CSS}
 h1 {{ font-size:18px; margin:0 0 4px; }}
 p.sub {{ color:var(--text-dim); max-width:760px; font-size:13px; line-height:1.6; }}
 #wrap {{ display:flex; gap:24px; margin-top:20px; flex-wrap:wrap; }}

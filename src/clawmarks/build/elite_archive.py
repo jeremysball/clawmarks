@@ -22,7 +22,16 @@ from pathlib import Path
 
 from clawmarks.search import preference_pairwise_model
 from clawmarks.search.manifest_index import item_summary
-from clawmarks.shared_ui import nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, INFOTIP_CSS, info_btn, json_script
+from clawmarks.shared_ui import (
+    BTN_CSS,
+    DARK_TOKENS,
+    INFOTIP_CSS,
+    MOBILE_BASE_CSS,
+    TOPNAV_CSS,
+    info_btn,
+    json_script,
+    nav_bar_html,
+)
 
 N_BINS = 4  # matches gallery.html's display grid
 
@@ -139,11 +148,12 @@ def render_html(data, active_expedition=None, active_leg=None, running=None):
 <title>CLAWMARKS elite archive</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
-  --text-dim:#9a9aa4; --pick:#f5c542; --style:#5ec98a; --conflict:#e0a25e; --predicted:#7c9eff; }}
+{DARK_TOKENS}
+:root {{ --style:#5ec98a; --conflict:#e0a25e; --predicted:#7c9eff; }}
 body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
 {TOPNAV_CSS}
 {MOBILE_BASE_CSS}
+{BTN_CSS}
 h1 {{ font-size:18px; margin:0 0 4px; }}
 p.sub {{ color:var(--text-dim); max-width:760px; font-size:13px; line-height:1.6; }}
 a.navlink {{ color:#7c9eff; font-size:12.5px; text-decoration:none; }}
