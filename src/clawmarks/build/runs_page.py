@@ -15,7 +15,7 @@ render time; every dynamic piece is a live fetch against curation_server.py:
 
 Served live at /runs.html by curation_server.py.
 """
-from clawmarks.shared_ui import nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS
+from clawmarks.shared_ui import BTN_CSS, DARK_TOKENS, MOBILE_BASE_CSS, TOPNAV_CSS, nav_bar_html
 
 
 def render_html(active_expedition=None, active_leg=None, running=None):
@@ -23,11 +23,11 @@ def render_html(active_expedition=None, active_leg=None, running=None):
 <title>CLAWMARKS search runs</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
-  --text-dim:#9a9aa4; --up:#5ec98a; --down:#e0605e; --accent:#7c9eff; }}
+{DARK_TOKENS}
 body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
 {TOPNAV_CSS}
 {MOBILE_BASE_CSS}
+{BTN_CSS}
 h1 {{ font-size:18px; margin:0 0 4px; }}
 p.sub {{ color:var(--text-dim); max-width:760px; font-size:13px; line-height:1.6; }}
 a.navlink {{ color:var(--accent); font-size:12.5px; text-decoration:none; }}
@@ -37,7 +37,6 @@ a.navlink {{ color:var(--accent); font-size:12.5px; text-decoration:none; }}
 select, button {{ font-size:13px; padding:6px 12px; border-radius:6px; border:1px solid var(--border);
   background:#1f1f24; color:var(--text); }}
 button {{ cursor:pointer; }}
-button.primary {{ background:var(--accent); color:#0b0b0d; border-color:var(--accent); font-weight:600; }}
 button.danger {{ background:var(--down); color:#0b0b0d; border-color:var(--down); font-weight:600; }}
 button:disabled {{ opacity:0.4; cursor:not-allowed; }}
 #launchError {{ color:var(--down); font-size:12.5px; margin-top:8px; }}
@@ -67,7 +66,7 @@ already running.</p>
     <select id="expedition"></select>
     <label for="leg">Leg</label>
     <select id="leg"></select>
-    <button id="launchBtn" class="primary">Back up and launch</button>
+    <button id="launchBtn" class="btn btn--primary">Back up and launch</button>
     <button id="stopBtn" class="danger" disabled>Stop</button>
   </div>
   <div id="launchError"></div>

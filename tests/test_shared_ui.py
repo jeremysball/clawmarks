@@ -56,3 +56,9 @@ def test_nav_bar_omits_running_indicator_when_none():
     html = nav_bar_html("runs.html")
     assert "nav-running" not in html
     assert "RUNNING" not in html
+
+
+def test_dark_tokens_defines_pick_as_gold():
+    from clawmarks import shared_ui
+
+    assert "--pick:#f5c542" in shared_ui.DARK_TOKENS

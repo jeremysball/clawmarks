@@ -11,7 +11,16 @@ import json
 import re
 from collections import defaultdict
 
-from clawmarks.shared_ui import nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, INFOTIP_CSS, info_btn, json_script
+from clawmarks.shared_ui import (
+    BTN_CSS,
+    DARK_TOKENS,
+    INFOTIP_CSS,
+    MOBILE_BASE_CSS,
+    TOPNAV_CSS,
+    info_btn,
+    json_script,
+    nav_bar_html,
+)
 
 
 def compute_data(sweep_dir):
@@ -55,13 +64,14 @@ def render_html(data, active_expedition=None, active_leg=None, running=None):
 <title>CLAWMARKS novelty decay watchlist</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{ color-scheme: dark; }}
+{DARK_TOKENS}
 body {{ background:#0b0b0d; color:#eaeaee; font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
 h1 {{ font-size:18px; }}
 p {{ color:#9a9aa4; max-width:640px; font-size:13px; line-height:1.7; }}
 a.navlink {{ color:#7c9eff; font-size:12.5px; text-decoration:none; }}
 {TOPNAV_CSS}
 {MOBILE_BASE_CSS}
+{BTN_CSS}
 </style></head><body>
 {nav_bar_html('novelty_decay.html', active_expedition=active_expedition, active_leg=active_leg, running=running)}
 <h1>Novelty decay watchlist</h1>
@@ -86,11 +96,12 @@ sparkline per prompt family that has appeared more than once, sorted worst-trend
 <title>CLAWMARKS novelty decay watchlist</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
-  --text-dim:#9a9aa4; --up:#5ec98a; --down:#e0605e; --flat:#9a9aa4; }}
+{DARK_TOKENS}
+:root {{ --flat:#9a9aa4; }}
 body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
 {TOPNAV_CSS}
 {MOBILE_BASE_CSS}
+{BTN_CSS}
 h1 {{ font-size:18px; margin:0 0 4px; }}
 p.sub {{ color:var(--text-dim); max-width:760px; font-size:13px; line-height:1.6; }}
 a.navlink {{ color:#7c9eff; font-size:12.5px; text-decoration:none; }}

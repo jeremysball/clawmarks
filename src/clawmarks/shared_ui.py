@@ -42,6 +42,21 @@ NAV_OPTIONS = [
 ]
 
 
+DARK_TOKENS = """
+:root { color-scheme:dark; --bg:#0b0b0d; --panel:#16161a; --panel-2:#1d1d22; --border:#2a2a30;
+  --text:#eaeaee; --text-dim:#9a9aa4; --text-faint:#6a6a74; --accent:#7c9eff; --pick:#f5c542;
+  --up:#5ec98a; --down:#e0605e; }
+"""
+
+BTN_CSS = """
+.btn { font-size:13px; padding:6px 12px; border-radius:6px; border:1px solid var(--border);
+  background:var(--panel-2); color:var(--text); cursor:pointer; }
+.btn--primary { background:var(--accent); color:#0b0b0d; font-weight:600; border-color:var(--accent); }
+.btn--secondary { background:var(--panel-2); color:var(--text); border:1px solid var(--border); }
+.btn:disabled { opacity:0.4; cursor:not-allowed; }
+"""
+
+
 def nav_bar_html(current, active_expedition=None, active_leg=None, running=None):
     opts = "".join(
         f'<option value="{href}"{" selected" if href == current else ""}>{label}</option>'

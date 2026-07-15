@@ -109,7 +109,7 @@ from clawmarks.search.seed_pool import merge as seed_pool_merge
 from clawmarks.search import comparison_sampler, preference_settings, preference_pairwise_model
 from clawmarks.search import embed_cache
 from clawmarks.search.manifest_index import item_summary
-from clawmarks.shared_ui import _LIGHTBOX_JS, SCROLLNAV_JS, INFOTIP_JS
+from clawmarks.shared_ui import BTN_CSS, DARK_TOKENS, INFOTIP_JS, SCROLLNAV_JS, _LIGHTBOX_JS
 from clawmarks.live_cache import LiveCache
 from clawmarks.build import (
     scan_gallery, similarity_index, solution_map, map_view, redundancy_view, coverage_map,
@@ -968,13 +968,13 @@ class Handler(SimpleHTTPRequestHandler):
 <title>clawmarks curation server</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
-  --text-dim:#9a9aa4; --accent:#7c9eff; }}
+{DARK_TOKENS}
 body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
 h1 {{ font-size:18px; margin:0 0 4px; }}
 p {{ color:var(--text-dim); font-size:13px; line-height:1.6; }}
 code {{ color:var(--text); }}
 a {{ color:var(--accent); }}
+{BTN_CSS}
 </style></head><body>
 <h1>clawmarks curation server</h1>
 <p>sweep dir: <code>{html.escape(str(_active_out_dir() or 'none selected'))}</code></p>
@@ -998,7 +998,7 @@ fetch('/api/preference_status').then(r => r.json()).then(d => {{
         rows = "".join(
             f'<div class="exp-row"><strong>{html.escape(e["name"])}</strong> '
             + " ".join(
-                f'<button class="leg-btn" data-expedition="{html.escape(e["name"])}" '
+                f'<button class="btn btn--primary leg-btn" data-expedition="{html.escape(e["name"])}" '
                 f'data-leg="{html.escape(leg)}">{html.escape(leg)}</button>'
                 for leg in e["legs"]
             )
@@ -1009,8 +1009,7 @@ fetch('/api/preference_status').then(r => r.json()).then(d => {{
 <title>clawmarks curation server</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
-  --text-dim:#9a9aa4; --accent:#7c9eff; --down:#e0605e; }}
+{DARK_TOKENS}
 body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
 h1 {{ font-size:18px; margin:0 0 4px; }}
 p {{ color:var(--text-dim); font-size:13px; line-height:1.6; }}
@@ -1020,9 +1019,7 @@ a {{ color:var(--accent); }}
 .panel {{ background:var(--panel); border:1px solid var(--border); border-radius:8px;
   padding:16px; margin-top:16px; max-width:640px; }}
 .exp-row {{ margin:8px 0; }}
-button {{ font-size:13px; padding:6px 12px; border-radius:6px; border:1px solid var(--border);
-  background:var(--accent); color:#0b0b0d; font-weight:600; cursor:pointer; }}
-button:disabled {{ opacity:0.4; cursor:not-allowed; }}
+{BTN_CSS}
 #pickError {{ color:var(--down); font-size:12.5px; margin-top:8px; }}
 </style></head><body>
 <h1>clawmarks curation server</h1>
@@ -1055,7 +1052,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         rows = "".join(
             f'<div class="exp-row"><strong>{html.escape(e["name"])}</strong> '
             + " ".join(
-                f'<button class="leg-btn" data-expedition="{html.escape(e["name"])}" '
+                f'<button class="btn btn--primary leg-btn" data-expedition="{html.escape(e["name"])}" '
                 f'data-leg="{html.escape(leg)}">{html.escape(leg)}</button>'
                 for leg in e["legs"]
             )
@@ -1066,8 +1063,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
 <title>clawmarks curation server</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
-  --text-dim:#9a9aa4; --accent:#7c9eff; --down:#e0605e; }}
+{DARK_TOKENS}
 body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
 h1 {{ font-size:18px; margin:0 0 4px; }}
 p {{ color:var(--text-dim); font-size:13px; line-height:1.6; }}
@@ -1077,9 +1073,7 @@ a {{ color:var(--accent); }}
 .panel {{ background:var(--panel); border:1px solid var(--border); border-radius:8px;
   padding:16px; margin-top:16px; max-width:640px; }}
 .exp-row {{ margin:8px 0; }}
-button {{ font-size:13px; padding:6px 12px; border-radius:6px; border:1px solid var(--border);
-  background:var(--accent); color:#0b0b0d; font-weight:600; cursor:pointer; }}
-button:disabled {{ opacity:0.4; cursor:not-allowed; }}
+{BTN_CSS}
 #pickError {{ color:var(--down); font-size:12.5px; margin-top:8px; }}
 </style></head><body>
 <h1>clawmarks curation server</h1>

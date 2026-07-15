@@ -17,7 +17,7 @@ import json
 import os
 import re
 
-from clawmarks.shared_ui import MOBILE_BASE_CSS, INFOTIP_CSS, info_btn, json_script
+from clawmarks.shared_ui import BTN_CSS, DARK_TOKENS, INFOTIP_CSS, MOBILE_BASE_CSS, info_btn, json_script
 
 
 def generation_of(tag):
@@ -107,13 +107,8 @@ def render_html(items):
 <title>CLAWMARKS uncanny scan</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{
-  color-scheme: dark;
-  --bg: #0b0b0d; --panel: #16161a; --panel-2: #1d1d22; --border: #2a2a30;
-  --text: #eaeaee; --text-dim: #9a9aa4; --text-faint: #6a6a74;
-  --accent: #7c9eff; --style: #5ec98a; --conflict: #e0a25e; --pick: #f5c542;
-  --radius: 10px;
-}}
+{DARK_TOKENS}
+:root {{ --style: #5ec98a; --conflict: #e0a25e; --radius: 10px; }}
 * {{ box-sizing: border-box; }}
 body {{
   background: var(--bg); color: var(--text); margin:0; padding:0;
@@ -121,6 +116,7 @@ body {{
   -webkit-font-smoothing: antialiased;
 }}
 {MOBILE_BASE_CSS}
+{BTN_CSS}
 #bar {{
   position:sticky; top:0; z-index:10; background: rgba(22,22,26,0.92); backdrop-filter: blur(10px);
   border-bottom:1px solid var(--border); padding:12px 20px; display:flex; gap:18px;
