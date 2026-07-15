@@ -120,3 +120,8 @@ def test_render_html_captions_avoid_innerhtml_injection():
     # prompt_name is model-controlled; captions must be set via textContent, never innerHTML.
     assert "cap1').textContent" in html
     assert "cap2').textContent" in html
+
+
+def test_render_html_uses_accent_for_pane_hover():
+    html = compare_page.render_html()
+    assert ".pane:hover { border-color:var(--accent); }" in html
