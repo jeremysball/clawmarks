@@ -44,3 +44,16 @@ def test_render_html_wires_real_image_hover():
     html = map_view.render_html(data)
     assert 'id="realImg"' in html
     assert "'/real/' + encodeURIComponent(p.nearest_real)" in html
+
+
+def test_render_html_never_emits_a_literal_closing_script_tag():
+    """A literal "</script>" substring anywhere before the real closing tag truncates the
+    browser's HTML parse of the whole <script> block early -- everything after it is dropped
+    silently, with no console error. This bit six pages via a copy-pasted comment; guard
+    against it coming back."""
+    data = {"points": [], "real_points": [], "max_gen": 0, "real_anchor_counts": []}
+    html = map_view.render_html(data)
+    script_start = html.index("<script>")
+    script_end = html.index("</script>", script_start + len("<script>"))
+    body = html[script_start + len("<script>"):script_end]
+    assert "</script" not in body

@@ -92,3 +92,16 @@ def test_top_frontier_cells_respects_n():
     ]
     data = {"cells": cells, "max_count": 2}
     assert len(coverage_map.top_frontier_cells(data, n=1)) == 1
+
+
+def test_render_html_never_emits_a_literal_closing_script_tag():
+    """A literal "</script>" substring anywhere before the real closing tag truncates the
+    browser's HTML parse of the whole <script> block early -- everything after it is dropped
+    silently, with no console error. This bit six pages via a copy-pasted comment; guard
+    against it coming back."""
+    data = {"cells": [], "max_count": 0}
+    html = coverage_map.render_html(data)
+    script_start = html.index("<script>")
+    script_end = html.index("</script>", script_start + len("<script>"))
+    body = html[script_start + len("<script>"):script_end]
+    assert "</script" not in body

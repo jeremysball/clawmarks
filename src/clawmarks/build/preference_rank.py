@@ -98,7 +98,7 @@ p.sub {{ color:var(--text-dim); max-width:760px; font-size:13px; line-height:1.6
 <p class="sub">Top {len(items)} images by predicted preference score, highest first.</p>
 <div id="grid"></div>
 <script>
-// json_script() only protects this declaration from a </script> breakout; it does not
+// json_script() only protects this declaration from a <\\/script> breakout; it does not
 // HTML-escape decoded string values. Every ITEMS field written into innerHTML/an attribute
 // below must go through escHtml() first.
 function escHtml(s) {{

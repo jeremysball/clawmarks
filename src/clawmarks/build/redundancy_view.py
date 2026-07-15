@@ -128,7 +128,7 @@ of the population, not just its raw count.</p>
 <div id="clusters"></div>
 
 <script>
-// json_script() only protects this declaration from a </script> breakout; it does not
+// json_script() only protects this declaration from a <\\/script> breakout; it does not
 // HTML-escape decoded string values. Every EDGES/THUMBS/META field written into innerHTML/an
 // attribute below must go through escHtml() first.
 function escHtml(s) {{
