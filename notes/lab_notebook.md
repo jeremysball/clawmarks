@@ -2255,3 +2255,24 @@ than the None-guard bug class, i.e. expected behavior, not a regression.
 Posted the raw finder-stage output and the hand-verified findings as two separate comments on
 PR #33 per the `delegate-code-review` skill's posting convention. Next: merge PR #33 and retire
 the worktree.
+
+### 2026-07-15 (session 12): resolved the merge conflict with origin/main's round-based model
+
+`origin/main` had advanced past PR #33's fork point via an already-merged PR #32
+("friendly errors, XDG state relocation, and a launch-hub empty state"), which independently
+renamed and kept the round-based model (`RoundConfig`/`ROUND_CONFIGS`, `SWEEP_DIR`/`SWEEP2_DIR`
+under `uncanny_round1`/`uncanny_round2`) instead of adopting this branch's expedition/leg model,
+and built its own, differently-shaped `do_GET`/`do_POST` error-handling wrapper. `git merge
+origin/main --no-edit` produced conflicts in `config.py`, `curation_server.py`, `driver.py`,
+`test_config.py`, and this notebook.
+
+Asked the user how to reconcile the fork; the answer was to let the expedition/leg model win
+outright and drop the round-based model, since PR #33's entire purpose is retiring it. Resolved
+every conflict by keeping this branch's expedition/leg code (`EXPEDITIONS_DIR`, `leg_dir()`,
+`LegConfig`/`load_leg_config`, `_require_out_dir()`/`NoActiveLegError`) and deleting
+`RoundConfig`/`ROUND_CONFIGS`/`SWEEP_DIR`/`SWEEP2_DIR` and their call sites entirely. Also found
+and fixed one silent auto-merge duplication that produced two `_check_manifest_images()`
+definitions in `curation_server.py` (git merged them without flagging a conflict since they
+didn't textually overlap); kept the expedition/leg-aware one, deleted the `SWEEP_DIR`-based
+duplicate it shadowed. `rg -n "SWEEP_DIR|SWEEP2_DIR|ROUND_CONFIGS|RoundConfig" src/ tests/`
+confirms nothing remains.
