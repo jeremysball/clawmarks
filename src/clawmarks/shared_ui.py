@@ -81,7 +81,7 @@ TOPNAV_CSS = """
 .topnav .nav-running { color:#0b0b0d; font-size:11.5px; font-weight:700; padding:2px 8px;
   background:var(--up,#5ec98a); border-radius:5px; white-space:nowrap; letter-spacing:0.02em; }
 @media (max-width: 640px) {
-  .topnav { padding:8px 10px; gap:8px; font-size:12px; }
+  .topnav { padding:8px 10px; gap:8px; font-size:12px; flex-wrap:wrap; }
   .topnav select { flex:1; min-width:0; max-width:none; }
 }
 """
