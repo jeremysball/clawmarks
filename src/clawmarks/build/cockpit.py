@@ -593,11 +593,12 @@ function renderQueue(){{
   const draftsAndRunning=queue.filter(t=>t.status==='draft'||t.status==='running'||t.status==='failed');
   $('queuePane').innerHTML = draftsAndRunning.length ? draftsAndRunning.map(t=>`
     <div class="trial-row"><div><b>${{escapeHtml(t.queue_title||t.mission)}}</b><br>
+    <span class="small">${{escapeHtml((t.prompt||'').split('\\n')[0].slice(0,80))}}</span><br>
     <span class="small">${{t.n}} images &middot; ${{escapeHtml(t.seed_strategy)}} seeds &middot; ${{t.strength.toFixed(2)}} strength &middot; ${{escapeHtml(t.sampler)}} / ${{t.steps}} / ${{t.cfg}}</span></div>
     <span class="status ${{t.status}}">${{t.status}}${{t.error?': '+escapeHtml(t.error):''}}</span>
-    ${{t.status==='draft'?`<button data-run="${{t.id}}" type="button">Run queued trial</button>`:''}}</div>`).join('')
+    ${{t.status==='draft'?`<button data-run="${{t.id}}" type="button">Review and run</button>`:''}}</div>`).join('')
     : '<div class="empty-note">No trials queued yet.</div>';
-  $('queuePane').querySelectorAll('[data-run]').forEach(button=>button.onclick=()=>runTrial(button.dataset.run));
+  $('queuePane').querySelectorAll('[data-run]').forEach(button=>button.onclick=()=>reviewTrial(button.dataset.run));
 
   const completed=queue.filter(t=>t.status==='completed');
   $('resultsPane').innerHTML = completed.length ? completed.map(t=>
@@ -612,6 +613,17 @@ function renderQueue(){{
 
 function loadQueue(){{
   fetch('/api/cockpit/queue').then(r=>r.json()).then(d=>{{queue=d.trials||[];renderQueue()}}).catch(()=>{{}});
+}}
+
+function reviewTrial(id){{
+  const trial = queue.find(t=>t.id===id);
+  if(!trial) return;
+  const summary = `Expedition: ${{trial.expedition||'(current)'}}\\n`+
+    `Prompt: ${{trial.prompt}}\\n`+
+    `Target: ${{trial.target_cell ? JSON.stringify(trial.target_cell) : '(none)'}}\\n`+
+    `This submits ${{trial.n}} paid RunPod job(s).`;
+  if(!confirm(summary + '\\n\\nConfirm and run?')) return;
+  runTrial(id);
 }}
 
 function runTrial(id){{
