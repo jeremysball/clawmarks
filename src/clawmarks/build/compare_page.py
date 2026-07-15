@@ -53,7 +53,7 @@ p.sub {{ color:var(--text-dim); max-width:640px; font-size:13px; line-height:1.6
 #pair {{ display:flex; gap:16px; width:100%; justify-content:center; flex-wrap:wrap; }}
 .pane {{ position:relative; flex:1 1 420px; max-width:520px; cursor:pointer; border-radius:10px;
   border:2px solid transparent; transition:border-color .12s ease; }}
-.pane:hover {{ border-color:var(--pick); }}
+.pane:hover {{ border-color:var(--accent); }}
 .pane.submitting {{ pointer-events:none; opacity:0.6; }}
 .pane img {{ display:block; width:100%; max-height:70vh; object-fit:contain; border-radius:8px;
   background:var(--panel); user-select:none; -webkit-user-drag:none; }}
