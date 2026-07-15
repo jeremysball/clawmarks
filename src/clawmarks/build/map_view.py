@@ -149,7 +149,7 @@ real style, not the whole training set; click a bar to highlight those images on
 <div id="anchorChart"></div>
 
 <script>
-// json_script() only protects this declaration from a </script> breakout; it does not
+// json_script() only protects this declaration from a <\\/script> breakout; it does not
 // HTML-escape decoded string values. Every POINTS/REAL field written into innerHTML below
 // must go through escHtml() first.
 function escHtml(s) {{

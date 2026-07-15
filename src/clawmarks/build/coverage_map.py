@@ -260,7 +260,7 @@ all. Click a cell to preview its top image, or "view all" to see every image in 
 </div>
 
 <script>
-// json_script() only protects this declaration from a </script> breakout; it does not
+// json_script() only protects this declaration from a <\\/script> breakout; it does not
 // HTML-escape decoded string values. Every CELLS field written into innerHTML/an attribute
 // below must go through escHtml() first.
 function escHtml(s) {{
