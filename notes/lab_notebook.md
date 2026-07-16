@@ -2440,3 +2440,62 @@ Merge commit `bbb7afe`. Full suite: 415 passed, 0 failed (the worktree's pre-mer
 MyPy, and `git diff --check` all clean. Tasks 1-6 hand off to opencode
 (`opencode-go/deepseek-v4-flash`, max effort) next via the subagent-driven-development workflow,
 per the user's instruction to do the semantic merge inline and delegate only the mechanical tasks.
+
+### 2026-07-15/16 (session 17 continued): PR #41 review findings, Tasks 1-6
+
+Task 5 turned out to need no separate work: every checklist item in its brief (`n_usable`,
+`statusStale`, raw-count tracking, bucket-crossing detection, the `choiceSubmitted`/`zoomOpen`
+guards, `revealSamplingDetails`) was already present in the Task 0 merge's resolved
+`compare_page.py`, and `tests/test_compare_page.py` already covered it. Marked done as a byproduct
+rather than dispatching a redundant task.
+
+The first two dispatch attempts for Task 1, using `opencode-go/deepseek-v4-flash` at max effort,
+crashed with `no_output_timeout` and produced completely empty logs, a provider-side startup
+failure rather than a task problem. Switched every remaining dispatch to `openai/gpt-5.6-luna` at
+max effort, which ran cleanly for the rest of the session.
+
+Tasks 1, 2, 3, 4, and 6 each closed one review finding, dispatched one at a time via taskferry with
+a TDD mandate, then independently re-verified locally (full suite, Ruff, MyPy, `git diff --check`)
+rather than trusting the dispatched agent's self-report:
+
+- Task 1 (`ae96040`): bound favorite add/remove to the expedition/leg that was active when the
+  lightbox opened (`LB_EXPEDITION`/`LB_LEG`), rejecting the mutation with a stale-context error if
+  the server's active selection changed underneath it. 416 passed.
+- Task 2 (`888449c`): the run-stop endpoint now requires the caller to send back the PID and start
+  time it was given when the run started, and rejects a stop request whose identity doesn't match
+  the currently running process, so a stale "stop" click from an old page load can't kill a
+  different, newer run. 419 passed.
+- Task 3 (`62c2fa9`): fixed three bugs in the lightbox undo flow: `undoBtn` became a module-scoped
+  variable so a second favorite-removal clears the previous undo button instead of leaving a stale
+  one clickable, the undo handler now dispatches `lightbox:favorite` so the scan gallery's
+  favorited filter updates, and both the toggle and undo fetch handlers now check the JSON
+  response body for an `error` field instead of only checking `r.ok` (a 200 response carrying
+  `{"error": ...}` was previously treated as success). 420 passed.
+- Task 4 (`49dfc22`): `_send_status_page` now distinguishes a leg that was never launched
+  (`n_entries == 0`, unchanged "launch a round" advice) from a damaged one (`n_entries > 0` but
+  zero files present on disk), which gets a new data-integrity error page naming the missing count
+  and pointing at the backup/state directory instead of suggesting a launch that could overwrite
+  recoverable data. `POST /api/active-leg` also now warns to stderr if the newly selected leg is
+  damaged. 422 passed.
+- Task 6 (`2d9379a`, `e5d8b44`): unknown `/api/*` routes now 404 with a JSON body instead of the
+  browser HTML error page, and `end_headers` strips the query string before checking the file
+  extension (so `/scan.html?filter=...` keeps its `no-cache` header) and treats `.json` the same
+  as `.html`, so `/scan_data.json` gets a `no-cache` directive it never had. 423 passed.
+
+Every task's diff matched its brief closely enough that no rework was needed; independent local
+verification confirmed each self-report rather than just trusting it. `git merge-tree --write-tree
+phase7-dino-explainability pr41-review-fixes` produces a single tree SHA with no conflict markers,
+confirming the whole stack still merges cleanly against Phase 7.
+
+Mid-session the user asked for each task to become its own stacked PR, matching the existing
+Phase 1-8 pattern (PRs #34-41), instead of one combined branch. Since all six tasks had already
+landed as a linear commit history on `pr41-review-fixes`, this needed no rework: cut one
+lightweight branch pointer per task at its already-existing commit SHA, each based on the previous
+task's branch: `pr41-task0-merge-phase7` (`c526646`) on `phase8-ia-accessibility`, then
+`pr41-task1-favorites-leg-scope` (`ae96040`), `pr41-task2-stop-run-identity` (`888449c`),
+`pr41-task3-undo-recovery` (`62c2fa9`), `pr41-task4-integrity-error` (`49dfc22`), and
+`pr41-task6-lowseverity-fixes` (`e5d8b44`), each stacked on the last.
+
+Still open: a live Playwright pass covering the JS changes from Tasks 1-4 (no browser access in
+the dispatch sandbox), and the user's decision on whether to push and open the six PRs now or
+defer. No branches have been pushed yet.
