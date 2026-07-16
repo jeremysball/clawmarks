@@ -638,29 +638,44 @@ _LIGHTBOX_JS = r"""(function(){
     const removedRecord = isFav ? favorites[d.tag] : null;
     fetch(endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
       .then(r => { if (!r.ok) throw new Error('favorite save failed'); return r.json(); })
-      .then(() => {
+      .then(res => {
+        if (res.error) throw new Error(res.error);
         if (isFav) delete favorites[d.tag]; else favorites[d.tag] = body;
         render();
         document.dispatchEvent(new CustomEvent('lightbox:favorite', {detail: {tag: d.tag, favorited: !isFav}}));
         if (isFav && removedRecord) showUndoFavorite(d.tag, removedRecord);
-      }).catch(() => {});
+      }).catch(() => {
+        const status = el.querySelector('.lb-info');
+        if (status) status.textContent = 'Could not save. Check connection and try again.';
+      });
   }
   let undoTimer = null;
+  let undoBtn = null;
   function showUndoFavorite(tag, record){
+    if (undoBtn) { undoBtn.remove(); undoBtn = null; }
     clearTimeout(undoTimer);
     const status = el.querySelector('.lb-info');
     const original = status.textContent;
     status.textContent = 'Removed favorite. Undo?';
-    const undoBtn = document.createElement('button');
+    undoBtn = document.createElement('button');
     undoBtn.textContent = 'Undo';
     undoBtn.onclick = () => {
       const body = Object.assign({}, record, {expedition: LB_EXPEDITION, leg: LB_LEG});
       fetch('/api/favorite', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
-        .then(r => { if (!r.ok) throw new Error('favorite save failed'); return r.json(); })
-        .then(() => { favorites[tag] = body; render(); }).catch(() => {});
+        .then(r => { if (!r.ok) throw new Error('restore failed'); return r.json(); })
+        .then(res => {
+          if (res.error) throw new Error(res.error);
+          favorites[tag] = record;
+          render();
+          document.dispatchEvent(new CustomEvent('lightbox:favorite', {detail: {tag, favorited: true}}));
+          undoBtn.remove(); undoBtn = null;
+          status.textContent = original;
+        }).catch(() => {
+          status.textContent = 'Could not restore favorite. Try again.';
+        });
     };
     el.querySelector('.lb-actions').appendChild(undoBtn);
-    undoTimer = setTimeout(() => { undoBtn.remove(); }, 10000);
+    undoTimer = setTimeout(() => { if (undoBtn) { undoBtn.remove(); undoBtn = null; } }, 10000);
   }
   function close(){ el.classList.remove('open'); }
 
