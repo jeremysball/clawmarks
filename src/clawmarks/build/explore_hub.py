@@ -6,7 +6,7 @@ its own.
 Run: python3 -m clawmarks.build.explore_hub
 """
 
-from clawmarks.shared_ui import INFOTIP_CSS, MOBILE_BASE_CSS, NAV_GROUPS, info_btn
+from clawmarks.shared_ui import BTN_CSS, DARK_TOKENS, INFOTIP_CSS, MOBILE_BASE_CSS, NAV_GROUPS, info_btn
 
 # Order mirrors shared_ui.NAV_OPTIONS (minus explore.html, which is this hub) so the home page
 # and the jump-to dropdown list the same tools in the same order.
@@ -59,10 +59,11 @@ def render_html():
 <title>CLAWMARKS exploration tools</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee; --text-dim:#9a9aa4; --accent:#7c9eff; }}
+{DARK_TOKENS}
 body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:32px; }}
 {MOBILE_BASE_CSS}
 {INFOTIP_CSS}
+{BTN_CSS}
 h1 {{ font-size:20px; margin:0 0 6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }}
 h1 .howtip {{ font-size:12.5px; font-weight:400; color:var(--text-dim); display:inline-flex; align-items:center; gap:6px; }}
 p.sub {{ color:var(--text-dim); max-width:700px; font-size:13.5px; line-height:1.6; }}

@@ -54,3 +54,19 @@ def test_rank_page_reports_flag_save_failures_without_mutating_state():
     assert "flags[tag] = {flag: flag, flagged_at: flags[tag]?.flagged_at ?? null}" in html
     assert "Could not save this flag." in html
     assert "id=\"flagError\"" in html
+
+
+def test_render_html_never_emits_a_literal_closing_script_tag():
+    """A literal "</script>" substring anywhere before the real closing tag truncates the
+    browser's HTML parse of the whole <script> block early -- everything after it is dropped
+    silently, with no console error. This bit six pages via a copy-pasted comment; guard
+    against it coming back."""
+    data = {"has_model": True, "items": [
+        {"tag": "a", "prompt_name": "p", "prompt_type": "style", "faith": 0.5, "novelty": 0.5,
+         "strength": 1.0, "cfg": 7.0, "thumb": "a.png", "file": "a.png", "predicted_preference": 0.9},
+    ]}
+    html = preference_rank.render_html(data)
+    script_start = html.index("<script>")
+    script_end = html.index("</script>", script_start + len("<script>"))
+    body = html[script_start + len("<script>"):script_end]
+    assert "</script" not in body

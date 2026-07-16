@@ -2277,7 +2277,77 @@ didn't textually overlap); kept the expedition/leg-aware one, deleted the `SWEEP
 duplicate it shadowed. `rg -n "SWEEP_DIR|SWEEP2_DIR|ROUND_CONFIGS|RoundConfig" src/ tests/`
 confirms nothing remains.
 
-### 2026-07-15 (session 13): Phase 8 navigation and review-workflow improvements
+### 2026-07-15 (session 13): UX shard-review plan, Phases 1-5 shipped as stacked PRs
+
+Started closing findings from a 10-shard UX review of the curation server
+(`docs/superpowers/plans/design-shards/*.md`), tracked by
+`docs/superpowers/plans/2026-07-15-ui-design-shard-findings.md` across 8 phases. Delivered each
+phase as its own PR, stacked on the previous phase's branch rather than on `main`, so review stays
+scoped per phase: Phase 1 (active expedition/leg visibility, PR #34), Phase 2 (confirm
+destructive/paid actions, PR #35), Phase 3 (compare.html judgment-workflow correctness, PR #36),
+Phase 4 (visual design-token consolidation, PR #37), Phase 5 (gallery/archive at scale, PR #38).
+
+Phase 5's most significant finding was unplanned: while porting `scan_gallery.py`'s
+pagination pattern into `elite_archive.py`'s "view all" modal, a page rendered with `CELLS` and
+`openModal()` undefined in the browser, no console error. Root cause was a copy-pasted comment
+containing a literal `</script>` substring inside a `<script>` block. The browser's HTML tokenizer
+closes a `<script>` element on the *first* `</script`-prefixed text it sees, including inside a
+JS comment, since it's not JS-aware at that point in parsing, only scanning for the literal
+closing tag. Everything after that point, including the real code and the real closing tag,
+gets dropped from the script and parsed as plain markup instead. This bit six pages that all
+carried the same comment (archive, coverage, map, redundancy, novelty-decay, preference-rank):
+every one of them has had a completely dead grid, no click handlers, no data loading, for as long
+as that comment existed, with nothing in server logs or the browser console to flag it. Fixed by
+escaping it as `<\/script>` (backslash before the slash defeats the tokenizer's literal match) in
+all six files, and added a regression test per module asserting the rendered `<script>` body never
+contains a bare `</script` substring.
+
+Also fixed a second, smaller regression this same phase introduced: persisting scan.html's
+filter/sort state in the URL (`history.replaceState`) meant `/scan.html?sortKey=...` requests
+started hitting the server, but the route matched only the bare path (`self.path ==
+"/scan.html"`) and 404'd on anything with a query string. Widened the match to
+`self.path.startswith("/scan.html?")` as well, same pattern `archive.html`'s route already used
+for its own `?cell=` query param.
+
+Remaining phases (6: error/empty-state legibility, 7: DINOv2-similarity explainability, 8:
+remaining IA/nav/hygiene) not yet started; each gets its own worktree stacked on the prior phase's
+branch, following the same one-PR-per-phase pattern.
+
+### 2026-07-15 (session 14): Phase 5 review fixes and Phase 6 complete
+
+A GLM review of Phase 5 (PR #38) found two scan-page regressions. The round-aware sort change
+had replaced the human-readable generation field with its internal composite sort key, so the
+shared lightbox would show values such as `gen 200003`. The sort key now lives in a separate
+`sort_gen` field. The URL-restored picked/favorited filters also ran before the favorite records
+loaded and then only re-rendered the already-empty result set. The favorites callback now reruns
+the filters after it loads. Both fixes have regression tests.
+
+Completed Phase 6 on a branch stacked above the corrected Phase 5 commit. Missing manifests now
+tell the researcher to switch legs or launch a round, while missing images still explain stale
+manifest paths. Error pages name the failed route. Startup writes an actionable missing-manifest
+warning to stderr with the active expedition and leg. All 404s, including static-file fallthroughs,
+now render a dark, app-consistent page instead of the standard-library error document. The full
+suite passed with 396 tests, and Playwright verified the styled 404 at desktop and mobile widths.
+
+### 2026-07-15 (session 15): Phase 7 makes DINOv2 score views interpretable
+
+Completed the DINOv2-similarity explainability pass on a worktree stacked above Phase 6. The
+solution map, coverage map, redundancy clusters, and novelty-decay views now share one short
+DINOv2 explanation. The map distinguishes style match to the average real-art embedding from the
+closest single training photo, shows each sweep's style-match range and median in the hover panel,
+and includes an on-canvas mark legend plus a play-control tooltip. Coverage now explains its
+quantile bins and median frontier gate, and its legend marks one image, the median count, and the
+maximum count. Redundancy names its slider an image-to-image match threshold, gives its actual
+pair range, and identifies the representative as the highest-novelty member. Novelty decay now
+defines novelty before asking the researcher to act on a trend.
+
+Added rendering tests for every page, including the no-data novelty state. The focused suite has
+23 passing tests. The full suite has 400 passing tests, and ruff plus mypy are clean. A server
+smoke attempt reached the expected startup state but could not render the four pages because the
+user's currently selected `uncanny_frontier/cockpit` leg has no scored manifest. Selecting another
+leg would write the user's active-leg state, so that live check was intentionally not performed.
+
+### 2026-07-15 (session 16): Phase 8 navigation and review-workflow improvements
 
 Grouped the shared tool menu and the tools hub into Generate, Curate, Understand search, and
 Preference model. The scan page now uses that shared navigation contract. Added next-step links

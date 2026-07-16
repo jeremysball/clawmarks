@@ -17,7 +17,16 @@ import joblib
 from clawmarks.search import embed_cache, preference_pairwise_model
 from clawmarks.search.manifest_index import index_by_tag, item_summary
 from clawmarks.search.preference_pairwise_model import score
-from clawmarks.shared_ui import INFOTIP_CSS, MOBILE_BASE_CSS, TOPNAV_CSS, info_btn, nav_bar_html, json_script
+from clawmarks.shared_ui import (
+    BTN_CSS,
+    DARK_TOKENS,
+    INFOTIP_CSS,
+    MOBILE_BASE_CSS,
+    TOPNAV_CSS,
+    info_btn,
+    json_script,
+    nav_bar_html,
+)
 
 
 def build_ranked_items(by_tag, tags, scores, sweep_dir, limit=500):
@@ -51,7 +60,7 @@ def compute_data(sweep_dir):
     return {"has_model": True, "items": items}
 
 
-def render_html(data, active_expedition=None, active_leg=None):
+def render_html(data, active_expedition=None, active_leg=None, running=None):
     if not data["has_model"]:
         return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <style>:root {{ color-scheme:dark; --bg:#0b0b0d; --text:#eaeaee; --text-dim:#9a9aa4; --border:#2a2a30; }} body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }} {TOPNAV_CSS} {MOBILE_BASE_CSS} p {{ color:var(--text-dim); }}</style>
@@ -71,10 +80,11 @@ def render_html(data, active_expedition=None, active_leg=None):
 <title>CLAWMARKS predicted preference</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee; --text-dim:#9a9aa4; }}
+{DARK_TOKENS}
 body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px; }}
 {TOPNAV_CSS}
 {MOBILE_BASE_CSS}
+{BTN_CSS}
 h1 {{ font-size:18px; margin:0 0 4px; }}
 p.sub {{ color:var(--text-dim); max-width:760px; font-size:13px; line-height:1.6; }}
 #grid {{ display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin-top:20px; }}
@@ -89,13 +99,13 @@ p.sub {{ color:var(--text-dim); max-width:760px; font-size:13px; line-height:1.6
 {INFOTIP_CSS}
 </style></head><body>
 
-{nav_bar_html('preference_rank.html', active_expedition, active_leg)}
+{nav_bar_html('preference_rank.html', active_expedition=active_expedition, active_leg=active_leg, running=running)}
 <h1>Predicted preference{rank_tip}</h1>
 <p class="sub">Top {len(items)} images by predicted preference score, highest first.</p>
 <div id="review-controls"><label><input id="reviewMode" type="checkbox"> Review top, middle, and bottom</label><span id="reviewCount"></span><span id="flagError" class="flag-error" role="alert" aria-live="polite"></span></div>
 <div id="grid"></div>
 <script>
-// json_script() only protects this declaration from a </script> breakout; it does not
+// json_script() only protects this declaration from a <\\/script> breakout; it does not
 // HTML-escape decoded string values. Every ITEMS field written into innerHTML/an attribute
 // below must go through escHtml() first.
 function escHtml(s) {{
