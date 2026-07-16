@@ -2407,3 +2407,36 @@ each task. Final CI-equivalent verification passed with 378 tests, Ruff, MyPy, a
 --check` clean. Playwright checked the active-leg badge and the no-model ranking page at desktop
 and 390px mobile widths without new console errors. The temporary isolated server was stopped
 after the check.
+
+### 2026-07-15 (session 17): PR #41 review findings, Task 0 (Phase 7 merge)
+
+A full-stack review of PR #41 found six verified issues, the highest-severity being structural:
+Phase 8 (`phase8-ia-accessibility`, this branch's base) forked from `main` instead of from Phase 7
+(`phase7-dino-explainability`), so the two stacks diverged and produced 21 conflicting files.
+Built the fix plan in a new worktree, `pr41-review-fixes`, with 7 tasks: Task 0 merges Phase 7 in
+first so every later fix lands on the reunified stack, Tasks 1-6 close the remaining findings
+(favorite-mutation leg binding, stop-request PID check, undo-flow recovery, missing-vs-empty leg
+data, Phase 3 comparison-progress-logic preservation, and two lower-severity fixes).
+
+Task 0 resolved as a merge rather than a rebase: an attempted rebase hit the same conflicts once
+per commit (Phase 8 has 5), so aborted it and merged instead for one conflict-resolution pass. 52
+raw conflict markers landed across 19 files. Most followed one mechanical pattern: Phase 7 added a
+`running=None` parameter to every page's `render_html()` and threaded it through `nav_bar_html()`
+for the running-search indicator; Phase 8 didn't have it yet, so Phase 7's side almost always won.
+Three merges needed real judgment: `compare_page.py`'s `choose()` had to keep Phase 8's
+`choiceSubmitted`/`zoomOpen` accessibility guard alongside Phase 7's `submitting` single-flight
+guard as two independent checks (both are asserted on by name in the test suite), move Phase 7's
+`submitting` reset out of the success path and into `loadNext()` so the guard stays active during
+the 1-second reveal delay, and drop Phase 8's raw `res.count`-based retrain-boundary check in favor
+of Phase 7's `/api/preference_status`-derived bucket-crossing check (this alone closes finding #6,
+the Phase 3 progress-logic regression). `curation_server.py`'s no-selection status page had a
+`manifest_summary` reference that isn't even a parameter of that method, a leftover Phase 8 bug;
+dropped it rather than resolving toward either side. `scan.html`'s route needed both Phase 7's
+`?sortKey=...`-friendly query-string match and Phase 8's `active_expedition`/`active_leg` args,
+which the two branches had touched independently without conflicting semantically.
+
+Merge commit `bbb7afe`. Full suite: 415 passed, 0 failed (the worktree's pre-merge baseline had
+377 passed, 1 pre-existing failure in `test_cli.py`; the merge subsumed whatever fixed it). Ruff,
+MyPy, and `git diff --check` all clean. Tasks 1-6 hand off to opencode
+(`opencode-go/deepseek-v4-flash`, max effort) next via the subagent-driven-development workflow,
+per the user's instruction to do the semantic merge inline and delegate only the mechanical tasks.
