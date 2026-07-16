@@ -1637,7 +1637,8 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         if self.path == "/api/searchrun/stop":
-            self._json_response(200, run_manager.stop_run())
+            self._json_response(200, run_manager.stop_run(
+                pid=payload.get("pid"), start_time_ticks=payload.get("start_time_ticks")))
             return
 
         self._json_response(404, {"error": "unknown endpoint"})
