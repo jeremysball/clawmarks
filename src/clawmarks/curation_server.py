@@ -852,9 +852,10 @@ class Handler(SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(active_dir) if active_dir else str(config.STATE_DIR), **kwargs)
 
     def end_headers(self):
-        if self.path.endswith((".jpg", ".jpeg", ".png")):
+        path = urllib.parse.urlparse(self.path).path
+        if path.endswith((".jpg", ".jpeg", ".png")):
             self.send_header("Cache-Control", "public, max-age=31536000, immutable")
-        elif self.path.endswith(".html"):
+        elif path.endswith((".html", ".json")):
             self.send_header("Cache-Control", "no-cache, must-revalidate")
         super().end_headers()
 
