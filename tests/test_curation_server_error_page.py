@@ -1,3 +1,4 @@
+import json
 import threading
 from http.server import HTTPServer
 import urllib.error
@@ -81,3 +82,15 @@ def test_missing_route_uses_the_styled_404_page(running_server):
     body = exc_info.value.read().decode()
     assert "Nothing here" in body
     assert "/missing-page.html" in body
+
+
+def test_missing_api_route_returns_json_404(running_server):
+    port = running_server.server_address[1]
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/api/nonexistent-route-xyz")
+
+    assert exc_info.value.code == 404
+    assert exc_info.value.headers.get_content_type() == "application/json"
+    body = json.loads(exc_info.value.read().decode())
+    assert body["error"] == "unknown route: /api/nonexistent-route-xyz"
