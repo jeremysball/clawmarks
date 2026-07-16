@@ -1,7 +1,7 @@
 # tests/test_shared_ui.py
 import json
 
-from clawmarks.shared_ui import NAV_OPTIONS, json_script, nav_bar_html
+from clawmarks.shared_ui import NAV_OPTIONS, _LIGHTBOX_JS, json_script, nav_bar_html
 
 
 def test_nav_options_includes_preference_status_page():
@@ -87,3 +87,18 @@ def test_dark_tokens_defines_pick_as_gold():
     from clawmarks import shared_ui
 
     assert "--pick:#f5c542" in shared_ui.DARK_TOKENS
+
+
+def test_lightbox_undo_flow_honors_recovery_contract():
+    undo_start = _LIGHTBOX_JS.index("function showUndoFavorite")
+    undo_js = _LIGHTBOX_JS[undo_start:]
+    toggle_start = _LIGHTBOX_JS.index("function toggleFavorite")
+    toggle_js = _LIGHTBOX_JS[toggle_start:undo_start]
+
+    assert "let undoBtn = null;" in _LIGHTBOX_JS
+    assert "if (undoBtn) { undoBtn.remove(); undoBtn = null; }" in undo_js
+    assert "const undoBtn =" not in undo_js
+    onclick_js = undo_js[undo_js.index("undoBtn.onclick"):]
+    assert "document.dispatchEvent(new CustomEvent('lightbox:favorite'" in onclick_js
+    assert "if (res.error) throw new Error(res.error);" in toggle_js
+    assert "if (res.error) throw new Error(res.error);" in onclick_js
