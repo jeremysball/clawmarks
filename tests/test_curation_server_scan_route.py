@@ -58,6 +58,7 @@ def test_scan_html_serves_with_filter_state_query_string(running_server, monkeyp
 
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/scan.html?sortKey=gen_desc&typeFilter=style") as resp:
         html = resp.read().decode()
+        assert resp.headers["Cache-Control"] == "no-cache, must-revalidate"
     assert '"prompt_name": "fox"' in html
 
 
@@ -67,6 +68,7 @@ def test_scan_data_json_route(running_server, monkeypatch):
     monkeypatch.setattr(cs.similarity_index, "compute_data", lambda sweep_dir: {})
 
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/scan_data.json") as resp:
+        assert resp.headers["Cache-Control"] == "no-cache, must-revalidate"
         data = json.loads(resp.read().decode())
     assert data[0]["tag"] == "a"
 
