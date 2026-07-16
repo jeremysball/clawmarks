@@ -100,6 +100,8 @@ const legSel = document.getElementById('leg');
 const statusLine = document.getElementById('statusLine');
 const launchError = document.getElementById('launchError');
 let expeditionsData = [];
+let lastStatusPid = null;
+let lastStatusStartTicks = null;
 
 function populateLegs() {{
   const exp = expeditionsData.find(e => e.name === expeditionSel.value);
@@ -176,11 +178,15 @@ function openReportTool(event, path) {{
 function refreshStatus() {{
   fetch('/api/searchrun/status').then(r => r.json()).then(d => {{
     if (d.running) {{
+      lastStatusPid = d.pid;
+      lastStatusStartTicks = d.start_time_ticks;
       statusLine.className = 'live';
       statusLine.textContent = `Running ${{escHtml(d.expedition)}}/${{escHtml(d.leg)}} (pid ${{d.pid}}), started ${{new Date(d.started_at * 1000).toLocaleString()}}.`;
       launchBtn.disabled = true;
       stopBtn.disabled = false;
     }} else {{
+      lastStatusPid = null;
+      lastStatusStartTicks = null;
       statusLine.className = 'idle';
       statusLine.textContent = 'Not running.';
       launchBtn.disabled = false;
@@ -216,14 +222,20 @@ launchBtn.addEventListener('click', () => {{
 }});
 
 stopBtn.addEventListener('click', () => {{
+  const confirmedPid = lastStatusPid;
+  const confirmedStart = lastStatusStartTicks;
   const msg = statusLine.textContent.startsWith('Running')
     ? `Stop this search run?\n\n${{statusLine.textContent}}\n\nAlready-written files are preserved; ` +
       `the driver process is sent SIGTERM, then SIGKILL if it doesn't exit.`
     : 'Stop the running search?';
   if (!confirm(msg)) return;
   stopBtn.disabled = true;
-  fetch('/api/searchrun/stop', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: '{{}}'}})
-    .then(() => refreshStatus());
+  const body = JSON.stringify({{pid: confirmedPid, start_time_ticks: confirmedStart}});
+  fetch('/api/searchrun/stop', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body}})
+    .then(r => r.json()).then(res => {{
+      if (res.error) {{ alert(res.error); stopBtn.disabled = false; }}
+      else refreshStatus();
+    }});
 }});
 
 legSel.addEventListener('change', refreshReport);
