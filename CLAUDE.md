@@ -130,13 +130,20 @@ installed). Scripts read these with `os.environ["NAME"]`, never a literal string
 secret shows up in a future session, put it in `.envrc` immediately, not inline in the script
 that first needed it.
 
+## Running Python
+
+Always run Python commands through `uv run` (`uv run pytest`, `uv run python -m clawmarks`,
+etc.), never bare `python3`, `pytest`, or `.venv/bin/python`. `uv run` resolves the correct
+project venv automatically; bare invocations pick up the wrong venv (the sandbox ships a stale
+`VIRTUAL_ENV` pointing elsewhere) and fail or test against the wrong environment.
+
 ## Running tests
 
-The full suite (`python3 -m pytest -q`) takes about a minute, cheap enough to run before calling
+The full suite (`uv run pytest -q`) takes about a minute, cheap enough to run before calling
 any change done. But don't make every edit-test cycle pay that minute:
 
 - **While iterating on one area, run only the test file(s) for what you're touching**
-  (`python3 -m pytest -q tests/test_<thing>.py`), not the full suite. Re-running everything on
+  (`uv run pytest -q tests/test_<thing>.py`), not the full suite. Re-running everything on
   every small edit wastes time without catching anything the targeted file wouldn't.
 - **Run the full suite once before treating a change as finished**, and again after merging to
   `main` if CI hasn't already confirmed it (`.github/workflows/check.yml` runs it on every PR and

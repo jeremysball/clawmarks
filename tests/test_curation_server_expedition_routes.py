@@ -179,3 +179,56 @@ def test_unfavorite_rejects_payload_for_stale_leg(running_server_with_leg):
 
     assert exc_info.value.code == 409
     assert json.loads((leg_a / "user_favorites.json").read_text()) == favorites_a
+
+
+def test_create_leg_writes_empty_overrides_and_scaffolds_its_dir():
+    cs._create_expedition({"name": "demo", "textures": [], "fallback_subjects": []})
+
+    result = cs._create_leg({"expedition": "demo", "name": "round1"})
+
+    assert result == {"ok": True, "expedition": "demo", "name": "round1"}
+    leg_file = config.EXPEDITIONS_DIR / "demo" / "legs" / "round1.json"
+    assert json.loads(leg_file.read_text()) == {}
+    assert config.leg_dir("demo", "round1").exists()
+
+
+def test_create_leg_rejects_an_unknown_expedition():
+    with pytest.raises(ValueError, match="unknown expedition"):
+        cs._create_leg({"expedition": "nope", "name": "round1"})
+
+
+def test_create_leg_rejects_a_name_that_already_exists():
+    cs._create_expedition({"name": "demo", "textures": [], "fallback_subjects": []})
+    cs._create_leg({"expedition": "demo", "name": "round1"})
+
+    with pytest.raises(ValueError, match="already exists"):
+        cs._create_leg({"expedition": "demo", "name": "round1"})
+
+
+def test_create_leg_rejects_a_blank_name():
+    cs._create_expedition({"name": "demo", "textures": [], "fallback_subjects": []})
+
+    with pytest.raises(ValueError, match="'name' is required"):
+        cs._create_leg({"expedition": "demo", "name": "  "})
+
+
+def test_create_leg_rejects_the_reserved_name_legs():
+    # A leg literally named "legs" would resolve config.leg_dir("demo", "legs") to the same
+    # directory that holds every other leg's legs/<leg>.json config file, since EXPEDITIONS_DIR
+    # and leg_dir() share one root as of ADR 0001. Must be rejected, not silently collided.
+    cs._create_expedition({"name": "demo", "textures": [], "fallback_subjects": []})
+
+    with pytest.raises(ValueError, match="reserved"):
+        cs._create_leg({"expedition": "demo", "name": "legs"})
+
+
+def test_create_leg_rejects_a_name_with_a_path_separator():
+    cs._create_expedition({"name": "demo", "textures": [], "fallback_subjects": []})
+
+    with pytest.raises(ValueError, match="path separator"):
+        cs._create_leg({"expedition": "demo", "name": "../escape"})
+
+
+def test_create_expedition_rejects_a_name_with_a_path_separator():
+    with pytest.raises(ValueError, match="path separator"):
+        cs._create_expedition({"name": "../escape", "textures": [], "fallback_subjects": []})
