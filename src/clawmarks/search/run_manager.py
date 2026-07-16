@@ -77,6 +77,10 @@ def current_run():
     info = read_lock()
     if info is None:
         return None
+    # A finished driver sits as a zombie until reaped: os.kill(pid, 0) (what is_process_alive
+    # checks) reports zombies as alive, so without this a completed run would misreport as
+    # still running until something else happened to reap it (e.g. stop_run).
+    _reap_if_exited(info["pid"])
     if not is_process_alive(info["pid"]):
         _remove_lock()
         return None

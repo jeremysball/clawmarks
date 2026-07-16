@@ -1879,6 +1879,16 @@ touching `Dockerfile`/`docker-compose.yml`). Also unresolved: whether "explain i
 readme why docker compose uses watchtower" survived the "CLAWMARKS only" scope-down (answered in
 chat, not written into `hearth/README.md`), and what "what is the real key" referred to.
 
+### 2026-07-13: Added unfamiliar-subject seed prompts for style-break testing
+
+Created `notes/uncanny_seedrun1/candidate_seeds_gen_1783953823.json` with 20 short visual scene
+descriptions for testing whether the fine-tuned style survives across unfamiliar subjects or
+breaks into visual noise. Before writing into `notes/uncanny_seedrun1/`, made a complete mirror
+backup at `/tmp/opencode/uncanny_seedrun1_backups/uncanny_seedrun1_20260713_candidate_seeds_gen_1783953823`
+and verified it with `diff -qr`. (Logged retroactively on 2026-07-15 from an uncommitted stash
+found during a branch/worktree cleanup pass; the generated-timestamp file itself was later folded
+into `notes/uncanny_seedrun1/candidate_seeds.json`, which is what's on disk now.)
+
 ### 2026-07-13: Corrected finite permutation p-values and paired-seed power analysis
 
 Corrected two statistical record errors before round 1. `notes/mmd_score.py` now reports the
@@ -2554,3 +2564,140 @@ With the live check clean, merged the whole reconciled stack (phases 1-8 plus re
 head) was confirmed a strict git ancestor superset of every intermediate phase and task branch.
 PRs #34-46 were closed as superseded rather than merged separately, since every commit they
 contain already rides along inside PR #47's merge.
+
+### 2026-07-15 (session 13): live-check gotcha, active-leg state mutated by cockpit.html GETs
+
+Executing the UI design-shard findings plan (`docs/superpowers/plans/2026-07-15-ui-design-shard-findings.md`)
+via subagent-driven-development, with implementers dispatched through opencode per the global
+CLAUDE.md override. Task 1.1 (active leg in nav bar) and Task 1.2 (running-search nav indicator)
+both required a live Playwright/browser check per the plan's global constraints. Both my own
+Task 1.1 check and the Task 1.2 implementer's own live check hit `/cockpit.html` on a restarted
+`curation_server.py`, and `_set_active_selection` treats any GET to a cockpit-family route as an
+implicit leg switch to `"cockpit"` (`curation_server.py:1262-1264`, pre-existing logic from PR #33,
+not introduced by either task). Since `$XDG_STATE_HOME/clawmarks/active_leg.json` is real,
+shared, cross-worktree production state, not per-worktree, this silently overwrote the user's
+actual last selection (`trent_v3_epoch4/freeform1`) with `uncanny_frontier/cockpit` twice over
+during routine verification. Caught it by noticing the server startup banner reported a leg the
+user hadn't set, diffed against the value read at session start, and restored
+`trent_v3_epoch4/freeform1` by hand. No image data or embeddings were at risk (this file is only
+a pointer, not generation output), but it is exactly the class of unattended-agent side effect
+the project's data-integrity rule exists to catch.
+
+Gotcha for future live checks: any GET to `/cockpit.html` (or any other route that force-switches
+the active leg) during verification mutates real, shared selection state, not a worktree-local
+copy. Read `active_leg.json` before a live check and restore it afterward if it changed and the
+change wasn't intentional; this pattern was already used once before in session 11 ("restored to
+'none selected' afterward") but wasn't written up as a general rule at the time.
+
+### 2026-07-15: `cockpit.html` 500'd on `trent_v3_epoch4`; reconstructed its missing `expedition.json`
+
+While live-verifying the UI design-shard findings plan in the `ui-design-shard-findings`
+worktree, `/cockpit.html` returned a 500: `ValueError: unknown expedition 'trent_v3_epoch4'`.
+Traced this to `expedition.json` simply never having been created for `trent_v3_epoch4` — the
+expedition's `freeform1` leg has 50 real generated images and a full `scored_manifest.json` under
+`$XDG_STATE_HOME/clawmarks/`, but no config was ever committed to the repo's `expeditions/`
+directory, so `_set_active_selection` correctly refused to recognize it.
+
+**Gotcha:** `config.EXPEDITIONS_DIR` (`ROOT / "expeditions"`, git-tracked, holds each expedition's
+small `expedition.json`/`legs/*.json` config) and `config.leg_dir()` (`STATE_DIR / "expeditions" /
+...`, holds the actual generated images/manifests/embeddings) are two **different** directory
+trees that happen to share the `expeditions/<name>/` shape. This is deliberate (small, reviewable
+config lives in git; heavy generation output lives outside the repo per the XDG rule), confirmed
+by `test_config.py::test_expeditions_dir_is_repo_relative`, not a bug, but it means an expedition
+can have real `STATE_DIR` image data and still read as "unknown" if its config was never created
+or committed.
+
+Reconstructed `expeditions/trent_v3_epoch4/expedition.json` (plus empty `legs/freeform1.json` and
+`legs/cockpit.json`) with `trigger_word: "trentbuckle style, "` and `negative_prompt: "low
+quality, blurry, watermark"`, both recovered empirically (exact match across all 50
+`freeform1/scored_manifest.json` entries) rather than guessed. `textures`, `fallback_subjects`,
+and the budget/generation-count fields have no recoverable source, so they were borrowed from the
+`uncanny_frontier` reference expedition's already-committed config (same `trentbuckle` style
+family) as an informed placeholder. **Still uncommitted as of 2026-07-16** (untracked in the
+primary checkout's `expeditions/trent_v3_epoch4/`), pending the user's review of those placeholder
+fields before this goes into git.
+
+Verified live: `/api/expeditions` lists `trent_v3_epoch4` with both legs, `/cockpit.html` returns
+200 (previously 500), `/compare.html` still 200. The cockpit leg's own 500s (`FileNotFoundError`
+on `trent_v3_epoch4/cockpit/scored_manifest.json`) are expected, not a regression: that leg has
+genuinely never been run. Backed up both `trent_v3_epoch4` and `uncanny_frontier`'s
+`$XDG_STATE_HOME` directories (`cp -a` + `diff -rq` + file-count verification) before any of this,
+per the project's data-integrity rule; no image files were touched.
+
+### 2026-07-15: Phase 6 (error/empty-state legibility) implemented twice, independently
+
+The `ui-design-shard-findings` worktree implemented its own fix for the same error-legibility
+shard that PR #41's review-fix Task 6 also closed: a `FileNotFoundError` hint that distinguishes
+"no scored manifest yet" from "manifest points at a stale path," a styled dark-theme 404 page, and
+a startup warning that names the affected expedition/leg. Both fixes shipped independently on
+different branches before either was aware of the other.
+
+Opened as PR #48 to check whether it was still worth merging once discovered. It wasn't: `main`
+(via the already-merged Task 6) already carries the same missing-manifest hint logic and a styled
+404 page, plus `/api/*` 404s returned as JSON, which this worktree's version never added. Merging
+PR #48 would have been pure duplication and would have regressed the JSON-404 behavior. Closed as
+superseded rather than reconciled; the one difference worth noting is Task 6's `missing_path =
+str(exc).split("'")[1] if "'" in str(exc) else ""` versus this worktree's `exc.filename`, the
+latter being the more direct way to read a `FileNotFoundError`'s path, but not worth a follow-up
+patch on its own.
+
+### 2026-07-16: expedition/leg config moved from git to `$XDG_STATE_HOME` (ADR 0001)
+
+Jeremy decided the `trent_v3_epoch4/expedition.json` placeholder-field question from the prior
+entry should be answered by removing the underlying split entirely, not just this one file:
+expedition/leg config should never have been git-tracked in the first place, since it was the
+`ROOT/expeditions/` vs. `STATE_DIR/expeditions/` split itself that let `trent_v3_epoch4` end up
+with real generation output but no config anywhere in git. Wrote up the reasoning as
+`docs/adr/0001-expedition-config-lives-in-state-dir.md`, the project's first ADR.
+
+`config.EXPEDITIONS_DIR` now resolves to `STATE_DIR / "expeditions"`, the same root
+`config.leg_dir()` already used, so a given expedition's config and its per-leg output now live
+side by side in one directory, distinguished by `legs/<leg>.json` (config) versus a bare `<leg>/`
+(output). Migrated both existing expeditions by copying their `expedition.json`/`legs/*.json` into
+the matching `$XDG_STATE_HOME/clawmarks/expeditions/<name>/` directory (content-diffed clean
+against the originals first), `git rm`'d the previously-tracked `uncanny_frontier` config, deleted
+the untracked `trent_v3_epoch4` config from the repo tree, and added `/expeditions/` to
+`.gitignore` so the split can't quietly reappear. `trent_v3_epoch4`'s placeholder fields
+(`textures`, `fallback_subjects`, budget/generation-count, still borrowed from `uncanny_frontier`)
+are unchanged by this move; only their storage location changed, so that specific review question
+is still open, just no longer blocking anything on the git side.
+
+Updated `test_config.py::test_expeditions_dir_is_repo_relative` (renamed
+`test_expeditions_dir_is_state_dir_relative`) to assert the new location; every other test already
+used `monkeypatch.setattr(config, "EXPEDITIONS_DIR", ...)` and needed no change. Full suite: 427
+passed. Ruff, MyPy, and `git diff --check` all clean.
+
+### 2026-07-16: GLM review of the ADR 0001 diff found a real regression it introduced
+
+Dispatched the ADR 0001 diff (config.py, curation_server.py, test_curation_server_
+expedition_routes.py, .gitignore) to `cheapestinference/glm-5.2` at max effort via taskferry
+(delegate-code-review's single-dispatch path, since the diff was self-contained at ~285 lines).
+The prompt named the specific claim to break: that config and per-leg output paths never
+collide now that `EXPEDITIONS_DIR` and `leg_dir()` share one root.
+
+The model broke it. Before this migration, `EXPEDITIONS_DIR` (`ROOT/expeditions`, git-tracked)
+and `leg_dir()` (`STATE_DIR/expeditions/...`) were two separate filesystem trees, so a leg named
+`"legs"` never collided with anything. Moving both onto `STATE_DIR/expeditions` means
+`leg_dir(expedition, "legs")` now resolves to the exact same directory that holds every other
+leg's `legs/<leg>.json` config file. `_create_leg` only rejected a blank name, so nothing stopped
+this; `_list_expeditions()`'s `legs_dir.glob("*.json")` would then list every generation artifact
+written into that directory (`scored_manifest.json`, `user_favorites.json`, etc.) as a bogus leg.
+A real regression introduced by this migration, not a pre-existing bug.
+
+Fixed by adding `_validate_expedition_or_leg_name()`, called from both `_create_expedition` and
+`_create_leg`, rejecting a path separator or `..` in the name (also closes a pre-existing,
+lower-severity path-traversal gap the model flagged in the same pass, present before this
+migration too) and rejecting the reserved leg name `"legs"`. Four new regression tests cover the
+reserved-name rejection and the path-separator rejection for both expeditions and legs.
+
+The model's third finding also held up: the docker-compose bind mount (`./state:/app/state/
+clawmarks`) means a host running docker-compose from a repo checkout gets expedition config
+(and generation output, already true before this migration) landing directly in `<repo>/state/`,
+which `.gitignore` never covered. Added `/state/` to `.gitignore`.
+
+Verified every claim by hand before fixing anything (per delegate-code-review's rule not to
+trust a model's mechanism claim at face value): read `_create_leg`, `_create_expedition`, and
+`_list_expeditions()` directly, confirmed the collision is real by tracing `config.leg_dir()`
+against the new `EXPEDITIONS_DIR` value, and confirmed `git check-ignore` returned nothing for
+`state/` before the fix. Full suite after the fix: 430 passed. Ruff, MyPy, and `git diff --check`
+clean.

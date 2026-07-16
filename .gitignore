@@ -9,6 +9,13 @@ TODO.txt
 # archive: superseded/unrelated material kept on disk, not in history
 archive/
 
+# expedition/leg config: lives under $XDG_STATE_HOME/clawmarks/expeditions/, not the repo (ADR 0001)
+/expeditions/
+# docker-compose's CLAWMARKS_STATE_DIR bind mount target (docker-compose.yml): on a host that
+# runs docker-compose from a repo checkout, this is where generation output and expedition/leg
+# config actually land, so it must never be tracked.
+/state/
+
 # large binaries and generated media: regenerable from scripts + prompts, don't belong in git
 *.safetensors
 *.zip
@@ -26,21 +33,8 @@ review_sheets/
 samples/
 training_samples_v3_fixed/
 valgrid/
-notes/probe_uncanny/
-notes/probe_strength/
-notes/uncanny_sweep/*.html
-notes/uncanny_sweep/*.js
-notes/uncanny_sweep/scan_data.json
-notes/uncanny_sweep/manifest.json
-notes/uncanny_sweep/manifest_partial.json
-notes/uncanny_sweep/scored_manifest.json
-notes/uncanny_sweep/scored_manifest_round1_only.json
-notes/uncanny_sweep/similarity.json
-notes/uncanny_sweep/similarity_scored.json
-notes/uncanny_sweep/solution_map_data.json
-notes/uncanny_sweep/*.pt
-notes/uncanny_sweep2/*.html
-notes/uncanny_sweep2/scored_manifest.json
+# uncanny_sweep, uncanny_sweep2, probe_uncanny, probe_strength moved out of notes/ entirely,
+# to $XDG_STATE_HOME/clawmarks (see config.py's STATE_DIR), so they no longer need entries here.
 notes/uncanny_seedrun1/
 *.backup_candidate_seeds_*
 .playwright-mcp/
