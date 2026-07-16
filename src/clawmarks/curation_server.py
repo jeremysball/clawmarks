@@ -977,6 +977,9 @@ a {{ color:var(--accent); }}
 
     def send_error(self, code, message=None, explain=None):
         if code == 404:
+            if self.path.startswith("/api/"):
+                self._json_response(404, {"error": f"unknown route: {self.path}"})
+                return
             self._send_404_page(self.path)
             return
         super().send_error(code, message, explain)
