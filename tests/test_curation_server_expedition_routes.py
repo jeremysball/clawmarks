@@ -1,5 +1,6 @@
 import json
 import threading
+import urllib.error
 import urllib.request
 from http.server import HTTPServer
 
@@ -114,3 +115,30 @@ def test_status_page_data_branch_surfaces_comparison_count(running_server_with_l
 
     assert 'id="cmpStat"' in body
     assert "fetch('/api/preference_status')" in body
+
+
+def test_unfavorite_rejects_payload_for_stale_leg(running_server_with_leg):
+    leg_a = config.leg_dir("uncanny_frontier", "cockpit")
+    leg_b = config.leg_dir("uncanny_frontier", "round2")
+    leg_b.mkdir(parents=True, exist_ok=True)
+    (leg_b / "round2.json").write_text("{}")
+    favorites_a = {"gen1_a": {"tag": "gen1_a"}}
+    (leg_a / "user_favorites.json").write_text(json.dumps(favorites_a))
+
+    port = running_server_with_leg.server_address[1]
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}/api/unfavorite",
+        data=json.dumps({
+            "tag": "gen1_a",
+            "expedition": "uncanny_frontier",
+            "leg": "round2",
+        }).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(request)
+
+    assert exc_info.value.code == 409
+    assert json.loads((leg_a / "user_favorites.json").read_text()) == favorites_a

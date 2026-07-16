@@ -84,6 +84,7 @@ netns and auto-detection would otherwise fall back to 0.0.0.0 anyway).
 import base64
 import html
 import json
+import logging
 import os
 import random
 import re
@@ -122,6 +123,7 @@ with open(os.path.join(os.path.dirname(__file__), "static", "favicon.png"), "rb"
     _FAVICON_PNG = _f.read()
 
 _live_cache = LiveCache()
+_logger = logging.getLogger(__name__)
 
 _active_selection = {"expedition": None, "leg": None}
 
@@ -322,8 +324,10 @@ def _preference_retrain_gate_error():
                 f"via compare.html first.")
     return ""
 
-def _favorites_file():
-    return _require_out_dir() / "user_favorites.json"
+def _favorites_file(expedition=None, leg=None):
+    if expedition is None or leg is None:
+        return _require_out_dir() / "user_favorites.json"
+    return config.leg_dir(expedition, leg) / "user_favorites.json"
 
 
 def _comparisons_file():
@@ -1560,20 +1564,40 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             if not tag:
                 self._json_response(400, {"error": "missing 'tag'"})
                 return
+            expedition = payload.get("expedition")
+            leg = payload.get("leg")
+            if expedition is None or leg is None:
+                _logger.warning("favorite mutation without expedition/leg is deprecated")
+                favorites_file = _favorites_file()
+            elif (expedition, leg) != (_active_selection["expedition"], _active_selection["leg"]):
+                self._json_response(409, {"error": "favorite mutation targets a stale expedition/leg"})
+                return
+            else:
+                favorites_file = _favorites_file(expedition, leg)
             with _lock:
-                favorites = load_store(_favorites_file())
+                favorites = load_store(favorites_file)
                 payload["favorited_at"] = datetime.now(timezone.utc).isoformat()
                 favorites[tag] = payload
-                save_store(_favorites_file(), favorites)
+                save_store(favorites_file, favorites)
             self._json_response(200, {"ok": True, "count": len(favorites)})
             return
 
         if self.path == "/api/unfavorite":
             tag = payload.get("tag")
+            expedition = payload.get("expedition")
+            leg = payload.get("leg")
+            if expedition is None or leg is None:
+                _logger.warning("favorite mutation without expedition/leg is deprecated")
+                favorites_file = _favorites_file()
+            elif (expedition, leg) != (_active_selection["expedition"], _active_selection["leg"]):
+                self._json_response(409, {"error": "favorite mutation targets a stale expedition/leg"})
+                return
+            else:
+                favorites_file = _favorites_file(expedition, leg)
             with _lock:
-                favorites = load_store(_favorites_file())
+                favorites = load_store(favorites_file)
                 favorites.pop(tag, None)
-                save_store(_favorites_file(), favorites)
+                save_store(favorites_file, favorites)
             self._json_response(200, {"ok": True, "count": len(favorites)})
             return
 

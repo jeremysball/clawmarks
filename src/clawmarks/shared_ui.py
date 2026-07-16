@@ -78,7 +78,9 @@ def nav_bar_html(current, active_expedition=None, active_leg=None, running=None)
             f'title="an overnight search run is live">RUNNING: {r_exp}/{r_leg}</span>'
         )
     return (
-        '<div id="topnav" class="topnav" data-autohide>'
+        f'<div id="topnav" class="topnav" data-autohide '
+        f'data-expedition="{html.escape(active_expedition or "")}" '
+        f'data-leg="{html.escape(active_leg or "")}">'
         '<a class="navlink" href="explore.html">&larr; all tools</a>'
         f'{active_label}{running_label}'
         '<select onchange="if(this.value) location.href=this.value;">'
@@ -264,6 +266,8 @@ _LIGHTBOX_JS = r"""(function(){
   let favorites = {};
   let counterfactuals = {};
   let el = null;
+  let LB_EXPEDITION = null;
+  let LB_LEG = null;
 
   function ensureDom(){
     if (el) return;
@@ -379,6 +383,11 @@ _LIGHTBOX_JS = r"""(function(){
   </div>
   <div class="lb-simlabel">similar images (by DINOv2 embedding)</div>
   <div class="lb-simstrip"></div>`;
+    const context = document.getElementById('topnav');
+    LB_EXPEDITION = context ? context.dataset.expedition : null;
+    LB_LEG = context ? context.dataset.leg : null;
+    el.dataset.expedition = LB_EXPEDITION || '';
+    el.dataset.leg = LB_LEG || '';
     document.body.appendChild(el);
 
     const mainImg = el.querySelector('.lb-main');
@@ -623,16 +632,18 @@ _LIGHTBOX_JS = r"""(function(){
     const d = order[idx];
     const isFav = !!favorites[d.tag];
     const endpoint = isFav ? '/api/unfavorite' : '/api/favorite';
-    const body = isFav ? {tag: d.tag} : Object.assign({}, d);
+    const body = isFav
+      ? {tag: d.tag, expedition: LB_EXPEDITION, leg: LB_LEG}
+      : Object.assign({}, d, {expedition: LB_EXPEDITION, leg: LB_LEG});
     const removedRecord = isFav ? favorites[d.tag] : null;
     fetch(endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error('favorite save failed'); return r.json(); })
       .then(() => {
         if (isFav) delete favorites[d.tag]; else favorites[d.tag] = body;
         render();
         document.dispatchEvent(new CustomEvent('lightbox:favorite', {detail: {tag: d.tag, favorited: !isFav}}));
         if (isFav && removedRecord) showUndoFavorite(d.tag, removedRecord);
-      });
+      }).catch(() => {});
   }
   let undoTimer = null;
   function showUndoFavorite(tag, record){
@@ -643,8 +654,10 @@ _LIGHTBOX_JS = r"""(function(){
     const undoBtn = document.createElement('button');
     undoBtn.textContent = 'Undo';
     undoBtn.onclick = () => {
-      fetch('/api/favorite', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(record)})
-        .then(r => r.json()).then(() => { favorites[tag] = record; render(); });
+      const body = Object.assign({}, record, {expedition: LB_EXPEDITION, leg: LB_LEG});
+      fetch('/api/favorite', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+        .then(r => { if (!r.ok) throw new Error('favorite save failed'); return r.json(); })
+        .then(() => { favorites[tag] = body; render(); }).catch(() => {});
     };
     el.querySelector('.lb-actions').appendChild(undoBtn);
     undoTimer = setTimeout(() => { undoBtn.remove(); }, 10000);
