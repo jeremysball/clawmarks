@@ -181,10 +181,22 @@ def _list_expeditions():
     return result
 
 
+def _validate_expedition_or_leg_name(name, kind, reserved=()):
+    """Reject a name that would escape EXPEDITIONS_DIR/<expedition>/ (path separators, '..')
+    or collide with a reserved path segment that directory uses for its own config
+    (e.g. a leg literally named "legs" would resolve config.leg_dir() to the same directory
+    that holds every other leg's legs/<leg>.json config file)."""
+    if os.sep in name or (os.altsep and os.altsep in name) or "/" in name or ".." in name:
+        raise ValueError(f"{kind} name {name!r} may not contain a path separator or '..'")
+    if name in reserved:
+        raise ValueError(f"{kind} name {name!r} is reserved")
+
+
 def _create_expedition(payload):
     name = (payload.get("name") or "").strip()
     if not name:
         raise ValueError("'name' is required")
+    _validate_expedition_or_leg_name(name, "expedition")
     expedition_dir = config.EXPEDITIONS_DIR / name
     if expedition_dir.exists():
         raise ValueError(f"expedition {name!r} already exists")
@@ -205,6 +217,27 @@ def _create_expedition(payload):
     atomic_json_write(expedition_dir / "legs" / "cockpit.json", {})
     config.leg_dir(name, "cockpit").mkdir(parents=True, exist_ok=True)
     return {"ok": True, "name": name}
+
+
+def _create_leg(payload):
+    expedition = (payload.get("expedition") or "").strip()
+    name = (payload.get("name") or "").strip()
+    if not expedition:
+        raise ValueError("'expedition' is required")
+    if not name:
+        raise ValueError("'name' is required")
+    _validate_expedition_or_leg_name(name, "leg", reserved={"legs"})
+    expedition_dir = config.EXPEDITIONS_DIR / expedition
+    if not (expedition_dir / "expedition.json").exists():
+        raise ValueError(f"unknown expedition {expedition!r}")
+    leg_file = expedition_dir / "legs" / f"{name}.json"
+    if leg_file.exists():
+        raise ValueError(f"leg {name!r} already exists in expedition {expedition!r}")
+    # Empty overrides, same as the cockpit leg _create_expedition auto-scaffolds: a leg with no
+    # overrides file simply inherits every field from the expedition's own defaults.
+    atomic_json_write(leg_file, {})
+    config.leg_dir(expedition, name).mkdir(parents=True, exist_ok=True)
+    return {"ok": True, "expedition": expedition, "name": name}
 
 
 def _manifest_path():
@@ -1072,7 +1105,13 @@ a {{ color:var(--accent); }}
   padding:16px; margin-top:16px; max-width:640px; }}
 .exp-row {{ margin:8px 0; }}
 {BTN_CSS}
-#pickError {{ color:var(--down); font-size:12.5px; margin-top:8px; }}
+button {{ font-size:13px; padding:6px 12px; border-radius:6px; border:1px solid var(--border);
+  background:var(--accent); color:#0b0b0d; font-weight:600; cursor:pointer; }}
+button:disabled {{ opacity:0.4; cursor:not-allowed; }}
+input, select {{ font-size:13px; padding:6px 8px; border-radius:6px; border:1px solid var(--border);
+  background:var(--bg); color:var(--text); }}
+.formrow {{ display:flex; gap:8px; margin-top:8px; align-items:center; }}
+#pickError, #createExpError, #createLegError {{ color:var(--down); font-size:12.5px; margin-top:8px; }}
 </style></head><body>
 <h1>clawmarks curation server</h1>
 <div class="panel">
@@ -1080,6 +1119,27 @@ a {{ color:var(--accent); }}
 expedition first if this is a genuinely new line of work.</p>
 {rows or '<p class="sub">No expeditions exist yet.</p>'}
 <div id="pickError"></div>
+</div>
+<div class="panel">
+<p class="sub">Create a new expedition. It starts with an empty <code>cockpit</code> leg; add
+more legs below once it exists.</p>
+<div class="formrow">
+<input id="newExpName" placeholder="expedition name" autocomplete="off">
+<button id="createExpBtn">Create expedition</button>
+</div>
+<div id="createExpError"></div>
+</div>
+<div class="panel">
+<p class="sub">Create a new leg in an existing expedition. It inherits the expedition's
+defaults until you edit its <code>legs/&lt;name&gt;.json</code> file.</p>
+<div class="formrow">
+<select id="newLegExpedition">
+{"".join(f'<option value="{html.escape(e["name"])}">{html.escape(e["name"])}</option>' for e in expeditions) or '<option value="">no expeditions yet</option>'}
+</select>
+<input id="newLegName" placeholder="leg name" autocomplete="off">
+<button id="createLegBtn"{' disabled' if not expeditions else ''}>Create leg</button>
+</div>
+<div id="createLegError"></div>
 </div>
 <script>
 document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click', () => {{
@@ -1096,6 +1156,48 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
     }}
   }});
 }}));
+document.getElementById('createExpBtn').addEventListener('click', () => {{
+  document.getElementById('createExpError').textContent = '';
+  const name = document.getElementById('newExpName').value.trim();
+  if (!name) {{
+    document.getElementById('createExpError').textContent = 'name is required';
+    return;
+  }}
+  fetch('/api/expeditions', {{
+    method: 'POST', headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{name: name}}),
+  }}).then(async r => {{
+    const d = await r.json();
+    if (!r.ok) {{
+      document.getElementById('createExpError').textContent = d.error || 'creation failed';
+    }} else {{
+      location.reload();
+    }}
+  }});
+}});
+const createLegBtn = document.getElementById('createLegBtn');
+if (createLegBtn) {{
+  createLegBtn.addEventListener('click', () => {{
+    document.getElementById('createLegError').textContent = '';
+    const expedition = document.getElementById('newLegExpedition').value;
+    const name = document.getElementById('newLegName').value.trim();
+    if (!name) {{
+      document.getElementById('createLegError').textContent = 'name is required';
+      return;
+    }}
+    fetch('/api/legs', {{
+      method: 'POST', headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify({{expedition: expedition, name: name}}),
+    }}).then(async r => {{
+      const d = await r.json();
+      if (!r.ok) {{
+        document.getElementById('createLegError').textContent = d.error || 'creation failed';
+      }} else {{
+        location.reload();
+      }}
+    }});
+  }});
+}}
 </script>
 </body></html>""".encode()
 
@@ -1547,6 +1649,15 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         if self.path == "/api/expeditions":
             try:
                 result = _create_expedition(payload)
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
+            self._json_response(200, result)
+            return
+
+        if self.path == "/api/legs":
+            try:
+                result = _create_leg(payload)
             except ValueError as e:
                 self._json_response(400, {"error": str(e)})
                 return

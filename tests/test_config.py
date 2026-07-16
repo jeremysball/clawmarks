@@ -20,8 +20,8 @@ def test_derived_paths_under_state_dir():
     assert config.PROBE_STRENGTH_DIR == config.STATE_DIR / "probe_strength"
 
 
-def test_expeditions_dir_is_repo_relative():
-    assert config.EXPEDITIONS_DIR == config.ROOT / "expeditions"
+def test_expeditions_dir_is_state_dir_relative():
+    assert config.EXPEDITIONS_DIR == config.STATE_DIR / "expeditions"
 
 
 def test_active_leg_file_is_state_dir_relative():
