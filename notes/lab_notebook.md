@@ -2779,3 +2779,32 @@ a `coverage_frontier` create with a synthetic range that does not match any cell
 the server, not the client, decides), and `cs._active_selection` unchanged across all five
 verbs. The full suite passed 481 tests, Ruff passed, MyPy passed, and `git diff --check` passed.
 Committed as `feat(focus): expose dossier APIs`.
+
+### 2026-07-17: Final whole-branch review of feat/focus-persistence, approved
+
+Reviewed the full branch (8 commits, `5d3bdfe..12944e7`) against the Focus Persistence plan's
+global constraints: storage location, no-delete-before-replace, fsync-then-replace-then-fsync-
+parent on every write, one-level-at-a-time durable directory creation, `focus_`-prefixed UUID
+record IDs, `fcntl.flock` plus revision checks on every mutation, and untouched corrupt records.
+Every constraint holds. The reentrant cross-process lock test in `test_durable_records.py` uses
+real multiprocessing with opposite-order lock acquisition, not a same-process simulation, and a
+no-op flock mutation fails it, so the concurrency guarantee is genuinely exercised. No code path
+in `atomic_io.py`, `durable_records.py`, or `focus_store.py` deletes a file before its
+replacement succeeds.
+
+Triaged the ten non-blocking findings accumulated across Tasks 3-5. Nine closed as either
+working-as-designed or cosmetic, most notably the canonical-JSON tension: `atomic_json_write`
+writes records with `indent=1`, not the plan's canonical `sort_keys`/compact form, but tracing
+the actual call sites showed canonical-JSON encoding is only used for content-addressed digests
+(`sha256_json`, not yet called by any Focus write path), not for the on-disk record file itself.
+The plan's canonical-JSON line defines what canonical JSON is, not that every write must use it.
+
+One finding carries forward as a real, non-blocking follow-up: `FocusStore.list()`
+(`focus_store.py:80-85`) aborts entirely on the first corrupt record found in a scope, so one
+bad file 500s the whole list endpoint for that scope rather than skipping it and returning the
+rest. Worth fixing in a follow-up (log the corrupt file, return the remaining valid records),
+not worth blocking this merge over.
+
+Fresh verification run (not just re-trusting per-task reports): full suite 481 passed, Ruff
+clean, MyPy clean across 48 source files, `git diff --check` clean across the whole branch.
+Status: Approved. Proceeding to `superpowers:finishing-a-development-branch`.
