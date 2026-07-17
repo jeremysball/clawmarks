@@ -73,6 +73,29 @@ def map_payload(member_tags, real_anchor_tags=None):
     }
 
 
+def frontier_payload(faith, novelty, adjacent, real_anchor_tags=None, coverage_hint=None):
+    payload = {
+        "label": "Empty bin",
+        "source": {
+            "view": "coverage",
+            "kind": "coverage_frontier",
+            "score_ranges": {
+                "faithfulness": list(faith),
+                "novelty": list(novelty),
+            },
+            "adjacent_member_tags": list(adjacent),
+            "real_anchor_tags": real_anchor_tags or ["real.jpg"],
+        },
+        "question": "  Push here  ",
+        "observation": "Frontier cell.",
+        "hypothesis_text": "Marks survive.",
+        "test_contract": None,
+    }
+    if coverage_hint is not None:
+        payload["source"]["coverage_hint"] = coverage_hint
+    return payload
+
+
 def test_create_map_focus_preserves_text_and_deduplicates_tags(store, scope, manifest):
     focus = store.create(
         scope,
@@ -166,3 +189,114 @@ def test_malformed_json_is_preserved_and_reports_integrity_error(store, scope, m
 def test_missing_focus_raises_not_found(store, scope):
     with pytest.raises(FocusNotFound):
         store.get(scope, "focus_0123456789abcdef0123456789abcdef")
+
+
+def test_create_frontier_focus_requires_empty_adjacent_cell(store, scope, manifest):
+    focus = store.create(
+        scope,
+        frontier_payload(faith=[-0.2, 0.1], novelty=[0.8, 1.1], adjacent=["a"]),
+        manifest,
+        coverage_cells=[
+            {
+                "faith_lo": -0.2,
+                "faith_hi": 0.1,
+                "novelty_lo": 0.8,
+                "novelty_hi": 1.1,
+                "count": 0,
+                "frontier": True,
+            }
+        ],
+    )
+
+    assert focus["source"]["kind"] == "coverage_frontier"
+
+
+@pytest.mark.parametrize(
+    "faith,novelty",
+    [
+        ([0.2, 0.2], [0.1, 0.2]),
+        ([-1.1, 0], [0.1, 0.2]),
+        ([0, 1], [1.8, 2.1]),
+    ],
+)
+def test_frontier_ranges_must_be_ordered_and_in_domain(
+    store, scope, manifest, faith, novelty
+):
+    with pytest.raises(FocusValidationError):
+        store.create(
+            scope,
+            frontier_payload(faith, novelty, ["a"]),
+            manifest,
+            coverage_cells=[],
+        )
+
+
+@pytest.mark.parametrize(
+    "cell",
+    [
+        None,
+        {
+            "faith_lo": -0.2,
+            "faith_hi": 0.1,
+            "novelty_lo": 0.8,
+            "novelty_hi": 1.1,
+            "count": 1,
+            "frontier": True,
+        },
+        {
+            "faith_lo": -0.2,
+            "faith_hi": 0.1,
+            "novelty_lo": 0.8,
+            "novelty_hi": 1.1,
+            "count": 0,
+            "frontier": False,
+        },
+    ],
+)
+def test_create_frontier_rejects_invalid_coverage_cells(
+    store, scope, manifest, cell
+):
+    cells = [] if cell is None else [cell]
+    with pytest.raises(FocusValidationError):
+        store.create(
+            scope,
+            frontier_payload(faith=[-0.2, 0.1], novelty=[0.8, 1.1], adjacent=["a"]),
+            manifest,
+            coverage_cells=cells,
+        )
+
+
+def test_create_frontier_focus_preserves_coverage_hint_and_normalizes_ranges(
+    store, scope, manifest
+):
+    hint = {
+        "binning_version": "sha256:abc",
+        "metric_domains": {"faithfulness": [-1.0, 1.0], "novelty": [0.0, 2.0]},
+        "row": 4,
+        "column": 3,
+    }
+    faith, novelty = [-0.2, 0.1], [0.8, 1.1]
+    cells = [
+        {
+            "faith_lo": -0.2,
+            "faith_hi": 0.1,
+            "novelty_lo": 0.8,
+            "novelty_hi": 1.1,
+            "count": 0,
+            "frontier": True,
+        }
+    ]
+
+    focus = store.create(
+        scope,
+        frontier_payload(faith, novelty, ["a"], coverage_hint=hint),
+        manifest,
+        coverage_cells=cells,
+    )
+
+    assert focus["source"]["score_ranges"] == {
+        "faithfulness": [float(v) for v in faith],
+        "novelty": [float(v) for v in novelty],
+    }
+    assert focus["source"]["adjacent_member_tags"] == ["a"]
+    assert focus["source"]["coverage_hint"] == hint
