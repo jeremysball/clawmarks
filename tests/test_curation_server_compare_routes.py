@@ -77,7 +77,7 @@ def test_compare_next_returns_done_with_fewer_than_two_images(running_server):
         {"tag": "only", "prompt_name": "p", "prompt_type": "style", "centroid_sim": 0.5,
          "novelty": 0.5, "strength": 1.0, "cfg": 7.0, "file": "only.png"},
     ]))
-    cs._manifest_cache["manifest"] = None
+    cs._manifest_cache.clear()
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/compare/next") as resp:
         data = json.loads(resp.read().decode())
     assert data == {"done": True}

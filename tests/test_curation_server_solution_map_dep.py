@@ -1,22 +1,27 @@
 from clawmarks import curation_server as cs
+from clawmarks import config
 
 
 def test_get_solution_map_data_uses_live_cache(tmp_path, monkeypatch):
-    monkeypatch.setattr(cs, "_active_out_dir", lambda: tmp_path)
+    monkeypatch.setattr(config, "EXPEDITIONS_DIR", tmp_path / "expeditions")
     monkeypatch.setattr(cs, "_live_cache", cs.LiveCache())
-    (tmp_path / "scored_manifest.json").write_text("[]")
+    out_dir = config.leg_dir("demo", "round1")
+    out_dir.mkdir(parents=True)
+    (out_dir / "scored_manifest.json").write_text("[]")
 
     sentinel = {"solution_map_data": {"points": [], "real_points": []}, "similarity_scored": {}}
     monkeypatch.setattr(cs.solution_map, "compute_data", lambda sweep_dir: sentinel)
 
-    assert cs._get_solution_map_data() is sentinel
+    assert cs._get_solution_map_data("demo", "round1") is sentinel
 
 
 def test_get_solution_map_data_watches_the_final_embeddings_file_too(tmp_path, monkeypatch):
-    monkeypatch.setattr(cs, "_active_out_dir", lambda: tmp_path)
+    monkeypatch.setattr(config, "EXPEDITIONS_DIR", tmp_path / "expeditions")
     monkeypatch.setattr(cs, "_live_cache", cs.LiveCache())
-    (tmp_path / "scored_manifest.json").write_text("[]")
-    embs_file = tmp_path / "solution_map_final_embs.pt"
+    out_dir = config.leg_dir("demo", "round1")
+    out_dir.mkdir(parents=True)
+    (out_dir / "scored_manifest.json").write_text("[]")
+    embs_file = out_dir / "solution_map_final_embs.pt"
     embs_file.write_text("v1")
 
     calls = []
@@ -25,11 +30,11 @@ def test_get_solution_map_data_watches_the_final_embeddings_file_too(tmp_path, m
         lambda sweep_dir: calls.append(1) or {"n": len(calls)},
     )
 
-    first = cs._get_solution_map_data()
+    first = cs._get_solution_map_data("demo", "round1")
     assert first == {"n": 1}
 
     # Second call with nothing changed should hit the cache.
-    second = cs._get_solution_map_data()
+    second = cs._get_solution_map_data("demo", "round1")
     assert second == {"n": 1}
 
     # Swap the embeddings file (simulating merge_round2.py overwriting it) without touching
@@ -39,5 +44,5 @@ def test_get_solution_map_data_watches_the_final_embeddings_file_too(tmp_path, m
     embs_file.write_text("v2")
     os.utime(embs_file, (new_mtime, new_mtime))
 
-    third = cs._get_solution_map_data()
+    third = cs._get_solution_map_data("demo", "round1")
     assert third == {"n": 2}

@@ -2836,3 +2836,17 @@ explicitly excludes plain anchors (`a:not(.navlink):not(.nav-activeleg)`). Fixed
 addition to the existing mobile media query in `shared_ui.py`; re-verified zero small targets
 afterward. Final gate: `uv run pytest -q` 494 passed, Ruff and MyPy clean, `git diff --check`
 clean. Opened as PR #51 against `main`.
+
+### 2026-07-17: Research workspace navigation Task 2 complete
+
+Task 2 of the Research Workspace Navigation plan made live page data scope-explicit. Manifest
+lookups and every live-cache key now include the requested expedition and leg, so two browser tabs
+cannot reuse one another's computed page data. Focus-scoped GET routes resolve one immutable
+`WorkspaceContext` per request and leave the global active-leg selection and `active_leg.json`
+untouched. The new `/generated/<tag>` route and the scoped `/thumbs/<tag>.jpg` path resolve the tag
+inside the requested leg's manifest and reject manifest file paths outside that leg directory.
+
+TDD verification added real two-leg HTTP fixtures, full-image reads, thumbnail generation, and
+outside-leg path rejection. The focused suite passed 13 tests, the full suite passed 554 tests,
+Ruff passed, and MyPy passed across 49 source files. The full suite still reports existing
+third-party scikit-learn and UMAP warnings.

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from clawmarks.focus_store import (
     FocusIntegrityError,
@@ -197,3 +197,12 @@ def context_url(
     if encoded:
         return f"{base_path}?{encoded}"
     return base_path
+
+
+def generated_image_url(
+    tag: str, context: WorkspaceContext, thumbnail: bool = False
+) -> str:
+    """Build a leg-scoped URL for one generated image or its thumbnail."""
+    encoded_tag = quote(tag, safe="")
+    path = f"/thumbs/{encoded_tag}.jpg" if thumbnail else f"/generated/{encoded_tag}"
+    return context_url(path, context, include_focus=False)

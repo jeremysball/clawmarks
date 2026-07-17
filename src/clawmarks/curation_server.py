@@ -133,6 +133,11 @@ from clawmarks.shared_ui import (
     nav_bar_html,
 )
 from clawmarks.live_cache import LiveCache
+from clawmarks.workspace_context import (
+    ContextQueryError,
+    WorkspaceContext,
+    resolve_workspace_context,
+)
 from clawmarks.build import (
     scan_gallery, similarity_index, solution_map, map_view, redundancy_view, coverage_map,
     novelty_decay, lineage_view, elite_archive, preference_rank, explore_hub,
@@ -271,77 +276,114 @@ def _create_leg(payload):
     return {"ok": True, "expedition": expedition, "name": name}
 
 
-def _manifest_path():
-    return str(_require_out_dir() / "scored_manifest.json")
+def _scope_out_dir(expedition, leg):
+    if expedition is None or leg is None:
+        legacy_dir = _active_out_dir()
+        if legacy_dir is not None:
+            return legacy_dir
+        raise NoActiveLegError("no expedition/leg selected")
+    return config.leg_dir(expedition, leg)
 
 
-def _get_scan_items():
+def _active_scope():
+    expedition = _active_selection["expedition"]
+    leg = _active_selection["leg"]
+    active_dir = _active_out_dir()
+    if active_dir is not None and (
+        expedition is None
+        or leg is None
+        or active_dir.resolve() != config.leg_dir(expedition, leg).resolve()
+    ):
+        return None, None
+    return expedition, leg
+
+
+def _manifest_path(expedition, leg):
+    return _scope_out_dir(expedition, leg) / "scored_manifest.json"
+
+
+def _get_scan_items(expedition, leg):
+    scope = f"{expedition}:{leg}"
     _live_cache.get(
-        "similarity", similarity_index.compute_data,
-        watched_files=[_manifest_path()], sweep_dir=str(_active_out_dir()),
+        f"similarity:{scope}", similarity_index.compute_data,
+        watched_files=[str(_manifest_path(expedition, leg))],
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
     return _live_cache.get(
-        "scan", scan_gallery.compute_data,
-        watched_files=[_manifest_path()], depends_on=["similarity"], sweep_dir=str(_active_out_dir()),
+        f"scan:{scope}", scan_gallery.compute_data,
+        watched_files=[str(_manifest_path(expedition, leg))],
+        depends_on=[f"similarity:{scope}"],
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _solution_map_watched_files():
-    files = [_manifest_path()]
-    embs_file = str(_active_out_dir() / "solution_map_final_embs.pt")
+def _solution_map_watched_files(expedition, leg):
+    out_dir = _scope_out_dir(expedition, leg)
+    files = [str(_manifest_path(expedition, leg))]
+    embs_file = str(out_dir / "solution_map_final_embs.pt")
     if os.path.exists(embs_file):
         files.append(embs_file)
     return files
 
 
-def _get_solution_map_data():
+def _get_solution_map_data(expedition, leg):
+    scope = f"{expedition}:{leg}"
     return _live_cache.get(
-        "solution-map", solution_map.compute_data,
-        watched_files=_solution_map_watched_files(), sweep_dir=str(_active_out_dir()),
+        f"solution-map:{scope}", solution_map.compute_data,
+        watched_files=_solution_map_watched_files(expedition, leg),
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _get_map_data():
-    _get_solution_map_data()
+def _get_map_data(expedition, leg):
+    scope = f"{expedition}:{leg}"
+    _get_solution_map_data(expedition, leg)
     return _live_cache.get(
-        "map", map_view.compute_data,
-        watched_files=[], depends_on=["solution-map"], sweep_dir=str(_active_out_dir()),
+        f"map:{scope}", map_view.compute_data,
+        watched_files=[], depends_on=[f"solution-map:{scope}"],
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _get_redundancy_data():
-    _get_solution_map_data()
+def _get_redundancy_data(expedition, leg):
+    scope = f"{expedition}:{leg}"
+    _get_solution_map_data(expedition, leg)
     return _live_cache.get(
-        "redundancy", redundancy_view.compute_data,
-        watched_files=[], depends_on=["solution-map"], sweep_dir=str(_active_out_dir()),
+        f"redundancy:{scope}", redundancy_view.compute_data,
+        watched_files=[], depends_on=[f"solution-map:{scope}"],
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _get_manifest_cached(target_name, compute_fn):
+def _get_manifest_cached(target_name, compute_fn, expedition, leg):
+    scope = f"{expedition}:{leg}"
     return _live_cache.get(
-        target_name, compute_fn,
-        watched_files=[_manifest_path()], sweep_dir=str(_active_out_dir()),
+        f"{target_name}:{scope}", compute_fn,
+        watched_files=[str(_manifest_path(expedition, leg))],
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _prediction_watched_files():
+def _prediction_watched_files(expedition=None, leg=None):
     """Like _manifest_path() alone, but also watches the trained pairwise model so a retrain
     actually invalidates any cached page whose rendering depends on the model's predictions
     (predicted archive.html, preference_rank.html) instead of serving stale predictions until
     the manifest next changes or the server restarts."""
-    files = [_manifest_path()]
-    out_dir = _active_out_dir()
+    if expedition is None or leg is None:
+        expedition, leg = _active_scope()
+    files = [str(_manifest_path(expedition, leg))]
+    out_dir = _scope_out_dir(expedition, leg)
     model_files = (
         preference_pairwise_model.model_file(out_dir),
         preference_pairwise_model.model_meta_file(out_dir),
-    ) if out_dir else ()
+    )
     files.extend(str(f) for f in model_files)
     return files
 
 
-def _preference_status_watched_files():
+def _preference_status_watched_files(expedition, leg):
     files = []
-    out_dir = _active_out_dir()
+    out_dir = _scope_out_dir(expedition, leg)
     leg_files = (
         preference_pairwise_model.model_file(out_dir),
         preference_pairwise_model.model_meta_file(out_dir),
@@ -353,10 +395,12 @@ def _preference_status_watched_files():
     return files
 
 
-def _get_preference_status_data():
+def _get_preference_status_data(expedition, leg):
+    scope = f"{expedition}:{leg}"
     return _live_cache.get(
-        "preference-status", preference_status.compute_data,
-        watched_files=_preference_status_watched_files(), sweep_dir=str(_active_out_dir()),
+        f"preference-status:{scope}", preference_status.compute_data,
+        watched_files=_preference_status_watched_files(expedition, leg),
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
@@ -867,26 +911,47 @@ def cockpit_evidence(manifest, prompt, favorites, comparisons, top_n=3, cell_tag
     return out
 
 
-_manifest_cache = {"manifest": None, "mtime": None, "by_tag": None}
+_manifest_cache: dict[
+    tuple[str | None, str | None], dict[str, object]
+] = {}
 _manifest_cache_lock = threading.Lock()
 
 
-def load_manifest():
-    path = _active_out_dir() / "scored_manifest.json"
+def load_manifest(expedition, leg):
+    path = _manifest_path(expedition, leg)
+    cache_key = (expedition, leg)
     with _manifest_cache_lock:
         mtime = os.path.getmtime(path)
-        if _manifest_cache["manifest"] is None or _manifest_cache["mtime"] != mtime:
+        cached = _manifest_cache.get(cache_key)
+        if cached is None or cached["mtime"] != mtime:
             with open(path) as f:
                 manifest = json.load(f)
-            _manifest_cache["manifest"] = manifest
-            _manifest_cache["by_tag"] = {m["tag"]: m for m in manifest}
-            _manifest_cache["mtime"] = mtime
-        return _manifest_cache["manifest"]
+            cached = {
+                "manifest": manifest,
+                "by_tag": {m["tag"]: m for m in manifest},
+                "mtime": mtime,
+            }
+            _manifest_cache[cache_key] = cached
+        return cached["manifest"]
 
 
-def manifest_entry_by_tag(tag):
-    load_manifest()
-    return _manifest_cache["by_tag"].get(tag)
+def manifest_entry_by_tag(tag, expedition, leg):
+    load_manifest(expedition, leg)
+    return _manifest_cache[(expedition, leg)]["by_tag"].get(tag)
+
+
+def _manifest_file_in_scope(entry, out_dir):
+    candidate = Path(entry["file"])
+    if not candidate.is_absolute():
+        candidate = out_dir / candidate
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(out_dir.resolve())
+    except ValueError as exc:
+        raise FileNotFoundError("manifest image is outside its leg directory") from exc
+    if not resolved.is_file():
+        raise FileNotFoundError(str(resolved))
+    return resolved
 
 
 _ROUTES = [
@@ -931,9 +996,43 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_image_file(self, path):
+        body = path.read_bytes()
+        suffix = path.suffix.lower()
+        content_type = "image/png" if suffix == ".png" else "image/jpeg"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_scoped_generated_image(self, tag, context, thumbnail):
+        expedition, leg = self._page_scope(context)
+        out_dir = _scope_out_dir(expedition, leg)
+        match = manifest_entry_by_tag(tag, expedition, leg)
+        if match is None:
+            self.send_error(404, "no manifest entry for this tag")
+            return
+        try:
+            image_path = _manifest_file_in_scope(match, out_dir)
+        except (KeyError, FileNotFoundError):
+            self.send_error(404, "manifest image is unavailable")
+            return
+        if not thumbnail:
+            self._send_image_file(image_path)
+            return
+
+        thumbnail_path = out_dir / "thumbs" / f"{tag}.jpg"
+        if not thumbnail_path.exists():
+            thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+            generate_thumbnail(str(image_path), str(thumbnail_path))
+        self._send_image_file(thumbnail_path)
+
     def do_GET(self):
         try:
             self._do_GET()
+        except ContextQueryError as e:
+            self._send_context_error(e)
         except NoActiveLegError as e:
             self._send_no_active_leg_error(e)
         except Exception as e:
@@ -967,6 +1066,17 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
         except Exception:
             pass  # client already gone; nothing left to send
+
+    def _send_context_error(self, exc):
+        body = f"<h1>Invalid workspace context</h1><p>{html.escape(str(exc))}</p>".encode()
+        try:
+            self.send_response(400)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception:
+            pass
 
     def _send_json_error(self, exc):
         no_manifest = isinstance(exc, FileNotFoundError) and "scored_manifest.json" in str(exc)
@@ -1090,7 +1200,7 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
         else:
             n_entries = 0
             try:
-                manifest = load_manifest()
+                manifest = load_manifest(selection["expedition"], selection["leg"])
                 n_entries = len(manifest)
                 n_present = sum(1 for m in manifest if os.path.exists(m["file"]))
                 manifest_summary = f"{n_present}/{n_entries} manifest images present on disk"
@@ -1111,6 +1221,17 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _page_context(self):
+        return resolve_workspace_context(
+            self.path, _active_selection, self._focus_store()
+        )
+
+    def _page_scope(self, context: WorkspaceContext):
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        if not any(key in query for key in ("expedition", "leg", "focus_id")):
+            return _active_scope()
+        return context.expedition, context.leg
 
     def _status_page_data_body(self, manifest_summary):
         links = " &middot; ".join(f'<a href="{path}">{label}</a>' for path, label in _ROUTES)
@@ -1406,6 +1527,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
 </body></html>""".encode()
 
     def _do_GET(self):
+        route_path = urllib.parse.urlparse(self.path).path
         if self.path == "/api/active-leg":
             self._json_response(200, dict(_active_selection))
             return
@@ -1429,7 +1551,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         if self.path == "/api/compare/next":
             with _lock:
                 comparisons = load_comparisons()
-                response = next_compare_response(load_manifest(), comparisons)
+                response = next_compare_response(load_manifest(*_active_scope()), comparisons)
             self._json_response(200, response)
             return
         if self.path == "/api/favorites":
@@ -1449,7 +1571,9 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
                 self._json_response(200, load_store(_seeds_file()))
             return
         if self.path == "/api/cockpit/target_cells":
-            coverage_data = _get_manifest_cached("coverage", coverage_map.compute_data)
+            coverage_data = _get_manifest_cached(
+                "coverage", coverage_map.compute_data, *_active_scope(),
+            )
             cells = coverage_map.top_frontier_cells(coverage_data, n=3)
             self._json_response(200, {"cells": cells})
             return
@@ -1507,9 +1631,11 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.send_error(404, "unknown font asset")
             return
 
-        if self.path == "/scan.html" or self.path.startswith("/scan.html?"):
+        if route_path == "/scan.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
             html = scan_gallery.render_html(
-                _get_scan_items(), _active_selection["expedition"], _active_selection["leg"]
+                _get_scan_items(expedition, leg), context.expedition, context.leg
             )
             body = html.encode()
             self.send_response(200)
@@ -1518,12 +1644,16 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.end_headers()
             self.wfile.write(body)
             return
-        if self.path == "/scan_data.json":
-            self._json_response(200, _get_scan_items())
+        if route_path == "/scan_data.json":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            self._json_response(200, _get_scan_items(expedition, leg))
             return
 
-        if self.path == "/map.html":
-            html = map_view.render_html(_get_map_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
+        if route_path == "/map.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = map_view.render_html(_get_map_data(expedition, leg), active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1532,8 +1662,10 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.wfile.write(body)
             return
 
-        if self.path == "/redundancy.html":
-            html = redundancy_view.render_html(_get_redundancy_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
+        if route_path == "/redundancy.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = redundancy_view.render_html(_get_redundancy_data(expedition, leg), active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1542,8 +1674,10 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.wfile.write(body)
             return
 
-        if self.path == "/coverage.html":
-            html = coverage_map.render_html(_get_manifest_cached("coverage", coverage_map.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
+        if route_path == "/coverage.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = coverage_map.render_html(_get_manifest_cached("coverage", coverage_map.compute_data, expedition, leg), active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1552,8 +1686,10 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.wfile.write(body)
             return
 
-        if self.path == "/novelty_decay.html":
-            html = novelty_decay.render_html(_get_manifest_cached("novelty_decay", novelty_decay.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
+        if route_path == "/novelty_decay.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = novelty_decay.render_html(_get_manifest_cached("novelty_decay", novelty_decay.compute_data, expedition, leg), active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1562,8 +1698,10 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.wfile.write(body)
             return
 
-        if self.path == "/lineage.html":
-            html = lineage_view.render_html(_get_manifest_cached("lineage", lineage_view.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
+        if route_path == "/lineage.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = lineage_view.render_html(_get_manifest_cached("lineage", lineage_view.compute_data, expedition, leg), active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1572,18 +1710,19 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.wfile.write(body)
             return
 
-        if self.path.startswith("/archive.html"):
-            out_dir = _active_out_dir()
-            use_predicted = (out_dir is not None
-                             and preference_settings.load(out_dir)["use_predicted_preference"])
+        if route_path == "/archive.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            out_dir = _scope_out_dir(expedition, leg)
+            use_predicted = preference_settings.load(out_dir)["use_predicted_preference"]
             target_name = "archive_predicted" if use_predicted else "archive_actual"
-            watched = _prediction_watched_files() if use_predicted else [_manifest_path()]
+            watched = _prediction_watched_files(expedition, leg) if use_predicted else [str(_manifest_path(expedition, leg))]
             data = _live_cache.get(
-                target_name,
+                f"{target_name}:{expedition}:{leg}",
                 lambda sd: elite_archive.compute_data(sd, use_predicted_preference=use_predicted),
-                watched_files=watched, sweep_dir=str(_active_out_dir()),
+                watched_files=watched, sweep_dir=str(out_dir),
             )
-            html = elite_archive.render_html(data, active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
+            html = elite_archive.render_html(data, active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1592,12 +1731,15 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.wfile.write(body)
             return
 
-        if self.path == "/preference_rank.html":
+        if route_path == "/preference_rank.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
             data = _live_cache.get(
-                "preference_rank", preference_rank.compute_data,
-                watched_files=_prediction_watched_files(), sweep_dir=str(_active_out_dir()),
+                f"preference_rank:{expedition}:{leg}", preference_rank.compute_data,
+                watched_files=_prediction_watched_files(expedition, leg),
+                sweep_dir=str(_scope_out_dir(expedition, leg)),
             )
-            html = preference_rank.render_html(data, active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
+            html = preference_rank.render_html(data, active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1606,8 +1748,10 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.wfile.write(body)
             return
 
-        if self.path == "/preference_status.html":
-            html = preference_status.render_html(_get_preference_status_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
+        if route_path == "/preference_status.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = preference_status.render_html(_get_preference_status_data(expedition, leg), active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
             body = html.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1616,8 +1760,10 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.wfile.write(body)
             return
 
-        if self.path == "/api/preference_status":
-            self._json_response(200, _get_preference_status_data())
+        if route_path == "/api/preference_status":
+            expedition = _active_selection["expedition"]
+            leg = _active_selection["leg"]
+            self._json_response(200, _get_preference_status_data(expedition, leg))
             return
 
         if self.path == "/explore.html":
@@ -1700,11 +1846,32 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self.wfile.write(body)
             return
 
-        if self.path.startswith("/thumbs/") and self.path.endswith(".jpg"):
-            thumb_path = str(_require_out_dir() / self.path.lstrip("/"))
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        has_scope_query = any(key in query for key in ("expedition", "leg", "focus_id"))
+
+        if route_path.startswith("/generated/"):
+            tag = urllib.parse.unquote(route_path[len("/generated/"):])
+            if not tag or "/" in tag:
+                self.send_error(404, "invalid generated image tag")
+                return
+            self._send_scoped_generated_image(tag, self._page_context(), thumbnail=False)
+            return
+
+        if route_path.startswith("/thumbs/") and route_path.endswith(".jpg"):
+            if has_scope_query:
+                tag = urllib.parse.unquote(route_path[len("/thumbs/"):-len(".jpg")])
+                if not tag or "/" in tag:
+                    self.send_error(404, "invalid thumbnail tag")
+                    return
+                self._send_scoped_generated_image(tag, self._page_context(), thumbnail=True)
+                return
+
+            thumb_path = str(_require_out_dir() / route_path.lstrip("/"))
             if not os.path.exists(thumb_path):
-                tag = os.path.basename(self.path)[: -len(".jpg")]
-                match = manifest_entry_by_tag(tag)
+                tag = os.path.basename(route_path)[: -len(".jpg")]
+                match = manifest_entry_by_tag(
+                    tag, *_active_scope()
+                )
                 if match is None:
                     self.send_error(404, "no manifest entry for this tag")
                     return
@@ -1812,7 +1979,9 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
                 self._json_response(400, {"error": "no trained model yet; cannot enable predicted preference"})
                 return
             preference_settings.save(enabled, out_dir)
-            self._json_response(200, _get_preference_status_data())
+            self._json_response(200, _get_preference_status_data(
+                *_active_scope()
+            ))
             return
 
         if self.path == "/api/preference_rank/flag":
@@ -1848,7 +2017,9 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             except Exception as e:
                 self._json_response(500, {"error": f"preference retrain crashed: {e}"})
                 return
-            self._json_response(200, _get_preference_status_data())
+            self._json_response(200, _get_preference_status_data(
+                *_active_scope()
+            ))
             return
 
         if self.path == "/api/favorite":
@@ -2180,12 +2351,17 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             except ValueError:
                 fb = nb = None
             if fb is not None:
-                coverage_data = _get_manifest_cached("coverage", coverage_map.compute_data)
+                coverage_data = _get_manifest_cached(
+                    "coverage", coverage_map.compute_data, *_active_scope(),
+                )
                 cell_tags = coverage_map.neighbor_tags(coverage_data, fb, nb)
         with _lock:
             favorites = load_store(_favorites_file())
             comparisons = load_comparisons()
-        nearest = cockpit_evidence(load_manifest(), prompt, favorites, comparisons, cell_tags=cell_tags)
+        nearest = cockpit_evidence(
+            load_manifest(*_active_scope()),
+            prompt, favorites, comparisons, cell_tags=cell_tags,
+        )
         self._json_response(200, {"nearest": nearest})
 
     def _handle_cockpit_run(self, trial_id):
@@ -2416,8 +2592,11 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         with _lock:
             favorites = load_store(_favorites_file())
             comparisons = load_comparisons()
-        manifest = load_manifest()
-        coverage_data = _get_manifest_cached("coverage", coverage_map.compute_data)
+        manifest = load_manifest(*_active_scope())
+        coverage_data = _get_manifest_cached(
+            "coverage", coverage_map.compute_data,
+            *_active_scope(),
+        )
         context = build_autopilot_context(coverage_data, manifest, favorites, comparisons)
 
         tmp_path = str(_active_out_dir() / f"cockpit_autopilot_{int(time.time())}.json")
