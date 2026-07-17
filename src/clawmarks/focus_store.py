@@ -110,9 +110,25 @@ class FocusStore:
         manifest: List[dict],
         coverage_cells: List[dict] | None = None,
     ) -> dict:
-        """Validate and persist a new map-member Focus."""
-        del coverage_cells
-        source = self._validate_map_source(scope, payload, manifest)
+        """Validate and persist a new Focus (map_members or coverage_frontier)."""
+        if not isinstance(payload, dict):
+            raise FocusValidationError("Focus payload must be an object")
+        raw_source = payload.get("source")
+        if not isinstance(raw_source, dict):
+            raise FocusValidationError("Focus source must be an object")
+        kind = raw_source.get("kind")
+        if kind == "map_members":
+            del coverage_cells
+            source = self._validate_map_source(scope, raw_source, manifest)
+        elif kind == "coverage_frontier":
+            if not isinstance(coverage_cells, list):
+                raise FocusValidationError("coverage_cells must be a list")
+            source = self._validate_frontier_source(
+                scope, raw_source, manifest, coverage_cells
+            )
+        else:
+            raise FocusValidationError(f"unsupported Focus source kind: {kind!r}")
+
         now = self._whole_second_utc()
         focus_id = self._validate_focus_id(new_id("focus"))
         path = self._record_path(scope, focus_id)
@@ -234,13 +250,8 @@ class FocusStore:
             raise FocusValidationError(f"unsupported update key: {key}")
 
     def _validate_map_source(
-        self, scope: Scope, payload: dict, manifest: List[dict]
+        self, scope: Scope, source: dict[str, Any], manifest: List[dict]
     ) -> dict[str, Any]:
-        if not isinstance(payload, dict):
-            raise FocusValidationError("Focus payload must be an object")
-        source = payload.get("source")
-        if not isinstance(source, dict):
-            raise FocusValidationError("Focus source must be an object")
         if source.get("view") != "map" or source.get("kind") != "map_members":
             raise FocusValidationError("Focus source must be map_members")
 
@@ -259,6 +270,122 @@ class FocusStore:
         normalized["member_tags"] = member_tags
         normalized["real_anchor_tags"] = real_anchor_tags
         return normalized
+
+    def _validate_frontier_source(
+        self,
+        scope: Scope,
+        source: dict[str, Any],
+        manifest: List[dict],
+        coverage_cells: List[dict],
+    ) -> dict[str, Any]:
+        if (
+            source.get("view") != "coverage"
+            or source.get("kind") != "coverage_frontier"
+        ):
+            raise FocusValidationError("Focus source must be coverage_frontier")
+
+        score_ranges = source.get("score_ranges")
+        if not isinstance(score_ranges, dict):
+            raise FocusValidationError("score_ranges must be an object")
+        faith_range = self._validate_metric_range(
+            score_ranges.get("faithfulness"), "faithfulness", -1.0, 1.0
+        )
+        novelty_range = self._validate_metric_range(
+            score_ranges.get("novelty"), "novelty", 0.0, 2.0
+        )
+
+        adjacent_member_tags = self._deduplicate_tags(
+            source.get("adjacent_member_tags"), "adjacent member"
+        )
+        if not adjacent_member_tags:
+            raise FocusValidationError(
+                "frontier Focus requires at least one adjacent member tag"
+            )
+        self._validate_manifest_members(scope, adjacent_member_tags, manifest)
+
+        raw_anchor_tags = source.get("real_anchor_tags", [])
+        if raw_anchor_tags is None:
+            raw_anchor_tags = []
+        real_anchor_tags = self._deduplicate_tags(raw_anchor_tags, "real anchor")
+        self._validate_real_anchors(real_anchor_tags)
+
+        self._validate_coverage_cell(coverage_cells, faith_range, novelty_range)
+
+        normalized = copy.deepcopy(source)
+        normalized["score_ranges"] = {
+            "faithfulness": faith_range,
+            "novelty": novelty_range,
+        }
+        normalized["adjacent_member_tags"] = adjacent_member_tags
+        normalized["real_anchor_tags"] = real_anchor_tags
+        return normalized
+
+    @staticmethod
+    def _validate_metric_range(
+        value: Any, metric: str, low: float, high: float
+    ) -> List[float]:
+        if not isinstance(value, list) or len(value) != 2:
+            raise FocusValidationError(
+                f"score_ranges.{metric} must contain exactly two values"
+            )
+        lo, hi = value
+        if (
+            isinstance(lo, bool)
+            or isinstance(hi, bool)
+            or not isinstance(lo, (int, float))
+            or not isinstance(hi, (int, float))
+        ):
+            raise FocusValidationError(
+                f"score_ranges.{metric} must contain finite numbers"
+            )
+        lo_f = float(lo)
+        hi_f = float(hi)
+        if (
+            lo_f != lo_f
+            or hi_f != hi_f
+            or lo_f in (float("inf"), float("-inf"))
+            or hi_f in (float("inf"), float("-inf"))
+        ):
+            raise FocusValidationError(
+                f"score_ranges.{metric} must contain finite numbers"
+            )
+        if not (lo_f < hi_f):
+            raise FocusValidationError(
+                f"score_ranges.{metric} must satisfy min < max"
+            )
+        if not (low <= lo_f and hi_f <= high):
+            raise FocusValidationError(
+                f"score_ranges.{metric} must lie within [{low}, {high}]"
+            )
+        return [lo_f, hi_f]
+
+    @staticmethod
+    def _validate_coverage_cell(
+        coverage_cells: List[dict],
+        faith_range: List[float],
+        novelty_range: List[float],
+    ) -> None:
+        for cell in coverage_cells:
+            if not isinstance(cell, dict):
+                continue
+            if (
+                cell.get("faith_lo") == faith_range[0]
+                and cell.get("faith_hi") == faith_range[1]
+                and cell.get("novelty_lo") == novelty_range[0]
+                and cell.get("novelty_hi") == novelty_range[1]
+            ):
+                if cell.get("count") != 0:
+                    raise FocusValidationError(
+                        "frontier Focus requires an empty coverage cell"
+                    )
+                if cell.get("frontier") is not True:
+                    raise FocusValidationError(
+                        "frontier Focus requires frontier=true on its coverage cell"
+                    )
+                return
+        raise FocusValidationError(
+            "frontier Focus requires a matching empty frontier coverage cell"
+        )
 
     @staticmethod
     def _deduplicate_tags(value: Any, kind: str) -> List[str]:

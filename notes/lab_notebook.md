@@ -2725,3 +2725,19 @@ under the durable per-record `fcntl` lock. The existing Focus test file was left
 unchanged apart from removing two unused imports required by Ruff.
 
 The focused suite passed 10 tests, the full suite passed 453 tests, Ruff passed, and MyPy passed.
+
+### 2026-07-17: Implemented Task 4 coverage-frontier Focus validation
+
+Extended `src/clawmarks/focus_store.py` so `FocusStore.create()` dispatches on `source.kind`.
+The existing `map_members` branch keeps its behavior; a new `coverage_frontier` branch validates
+`score_ranges` as two finite numbers per metric with `min < max`, faithfulness within `[-1.0, 1.0]`,
+novelty within `[0.0, 2.0]`, deduplicated `adjacent_member_tags` resolving exactly once in the
+scoped manifest via the same leg-containment path as member tags, real anchors via the existing
+real-art validation, and a caller-supplied `coverage_cells` list whose bin exactly matches the
+requested score range with `count == 0` and `frontier is True`. `coverage_hint` is preserved
+opaquely as the design spec allows; the canonical score ranges, deduplicated adjacent tags, and
+real anchors overwrite the deep-copied source. Map-member and frontier validation share manifest,
+real-anchor, deduplication, and per-record locking plumbing, so the discriminated union stays a
+single create path with no duplicate record-emission code.
+
+The focused suite passed 18 tests, the full suite passed 461 tests, Ruff passed, and MyPy passed.
