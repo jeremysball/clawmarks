@@ -25,7 +25,7 @@ from clawmarks.atomic_io import durable_makedirs, fsync_directory
 
 
 # Only characters that are safe in a single path component.
-_COMPONENT_RE = re.compile(r"[A-Za-z0-9_.-]+$")
+_COMPONENT_RE = re.compile(r"[A-Za-z0-9_.-]+\Z")
 
 # Process-local reentrant locks, one per absolute lock path.
 _rlock_lock = threading.Lock()
@@ -96,13 +96,15 @@ def _open_lock_file(path: Path) -> int:
 def file_locks(paths: Iterable[Path]) -> Iterator[None]:
     """Acquire exclusive flocks on all ``paths`` in a deterministic order.
 
-    Paths are resolved to absolute form, deduplicated, and sorted before any
-    lock is taken. A process-local ``threading.RLock`` plus a thread-local
-    nesting count make the lock reentrant within a process: only the outermost
+    Parent directories are resolved to absolute form while each final path
+    component remains literal, then paths are deduplicated and sorted before
+    any lock is taken. This preserves the symlink check for the lock file
+    itself. A process-local ``threading.RLock`` plus a thread-local nesting
+    count make the lock reentrant within a process: only the outermost
     acquisition opens the file and calls ``flock(LOCK_EX)``; only the
     outermost release calls ``flock(LOCK_UN)`` and closes the descriptor.
     """
-    resolved = sorted({Path(p).resolve() for p in paths})
+    resolved = sorted({Path(p).parent.resolve() / Path(p).name for p in paths})
     acquired: list[tuple[Path, threading.RLock]] = []
     opened: list[tuple[Path, int]] = []
     depths = _depths()
@@ -114,7 +116,11 @@ def file_locks(paths: Iterable[Path]) -> Iterator[None]:
             acquired.append((path, rlock))
             if depths.get(path, 0) == 0:
                 fd = _open_lock_file(path)
-                fcntl.flock(fd, fcntl.LOCK_EX)
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX)
+                except BaseException:
+                    os.close(fd)
+                    raise
                 opened.append((path, fd))
                 depths[path] = 1
             else:
