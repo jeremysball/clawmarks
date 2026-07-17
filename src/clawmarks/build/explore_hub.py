@@ -1,10 +1,10 @@
-"""
-Landing page linking every exploration/curation tool built for the uncanny-frontier search, so
-there's one page to bookmark instead of remembering file names. Static, no data dependencies of
-its own.
+"""Render the active research desk and its compact full-tool index."""
 
-Run: python3 -m clawmarks.build.explore_hub
-"""
+from __future__ import annotations
+
+import html
+import json
+from typing import Any, Iterable
 
 from clawmarks.shared_ui import (
     CONTROL_CSS,
@@ -14,12 +14,11 @@ from clawmarks.shared_ui import (
     SULFUR_CSS,
     SULFUR_FONT_CSS,
     TOPNAV_CSS,
-    info_btn,
     nav_bar_html,
 )
+from clawmarks.workspace_context import WorkspaceContext, context_url, generated_image_url
 
-# Order mirrors shared_ui.NAV_OPTIONS (minus explore.html, which is this hub) so the home page
-# and the jump-to dropdown list the same tools in the same order.
+
 TOOLS = [
     ("cockpit.html", "Generation cockpit", "Pick a mission, target a real coverage gap, draft a prompt against live evidence, queue a trial, and run it as a real generation batch scored into the archive."),
     ("runs.html", "Search runs", "Launch, monitor, and stop an overnight search round from the browser: backs up the round's out_dir and verifies it before launching, checks the RunPod balance floor, and shows a live novelty/plateau/spend report."),
@@ -36,82 +35,194 @@ TOOLS = [
     ("preference_rank.html", "Predicted preference", "The trained preference model's ranking of every image, most-preferred first: what it predicts you'd pick, including images you never directly compared."),
 ]
 
+_CONTRACT_FIELDS = ("intention", "evidence_scope", "changed_variable", "held_constant", "expected_move", "evidence_against")
 
-def render_html(active_expedition=None, active_leg=None, running=None):
-    process_tip = info_btn(
-        "This is a MAP-Elites search: instead of hill-climbing toward one 'best' image, it keeps a "
-        "grid of bins (a faithfulness x novelty archive, see the elite archive) and tries to fill "
-        "every bin with a good example, so the whole space gets mapped, not just its peak. Each "
-        "generation makes a batch of new images two ways. Explore jobs draw a fresh random "
-        "subject/texture combination, unrelated to anything made before: this is how the search "
-        "finds genuinely new territory. Exploit jobs take an existing strong image (the current "
-        "elite in a bin, or a human pick) and nudge its strength/cfg/seed slightly, hoping a small "
-        "step nearby does even better: this is how the search refines what's already working. "
-        "The mix between the two (e.g. round 2's 85% explore/15% exploit) is a deliberate dial: more "
-        "explore finds new regions faster but refines them less, more exploit polishes known-good "
-        "regions but can plateau if there's nothing better nearby to find. A 'generation' is one "
-        "batch of jobs; 'plateau' means several generations in a row without the best novelty score "
-        "improving, which is when the search either stops, escalates (e.g. asking an LLM for fresh "
-        "subject ideas), or hits its budget cap and ends. Human picks made in the lightbox feed "
-        "directly into the next generation's exploit pool, ahead of the algorithm's own ranking."
-    )
 
-    # The Explore group in NAV_GROUPS is a quick-access subset of the workflow's five stage
-    # destinations; those destinations are also listed in the detailed groups below, so the
-    # hub doesn't double-render them and the user isn't pointed at "/" (this very page).
-    detailed_groups = [g for g in NAV_GROUPS if g[0] != "Explore"]
+def _scope_from_focus(focus: dict[str, Any] | None) -> WorkspaceContext:
+    scope = focus.get("scope", {}) if isinstance(focus, dict) else {}
+    return WorkspaceContext(scope.get("expedition"), scope.get("leg"), focus)
+
+
+def _focus_url(path: str, focus: dict[str, Any] | None) -> str:
+    return context_url(path, _scope_from_focus(focus)) if focus else path
+
+
+def _contract_complete(focus: dict[str, Any] | None) -> bool:
+    contract = focus.get("test_contract") if isinstance(focus, dict) else None
+    return isinstance(contract, dict) and all(bool(contract.get(field)) for field in _CONTRACT_FIELDS)
+
+
+def _trial_evaluated(trial: dict[str, Any]) -> bool:
+    return bool(trial.get("evaluated") or trial.get("evaluation") or trial.get("judgment"))
+
+
+def derive_next_decision(focus, trials=()):
+    """Return the next concrete workflow action for a Focus, without changing state."""
+    if not focus:
+        return {"stage": "Orient", "label": "Choose a Focus", "href": "/status.html"}
+    if not _contract_complete(focus):
+        return {"stage": "Explain", "label": "Edit Focus", "href": _focus_url("/explore.html", focus)}
+    focus_id = focus.get("focus_id")
+    relevant = [trial for trial in trials if not focus_id or trial.get("focus_id") in (None, focus_id)]
+    latest = relevant[-1] if relevant else None
+    context = _scope_from_focus(focus)
+    if latest is None:
+        return {"stage": "Act", "label": "Draft a trial", "href": context_url("/cockpit.html", context)}
+    if latest.get("status") in {"draft", "queued", "confirmed", "running", "in_progress"}:
+        return {"stage": "Act", "label": "Review trial", "href": context_url("/cockpit.html", context)}
+    if not _trial_evaluated(latest):
+        return {"stage": "Learn", "label": "Evaluate results", "href": context_url("/runs.html", context)}
+    return {"stage": "Learn", "label": "Revise Focus", "href": _focus_url("/explore.html", focus)}
+
+
+def _source_tags(focus: dict[str, Any]) -> tuple[list[str], list[str]]:
+    source = focus.get("source") or {}
+    generated = source.get("member_tags") or source.get("adjacent_member_tags") or []
+    anchors = source.get("real_anchor_tags") or []
+    return [tag for tag in generated if isinstance(tag, str)], [tag for tag in anchors if isinstance(tag, str)]
+
+
+def _stored_evidence(focus: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    evidence = focus.get("evidence") or {}
+    records: list[Any] = []
+    if isinstance(evidence, dict):
+        for key in ("generated_members", "members", "real_anchors", "anchors"):
+            value = evidence.get(key, [])
+            if isinstance(value, list):
+                records.extend(value)
+    result: dict[str, dict[str, Any]] = {}
+    for record in records:
+        tag = record if isinstance(record, str) else record.get("tag") if isinstance(record, dict) else None
+        if isinstance(tag, str):
+            result[tag] = record if isinstance(record, dict) else {"tag": tag}
+    return result
+
+
+def _evidence_wall(focus: dict[str, Any]) -> list[dict[str, Any]]:
+    generated, anchors = _source_tags(focus)
+    stored = _stored_evidence(focus)
+    chosen = generated[:4]
+    anchor = anchors[0] if anchors else None
+    if anchor is None and len(generated) > 4:
+        chosen.append(generated[4])
+    result: list[dict[str, Any]] = []
+    for tag, role in [(tag, "generated_member") for tag in chosen] + ([(anchor, "real_anchor")] if anchor else []):
+        record = stored.get(tag)
+        item: dict[str, Any] = {"tag": tag, "role": role, "missing": record is None}
+        if record:
+            item.update({key: value for key, value in record.items() if key != "tag"})
+            item["missing"] = bool(record.get("missing", False))
+        result.append(item)
+    return result
+
+
+def _record_id(record: dict[str, Any], fallback: str) -> str:
+    for key in ("record_id", "id", "thread_id", "trial_id", "launch_id", "focus_id"):
+        value = record.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return fallback
+
+
+def _record_timestamp(record: dict[str, Any]) -> str:
+    for key in ("timestamp", "updated_at", "created_at"):
+        value = record.get(key)
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def _activity(focus: dict[str, Any] | None, records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    if focus:
+        focus_id = str(focus.get("focus_id", "focus"))
+        if focus.get("created_at"):
+            events.append({"record_id": f"{focus_id}:created", "timestamp": focus["created_at"], "label": "Focus created"})
+        if focus.get("updated_at") and focus.get("updated_at") != focus.get("created_at"):
+            events.append({"record_id": f"{focus_id}:updated", "timestamp": focus["updated_at"], "label": "Focus updated"})
+    for index, record in enumerate(records):
+        if isinstance(record, dict):
+            event = dict(record)
+            event["record_id"] = _record_id(record, f"record-{index}")
+            event["timestamp"] = _record_timestamp(record)
+            events.append(event)
+    return sorted(events, key=lambda event: (event.get("timestamp", ""), event.get("record_id", "")))
+
+
+def build_explore_data(context, foci, trials=(), guide_threads=(), launches=()):
+    """Shape the leg-wide or Focus-scoped records consumed by :func:`render_html`."""
+    focus = context.focus
+    open_foci = [record for record in foci if record.get("status", "open") == "open"]
+    selected_trials = [record for record in trials if isinstance(record, dict)]
+    if focus is not None:
+        focus_id = focus.get("focus_id")
+        selected_trials = [record for record in selected_trials if record.get("focus_id") in (None, focus_id)]
+    decision = derive_next_decision(focus, selected_trials)
+    latest = selected_trials[-1] if selected_trials else None
+    return {
+        "context": {"expedition": context.expedition, "leg": context.leg},
+        "focus": focus,
+        "open_foci": open_foci,
+        "saved_observations": ([focus["observation"]] if focus and focus.get("observation") else []),
+        "evidence": _evidence_wall(focus) if focus else [],
+        "activity": _activity(focus, list(guide_threads) + selected_trials + list(launches)),
+        "readiness": {"contract_complete": _contract_complete(focus), "has_trial": latest is not None, "trial_status": latest.get("status") if latest else None, "trial_evaluated": _trial_evaluated(latest) if latest else False},
+        "next_decision": decision,
+        "trials": selected_trials,
+    }
+
+
+def _esc(value: Any) -> str:
+    return html.escape(str(value))
+
+
+def _action(path: str, label: str, context: WorkspaceContext, include_focus: bool = True) -> str:
+    return f'<a class="raised-control workflow-action" href="{_esc(context_url(path, context, include_focus))}">{_esc(label)}</a>'
+
+
+def render_html(active_expedition=None, active_leg=None, running=None, data=None, context=None):
+    context = context or WorkspaceContext(active_expedition, active_leg)
+    data = data or build_explore_data(context, [])
+    focus = data.get("focus")
+    context = WorkspaceContext(context.expedition, context.leg, focus)
+    decision = data["next_decision"]
+    selected = decision["stage"] if focus else "Orient"
+    stages = ("Orient", "Scout", "Explain", "Act", "Learn")
+    explanations = {"Orient": "How does this search work? Set the expedition and leg, then name the visual question.", "Scout": "Find a cluster, anchor, or reachable frontier worth explaining.", "Explain": "Separate observation from interpretation before changing one variable.", "Act": "Turn one Focus revision into a bounded trial with a spend cap.", "Learn": "Review results against the evidence and record the human judgment."}
+    actions = {
+        "Orient": [_action("/status.html", "Choose expedition and leg", context, False), _action("/map.html", "Create from Map", context, False), _action("/coverage.html", "Create from Coverage", context, False)],
+        "Scout": [_action("/map.html", "Open Solution Map", context), _action("/coverage.html", "Open Coverage", context), _action("/archive.html", "Open Archive", context)],
+        "Explain": [_action("/redundancy.html", "Inspect Redundancy", context), _action("/novelty_decay.html", "Open Novelty Decay", context), _action("/lineage.html", "Open Lineage", context), _action("/compare.html", "Compare Images", context)],
+        "Act": [_action("/cockpit.html", "Draft a Trial", context), _action("/explore.html", "Return to Focus", context)],
+        "Learn": [_action("/runs.html", "Review Runs", context), _action("/scan.html", "Scan Results", context), _action("/coverage.html", "Compare Coverage", context), _action("/explore.html", "Debrief Focus", context)],
+    }
+    def stage_button(stage):
+        current = ' aria-current="step"' if stage == selected else ""
+        return f'<button class="workflow-stage" type="button" data-stage="{stage}"{current}>{stage}</button>'
+
+    buttons = "".join(stage_button(stage) for stage in stages)
+    evidence = "".join(_evidence_html(item, context) for item in data.get("evidence", [])) or '<p class="subtle">No saved evidence in this Focus.</p>'
+    observations = "".join(f"<li>{_esc(item)}</li>" for item in data.get("saved_observations", [])) or "<li>No saved observations yet.</li>"
+    activity = "".join(f'<li class="light-detent"><time>{_esc(event.get("timestamp", ""))}</time>{_esc(event.get("label") or event.get("status") or event.get("record_id"))}</li>' for event in data.get("activity", [])) or '<li class="light-detent">No activity recorded yet.</li>'
+    desk = _focus_desk(focus, data, context, evidence, observations, activity, decision) if focus else _focus_list(data, context)
     descriptions = {path: (name, desc) for path, name, desc in TOOLS}
-    items_html = "".join(f"""
-<section class="tool-group"><h2>{group}</h2><div class="tools">
-{"".join(f'''<a class="tool raised-readout" href="{path}">
-  <div class="name">{descriptions[path][0]}</div>
-  <div class="desc">{descriptions[path][1]}</div>
-</a>''' for path, _label in group_tools)}
-</div></section>""" for group, group_tools in detailed_groups)
+    groups = [group for group in NAV_GROUPS if group[0] != "Explore"]
+    tool_index = "".join(f'<section><h2>{_esc(group)}</h2><div class="tool-index">' + "".join(f'<a href="{_esc(path)}"><span class="name">{_esc(descriptions[path][0])}</span><span class="desc">{html.escape(descriptions[path][1], quote=False)}</span></a>' for path, _ in group_tools) + "</div></section>" for group, group_tools in groups)
+    return f'''<!doctype html><html><head><meta charset="utf-8"><title>CLAWMARKS research desk</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>{SULFUR_FONT_CSS}{SULFUR_CSS}{CONTROL_CSS}{TOPNAV_CSS}{MOBILE_BASE_CSS}{INFOTIP_CSS}
+main{{max-width:1220px;margin:0 auto;padding:22px 24px 52px}}h1{{font:600 clamp(28px,5vw,48px)/1 var(--font-display);margin:0}}.desk-scope{{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin:18px 0 10px;flex-wrap:wrap}}.desk-scope span{{font:12px var(--font-mono);color:var(--text-soft)}}.subtle,.sub{{color:var(--text-soft)}}#workflowStepper{{display:flex;overflow-x:auto;border-block:2px solid var(--ink);min-width:100%}}.workflow-stage{{flex:1 0 130px;border:0;border-right:1px solid var(--rule);background:var(--paper);padding:13px 15px;color:var(--text-soft);font:600 15px var(--font-display);cursor:pointer;text-align:left}}.workflow-stage:hover,.workflow-stage[aria-current="step"]{{background:var(--sulfur);color:var(--ink)}}.workflow-explanation{{padding:10px 0 12px;border-bottom:1px solid var(--rule)}}.workflow-actions{{display:flex;gap:9px;flex-wrap:wrap;min-height:42px;padding:8px 0}}.workspace-grid{{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;margin-top:22px}}.focus-title{{font:600 31px/1.05 var(--font-display);margin:0 0 5px}}.question{{border-left:4px solid var(--sulfur);padding:9px 12px;margin:15px 0;background:var(--paper-deep)}}.mounted{{padding:14px}}.evidence-wall{{display:grid;grid-template-columns:repeat(5,minmax(100px,1fr));gap:10px}}.evidence-item{{margin:0;border:1px solid var(--rule);background:var(--paper-deep);min-width:0}}.evidence-item img,.evidence-missing{{width:100%;aspect-ratio:1;object-fit:cover;display:flex;align-items:center;justify-content:center;font:11px var(--font-mono);text-align:center;padding:8px}}.evidence-item figcaption{{padding:6px;font-size:11px;color:var(--text-soft)}}.evidence-item.missing{{border-style:dashed}}.tabs{{display:flex;gap:8px;border-bottom:1px solid var(--rule);margin-top:18px}}.tab{{border:0;background:none;padding:8px 2px;margin-right:12px;font-weight:600;cursor:pointer}}.next-decision{{padding:15px;border:2px solid var(--ink);margin-bottom:16px}}.next-decision h2{{margin:0 0 8px;font-size:19px}}.activity{{list-style:none;padding:0;margin:0;display:grid;gap:7px}}.activity li{{padding:7px 9px;font-size:12px}}.activity time{{font:10px var(--font-mono);display:block;color:var(--text-soft)}}.focus-list{{list-style:none;padding:0;margin:12px 0;border-top:1px solid var(--rule)}}.focus-list li{{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--rule)}}.focus-list a{{color:var(--ink);font-weight:600}}.focus-list span{{color:var(--text-soft);font:12px var(--font-mono)}}.tool-index{{border-top:1px solid var(--rule);margin-bottom:18px}}.tool-index a{{display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:14px;padding:9px 0;border-bottom:1px solid var(--rule);color:var(--ink);text-decoration:none}}.tool-index a:hover{{background:var(--paper-deep)}}.tool-index .name{{font-weight:600}}.tool-index .desc{{color:var(--text-soft);font-size:12px}}@media(max-width:720px){{main{{padding:16px 12px 40px}}.workspace-grid{{grid-template-columns:1fr}}.evidence-wall{{grid-template-columns:repeat(2,minmax(0,1fr))}}.tool-index a{{grid-template-columns:1fr;gap:2px}}}}
+</style></head><body>{nav_bar_html("/", active_expedition=context.expedition, active_leg=context.leg, running=running, focus=focus)}<main><div class="desk-scope"><h1>{_esc(focus.get("label") or "Untitled Focus") if focus else "No Focus selected"}</h1><span>{_esc(context.expedition or "no expedition")} / {_esc(context.leg or "no leg")}</span></div><nav id="workflowStepper" aria-label="Research workflow">{buttons}</nav><div id="workflowExplanation" class="workflow-explanation" aria-live="polite">{_esc(explanations[selected])}</div><div id="workflowActions" class="workflow-actions">{"".join(actions[selected])}</div>{desk}<section aria-label="All tools"><h2>All tools</h2>{tool_index}</section></main><script>const STAGES={json.dumps(explanations)};const ACTIONS={json.dumps(actions)};document.querySelectorAll('.workflow-stage').forEach(button=>button.addEventListener('click',()=>{{const stage=button.dataset.stage;document.querySelectorAll('.workflow-stage').forEach(item=>item.removeAttribute('aria-current'));button.setAttribute('aria-current','step');document.getElementById('workflowExplanation').textContent=STAGES[stage];document.getElementById('workflowActions').innerHTML=ACTIONS[stage]}}));</script><script src="scrollnav.js"></script><script src="infotip.js"></script><script src="/shared-ui.js"></script></body></html>'''
 
-    html = f"""<!doctype html><html><head><meta charset="utf-8">
-<title>CLAWMARKS exploration tools</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-{SULFUR_FONT_CSS}
-{SULFUR_CSS}
-{CONTROL_CSS}
-{TOPNAV_CSS}
-{MOBILE_BASE_CSS}
-{INFOTIP_CSS}
-main {{ max-width: 1180px; margin: 0 auto; padding: 24px; }}
-h1 {{ font-size:22px; margin:0 0 6px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-  letter-spacing:0.02em; text-transform:uppercase; }}
-h1 .howtip {{ font-size:12.5px; font-weight:400; color:var(--text-soft);
-  display:inline-flex; align-items:center; gap:6px; text-transform:none;
-  letter-spacing:0; font-family:var(--font-body); }}
-p.sub {{ color:var(--text-soft); max-width:780px; font-size:13.5px; line-height:1.6;
-  margin:0 0 18px; padding-bottom:14px; border-bottom:1px solid var(--rule); }}
-.tool-group {{ margin-top:22px; max-width:1100px; }}
-.tool-group h2 {{ font:600 13px/1.2 var(--font-display); color:var(--text-soft);
-  margin:0 0 10px; text-transform:uppercase; letter-spacing:0.08em; }}
-.tools {{ display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }}
-.tool {{ background:var(--paper); border:1px solid var(--ink); color:var(--ink);
-  padding:16px; text-decoration:none; display:block;
-  transition: box-shadow .12s ease, transform .12s ease; }}
-.tool .name {{ font:600 14.5px/1.3 var(--font-body); margin-bottom:6px; }}
-.tool .desc {{ font-size:12.5px; color:var(--text-soft); line-height:1.55; }}
-</style></head><body>
 
-{nav_bar_html('explore.html', active_expedition=active_expedition, active_leg=active_leg, running=running)}
+def _evidence_html(item: dict[str, Any], context: WorkspaceContext) -> str:
+    tag = _esc(item["tag"])
+    body = f'<div class="evidence-missing">missing: {tag}</div>' if item["missing"] else f'<img src="{_esc(generated_image_url(item["tag"], context, thumbnail=True))}" alt="{_esc(item["role"])} {tag}">'
+    return f'<figure class="evidence-item {"missing" if item["missing"] else ""}">{body}<figcaption>{_esc(item["role"])} · {tag}</figcaption></figure>'
 
-<main>
-<h1>CLAWMARKS exploration tools <span class="howtip">How does this search work?{process_tip}</span></h1>
-<p class="sub">Tools for browsing individual generated images and clusters of them, and for
-understanding the shape of the solution space the search is mapping out: where it's dense,
-where it's empty but reachable, and how it's moved generation over generation.</p>
 
-<div id="tools">{items_html}</div>
-</main>
+def _focus_desk(focus, data, context, evidence, observations, activity, decision):
+    return f'<section class="focus-summary"><p class="question" id="focusQuestion"><strong>Question:</strong> {_esc(focus.get("question") or "State a visual question to begin.")}</p><div class="tabs"><button class="tab" type="button" aria-selected="true">Focus</button><button class="tab" type="button" aria-selected="false">Saved Observations</button></div><div class="workspace-grid"><section><h2 class="focus-title">Evidence scope</h2><div class="mounted mounted-evidence evidence-wall" aria-label="Focus evidence">{evidence}</div><h2>Saved Observations</h2><ul>{observations}</ul></section><aside><div class="next-decision raised-readout"><h2>Next Decision</h2><strong>{_esc(decision["label"])}</strong><p>Stage: {_esc(decision["stage"])}</p></div><h2>Activity</h2><ul class="activity">{activity}</ul></aside></div></section>'
 
-<script src="scrollnav.js"></script>
-<script src="infotip.js"></script>
-<script src="/shared-ui.js"></script>
-</body></html>"""
 
-    return html
+def _focus_list(data, context):
+    rows = "".join(f'<li><a href="{_esc(context_url("/explore.html", WorkspaceContext(context.expedition, context.leg, item)))}">{_esc(item.get("label") or item.get("focus_id"))}</a><span>r{_esc(item.get("revision", "?"))}</span></li>' for item in data.get("open_foci", [])) or '<li class="subtle">No open Foci in this expedition and leg.</li>'
+    return f'<section><h2>Open Foci</h2><p class="sub">Explore keeps the choice explicit. No Focus is selected automatically.</p><ul class="focus-list" aria-label="Open Foci">{rows}</ul><div class="workflow-actions"><a class="raised-control" href="{_esc(context_url("/map.html", context, False))}">Create from Map</a><a class="raised-control" href="{_esc(context_url("/coverage.html", context, False))}">Create from Coverage</a></div></section>'

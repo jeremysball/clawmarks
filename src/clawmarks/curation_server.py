@@ -1222,6 +1222,71 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
         self.end_headers()
         self.wfile.write(body)
 
+    def _explore_state_records(self, directory, context):
+        if context.expedition is None or context.leg is None:
+            return []
+        root = config.STATE_DIR / directory / context.expedition / context.leg
+        records = []
+        if not root.is_dir():
+            return records
+        for path in sorted(root.glob("*.json")):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            if isinstance(record, dict):
+                records.append(record)
+        return records
+
+    def _explore_foci(self, context):
+        if context.expedition is None or context.leg is None:
+            return []
+        records = self._focus_store().list(Scope(context.expedition, context.leg), status="open")
+        manifest_by_tag = {}
+        try:
+            manifest_by_tag = {record["tag"]: record for record in load_manifest(context.expedition, context.leg)}
+        except FileNotFoundError:
+            pass
+        enriched = []
+        for record in records:
+            copy = dict(record)
+            source = record.get("source") or {}
+            generated = source.get("member_tags") or source.get("adjacent_member_tags") or []
+            anchors = source.get("real_anchor_tags") or []
+            copy["evidence"] = {
+                "generated_members": [{"tag": tag, "record": manifest_by_tag[tag]} for tag in generated if tag in manifest_by_tag],
+                "real_anchors": [{"tag": tag} for tag in anchors if (Path(REAL_DIR) / tag).is_file()],
+            }
+            enriched.append(copy)
+        return enriched
+
+    def _send_explore_page(self):
+        context = self._page_context()
+        trials = []
+        if context.expedition is not None and context.leg is not None:
+            stored_trials = load_store(config.leg_dir(context.expedition, context.leg) / "cockpit_queue.json")
+            if isinstance(stored_trials, dict):
+                trials = list(stored_trials.values())
+        data = explore_hub.build_explore_data(
+            context,
+            self._explore_foci(context),
+            trials=trials,
+            guide_threads=self._explore_state_records("guide_threads", context),
+            launches=self._explore_state_records("paid_launches", context),
+        )
+        body = explore_hub.render_html(
+            active_expedition=context.expedition,
+            active_leg=context.leg,
+            running=((run["expedition"], run["leg"]) if (run := run_manager.current_run()) else None),
+            data=data,
+            context=context,
+        ).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _page_context(self):
         return resolve_workspace_context(
             self.path, _active_selection, self._focus_store()
@@ -1321,7 +1386,7 @@ input, select {{ font-size:13px; padding:6px 8px; border:1px solid var(--ink);
               active_leg=_active_selection["leg"],
               running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)}
 <h1>clawmarks curation server</h1>
-<div class="panel">
+<div class="panel" id="active-leg-form">
 <p class="sub">No expedition/leg selected. Pick an existing leg below, or create a new
 expedition first if this is a genuinely new line of work.</p>
 {rows or '<p class="sub">No expeditions exist yet.</p>'}
@@ -1447,7 +1512,7 @@ p.sub {{ max-width:640px; }}
 <p>Active: <code>{html.escape(selection["expedition"])}/{html.escape(selection["leg"])}</code>,
 {html.escape(manifest_summary)}. Launch a round from <a href="/runs.html">runs.html</a>
 or pick a different leg below.</p>
-<div class="panel">
+<div class="panel" id="active-leg-form">
 {rows or '<p class="sub">No expeditions exist yet.</p>'}
 <div id="pickError"></div>
 </div>
@@ -1512,7 +1577,7 @@ p.alert {{ background:var(--paper-deep); border:1px solid #8a3030; padding:10px 
 {n_entries} manifest images, but none are present on disk. Do not launch a new round. Check
 your backup or the state directory at <code>$XDG_STATE_HOME/clawmarks/</code> before changing
 this leg.</p>
-<div class="panel">
+<div class="panel" id="active-leg-form">
 <p class="sub">Pick a different leg below if needed.</p>
 {rows or '<p class="sub">No expeditions exist yet.</p>'}
 <div id="pickError"></div>
@@ -1603,8 +1668,12 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             if parsed.path.startswith("/api/foci/"):
                 self._handle_focus_get(parsed)
                 return
-        if self.path in ("/", "/status.html"):
+        if route_path == "/status.html":
             self._send_status_page()
+            return
+
+        if route_path in ("/", "/explore.html"):
+            self._send_explore_page()
             return
 
         if self.path in ("/favicon.ico", "/favicon.png"):
@@ -1798,15 +1867,6 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             expedition = _active_selection["expedition"]
             leg = _active_selection["leg"]
             self._json_response(200, _get_preference_status_data(expedition, leg))
-            return
-
-        if self.path == "/explore.html":
-            body = explore_hub.render_html().encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
             return
 
         if self.path == "/seeds.html":
