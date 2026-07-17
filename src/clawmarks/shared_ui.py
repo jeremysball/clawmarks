@@ -341,6 +341,8 @@ button.context-label:active { transform:translate(2px,2px); box-shadow:none; }
   .topnav select { flex:1; min-width:0; max-width:none; font-size:14px; min-height:44px; }
   .topnav .nav-running, .topnav .focus-link, .topnav .session-status,
   .topnav .guide-button { font-size:12px; }
+  .topnav .wordmark, .topnav .session-status { display:inline-flex; align-items:center;
+    min-height:44px; }
   .context-list .exp-name { min-width:0; flex:1 0 100%; }
 }
 """
