@@ -91,7 +91,7 @@ def test_render_html_preserves_a_compact_ruled_full_tool_index():
         assert a_open != -1, f"no <a> wrapping .name for {path}"
         a_close = html.find(">", a_open)
         a_tag = html[a_open:a_close + 1]
-        assert f'href="{path}"' in a_tag, f"link wrapping {path}'s .name has wrong href: {a_tag!r}"
+        assert f'href="/{path}"' in a_tag, f"link wrapping {path}'s .name has wrong href: {a_tag!r}"
         assert f'<span class="desc">{desc}</span>' in html
 
     # The h1 still carries the page's "How does this search work?" tip link.
@@ -196,3 +196,60 @@ def test_build_explore_data_lists_open_foci_without_selecting_one():
     assert [focus["focus_id"] for focus in data["open_foci"]] == [
         "focus_11111111111111111111111111111111"
     ]
+
+
+def test_build_explore_data_uses_enriched_selected_focus_evidence():
+    focus_id = "focus_11111111111111111111111111111111"
+    raw_focus = {
+        "focus_id": focus_id,
+        "scope": {"expedition": "demo", "leg": "round1"},
+        "source": {"member_tags": ["present"], "real_anchor_tags": ["anchor"]},
+    }
+    enriched_focus = {
+        **raw_focus,
+        "evidence": {
+            "generated_members": [{"tag": "present"}],
+            "real_anchors": [{"tag": "anchor"}],
+        },
+    }
+
+    data = explore_hub.build_explore_data(
+        WorkspaceContext("demo", "round1", raw_focus), [enriched_focus]
+    )
+
+    assert data["focus"] is enriched_focus
+    assert data["evidence"] == [
+        {"tag": "present", "role": "generated_member", "missing": False},
+        {"tag": "anchor", "role": "real_anchor", "missing": False},
+    ]
+
+
+def test_focus_desk_makes_tabs_and_next_decision_actionable():
+    focus = {
+        "focus_id": "focus_11111111111111111111111111111111",
+        "scope": {"expedition": "demo", "leg": "round1"},
+        "test_contract": None,
+    }
+    html = explore_hub.render_html(
+        context=WorkspaceContext("demo", "round1", focus),
+        data=explore_hub.build_explore_data(
+            WorkspaceContext("demo", "round1", focus), [focus]
+        ),
+    )
+
+    assert 'data-tab="focus"' in html
+    assert 'data-tab="observations"' in html
+    assert "tabPanel" in html
+    assert 'href="/explore.html?expedition=demo&amp;leg=round1&amp;focus_id=' in html
+
+
+def test_focus_tool_index_preserves_explicit_context():
+    focus = {
+        "focus_id": "focus_11111111111111111111111111111111",
+        "scope": {"expedition": "demo", "leg": "round1"},
+        "test_contract": None,
+    }
+    context = WorkspaceContext("demo", "round1", focus)
+    html = explore_hub.render_html(context=context, data=explore_hub.build_explore_data(context, [focus]))
+
+    assert 'href="/cockpit.html?expedition=demo&amp;leg=round1&amp;focus_id=' in html

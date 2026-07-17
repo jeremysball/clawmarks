@@ -8,6 +8,7 @@ import pytest
 
 from clawmarks import curation_server as cs
 from clawmarks import config
+from clawmarks.workspace_context import WorkspaceContext
 
 
 @pytest.fixture(autouse=True)
@@ -264,6 +265,37 @@ def test_status_html_route_keeps_the_picker_page(running_server_with_leg):
     assert status_resp.status == 200
     assert b"no scored" in status_body.lower()
     assert b'active-leg-form' in status_body
+
+
+def test_explore_foci_retains_present_and_missing_evidence(monkeypatch, tmp_path):
+    focus = {
+        "focus_id": "focus_11111111111111111111111111111111",
+        "source": {
+            "member_tags": ["generated-present", "generated-missing"],
+            "real_anchor_tags": ["anchor-present", "anchor-missing"],
+        },
+    }
+
+    class Store:
+        def list(self, scope, status=None):
+            return [focus]
+
+    monkeypatch.setattr(cs.Handler, "_focus_store", lambda _self: Store())
+    monkeypatch.setattr(cs, "load_manifest", lambda _expedition, _leg: [{"tag": "generated-present"}])
+    monkeypatch.setattr(cs, "REAL_DIR", tmp_path)
+    (tmp_path / "anchor-present").write_bytes(b"real")
+
+    handler = object.__new__(cs.Handler)
+    enriched = handler._explore_foci(WorkspaceContext("demo", "round1"))[0]
+
+    assert enriched["evidence"]["generated_members"] == [
+        {"tag": "generated-present", "record": {"tag": "generated-present"}},
+        {"tag": "generated-missing", "missing": True},
+    ]
+    assert enriched["evidence"]["real_anchors"] == [
+        {"tag": "anchor-present"},
+        {"tag": "anchor-missing", "missing": True},
+    ]
 
 
 def test_unfavorite_rejects_payload_for_stale_leg(running_server_with_leg):

@@ -1254,8 +1254,14 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
             generated = source.get("member_tags") or source.get("adjacent_member_tags") or []
             anchors = source.get("real_anchor_tags") or []
             copy["evidence"] = {
-                "generated_members": [{"tag": tag, "record": manifest_by_tag[tag]} for tag in generated if tag in manifest_by_tag],
-                "real_anchors": [{"tag": tag} for tag in anchors if (Path(REAL_DIR) / tag).is_file()],
+                "generated_members": [
+                    ({"tag": tag, "record": manifest_by_tag[tag]} if tag in manifest_by_tag else {"tag": tag, "missing": True})
+                    for tag in generated
+                ],
+                "real_anchors": [
+                    ({"tag": tag} if (Path(REAL_DIR) / tag).is_file() else {"tag": tag, "missing": True})
+                    for tag in anchors
+                ],
             }
             enriched.append(copy)
         return enriched
