@@ -8,6 +8,7 @@ import pytest
 
 from clawmarks import curation_server as cs
 from clawmarks import config
+from clawmarks.workspace_context import WorkspaceContext
 
 
 @pytest.fixture(autouse=True)
@@ -37,6 +38,11 @@ def running_server_with_leg():
 
 def test_list_expeditions_empty_when_none_exist():
     assert cs._list_expeditions() == []
+
+
+def test_create_leg_rejects_unsafe_expedition_name():
+    with pytest.raises(ValueError, match="path separator"):
+        cs._create_leg({"expedition": "../escape", "name": "new-leg"})
 
 
 def test_create_expedition_writes_config_and_scaffolds_cockpit_leg():
@@ -202,7 +208,7 @@ def test_status_page_selected_empty_body_uses_sulfur_proof_shell(running_server_
     assert "shared-ui.js" in body
     assert "<header" in body
     assert "prefers-color-scheme: dark" not in body
-    assert 'href="/status.html"' in body
+    assert 'href="/status.html?expedition=uncanny_frontier&amp;leg=cockpit"' in body
     # The legacy /runs.html prose link is still present as additional guidance.
     assert 'href="/runs.html"' in body
     assert "DARK_TOKENS" not in body
@@ -264,10 +270,41 @@ def test_root_serves_the_explore_workbench_and_status_html_serves_the_picker(
     # "/" and "/explore.html" render the same Explore workbench template. Each call to
     # info_btn() bumps a process-wide tip-id counter, so the two bodies aren't byte-identical
     # across separate render calls; compare the stable title instead.
-    assert "<title>CLAWMARKS exploration tools</title>" in root_body
-    assert "<title>CLAWMARKS exploration tools</title>" in explore_body
-    assert "<title>CLAWMARKS exploration tools</title>" not in status_body
+    assert "<title>CLAWMARKS research desk</title>" in root_body
+    assert "<title>CLAWMARKS research desk</title>" in explore_body
+    assert "<title>CLAWMARKS research desk</title>" not in status_body
     assert root_body != status_body
+
+
+def test_explore_foci_retains_present_and_missing_evidence(monkeypatch, tmp_path):
+    focus = {
+        "focus_id": "focus_11111111111111111111111111111111",
+        "source": {
+            "member_tags": ["generated-present", "generated-missing"],
+            "real_anchor_tags": ["anchor-present", "anchor-missing"],
+        },
+    }
+
+    class Store:
+        def list(self, scope, status=None):
+            return [focus]
+
+    monkeypatch.setattr(cs.Handler, "_focus_store", lambda _self: Store())
+    monkeypatch.setattr(cs, "load_manifest", lambda _expedition, _leg: [{"tag": "generated-present"}])
+    monkeypatch.setattr(cs, "REAL_DIR", tmp_path)
+    (tmp_path / "anchor-present").write_bytes(b"real")
+
+    handler = object.__new__(cs.Handler)
+    enriched = handler._explore_foci(WorkspaceContext("demo", "round1"))[0]
+
+    assert enriched["evidence"]["generated_members"] == [
+        {"tag": "generated-present", "record": {"tag": "generated-present"}},
+        {"tag": "generated-missing", "missing": True},
+    ]
+    assert enriched["evidence"]["real_anchors"] == [
+        {"tag": "anchor-present"},
+        {"tag": "anchor-missing", "missing": True},
+    ]
 
 
 def test_unfavorite_rejects_payload_for_stale_leg(running_server_with_leg):
@@ -295,6 +332,40 @@ def test_unfavorite_rejects_payload_for_stale_leg(running_server_with_leg):
 
     assert exc_info.value.code == 409
     assert json.loads((leg_a / "user_favorites.json").read_text()) == favorites_a
+
+
+@pytest.mark.parametrize("endpoint", ["/api/favorite", "/api/unfavorite"])
+def test_favorite_mutation_rejects_focus_from_a_different_leg(running_server_with_leg, endpoint):
+    cs._create_leg({"expedition": "uncanny_frontier", "name": "round2"})
+    leg_dir = config.leg_dir("uncanny_frontier", "cockpit")
+    image_path = leg_dir / "gen1_a.png"
+    image_path.write_bytes(b"image")
+    focus = cs.FocusStore(config.STATE_DIR, cs.REAL_DIR).create(
+        cs.Scope("uncanny_frontier", "cockpit"),
+        {"label": "Cockpit focus", "source": {"view": "map", "kind": "map_members",
+         "member_tags": ["gen1_a"], "real_anchor_tags": []}, "question": "q",
+         "observation": "o", "hypothesis_text": "h", "test_contract": None},
+        [{"tag": "gen1_a", "file": str(image_path)}],
+    )
+    payload = {
+        "tag": "gen1_a",
+        "expedition": "uncanny_frontier",
+        "leg": "round2",
+        "focus_id": focus["focus_id"],
+    }
+    port = running_server_with_leg.server_address[1]
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}{endpoint}",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(request)
+
+    assert exc_info.value.code == 400
+    assert not (config.leg_dir("uncanny_frontier", "round2") / "user_favorites.json").exists()
 
 
 def test_create_leg_writes_empty_overrides_and_scaffolds_its_dir():

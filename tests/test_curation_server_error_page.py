@@ -36,7 +36,7 @@ def test_error_page_missing_manifest_hint(running_server, monkeypatch):
     server = running_server
     port = server.server_address[1]
 
-    def raise_missing_manifest():
+    def raise_missing_manifest(*args):
         raise FileNotFoundError("[Errno 2] No such file or directory: '/x/scored_manifest.json'")
 
     monkeypatch.setattr(cs, "_get_map_data", raise_missing_manifest)
@@ -53,7 +53,7 @@ def test_error_page_stale_image_path_hint(running_server, monkeypatch):
     server = running_server
     port = server.server_address[1]
 
-    def raise_missing_image():
+    def raise_missing_image(*args):
         raise FileNotFoundError("[Errno 2] No such file or directory: '/x/thumbs/gen0_a.jpg'")
 
     monkeypatch.setattr(cs, "_get_map_data", raise_missing_image)
@@ -66,7 +66,7 @@ def test_error_page_stale_image_path_hint(running_server, monkeypatch):
 def test_error_page_shows_request_path(running_server, monkeypatch):
     server = running_server
     port = server.server_address[1]
-    monkeypatch.setattr(cs, "_get_map_data", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(cs, "_get_map_data", lambda *args: (_ for _ in ()).throw(RuntimeError("boom")))
 
     body = _fetch_error_page(port, "/map.html")
     assert "/map.html" in body
@@ -128,7 +128,7 @@ def test_500_error_page_uses_sulfur_proof_shell(running_server, monkeypatch):
     flat-bordered stack trace block."""
     server = running_server
     port = server.server_address[1]
-    monkeypatch.setattr(cs, "_get_map_data", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(cs, "_get_map_data", lambda *args: (_ for _ in ()).throw(RuntimeError("boom")))
 
     body = _fetch_error_page(port, "/map.html")
     assert "--paper:#C3C5BA" in body

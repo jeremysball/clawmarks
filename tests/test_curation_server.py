@@ -2,7 +2,9 @@
 from clawmarks import curation_server as cs
 
 
-def test_next_compare_response_returns_two_item_summaries():
+def test_next_compare_response_returns_two_item_summaries(monkeypatch):
+    monkeypatch.setitem(cs._active_selection, "expedition", "demo")
+    monkeypatch.setitem(cs._active_selection, "leg", "round1")
     manifest = [
         {"tag": "a", "prompt_name": "p", "prompt_type": "style", "centroid_sim": 0.5,
          "novelty": 0.3, "strength": 1.0, "cfg": 7.0, "file": "a.png"},
@@ -22,7 +24,9 @@ def test_next_compare_response_reports_done_with_one_image():
     assert result == {"done": True}
 
 
-def test_next_compare_response_never_repeats_the_only_already_judged_pair():
+def test_next_compare_response_never_repeats_the_only_already_judged_pair(monkeypatch):
+    monkeypatch.setitem(cs._active_selection, "expedition", "demo")
+    monkeypatch.setitem(cs._active_selection, "leg", "round1")
     manifest = [
         {"tag": "a", "prompt_name": "p", "prompt_type": "style", "centroid_sim": 0.5,
          "novelty": 0.3, "strength": 1.0, "cfg": 7.0, "file": "a.png"},
@@ -144,6 +148,16 @@ def test_build_trial_defaults_and_shape():
     assert trial["sampler"] == "ddim"
     assert trial["result_tags"] == []
     assert trial["queue_title"]  # resolved from cockpit.MISSIONS["gap"]
+
+
+def test_build_trial_preserves_focus_provenance():
+    trial = cs.build_trial(
+        {"prompt": "owl portrait", "focus_id": "focus_11111111111111111111111111111111"},
+        now="t0",
+        trial_id="trial_1",
+    )
+
+    assert trial["focus_id"] == "focus_11111111111111111111111111111111"
 
 
 def _trial(**overrides):

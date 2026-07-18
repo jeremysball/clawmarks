@@ -100,6 +100,7 @@ import uuid
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
+from typing import Any
 
 from clawmarks.atomic_io import atomic_json_write
 
@@ -133,6 +134,11 @@ from clawmarks.shared_ui import (
     nav_bar_html,
 )
 from clawmarks.live_cache import LiveCache
+from clawmarks.workspace_context import (
+    ContextQueryError,
+    WorkspaceContext,
+    resolve_workspace_context,
+)
 from clawmarks.build import (
     scan_gallery, similarity_index, solution_map, map_view, redundancy_view, coverage_map,
     novelty_decay, lineage_view, elite_archive, preference_rank, explore_hub,
@@ -171,9 +177,16 @@ _load_active_selection()
 
 
 def _active_out_dir():
-    if _active_selection["expedition"] is None:
+    expedition = _active_selection["expedition"]
+    leg = _active_selection["leg"]
+    if expedition is None or leg is None:
         return None
-    return config.leg_dir(_active_selection["expedition"], _active_selection["leg"])
+    try:
+        _validate_expedition_or_leg_name(expedition, "expedition")
+        _validate_expedition_or_leg_name(leg, "leg", reserved={"legs"})
+    except (TypeError, ValueError):
+        return None
+    return config.leg_dir(expedition, leg)
 
 
 class NoActiveLegError(Exception):
@@ -191,9 +204,7 @@ def _require_out_dir():
 
 
 def _set_active_selection(expedition, leg):
-    expedition_file = config.EXPEDITIONS_DIR / expedition / "expedition.json"
-    if not expedition_file.exists():
-        raise ValueError(f"unknown expedition {expedition!r}")
+    _request_scope(expedition, leg)
     _active_selection["expedition"] = expedition
     _active_selection["leg"] = leg
     atomic_json_write(config.ACTIVE_LEG_FILE, dict(_active_selection))
@@ -217,7 +228,11 @@ def _validate_expedition_or_leg_name(name, kind, reserved=()):
     or collide with a reserved path segment that directory uses for its own config
     (e.g. a leg literally named "legs" would resolve config.leg_dir() to the same directory
     that holds every other leg's legs/<leg>.json config file)."""
-    if os.sep in name or (os.altsep and os.altsep in name) or "/" in name or ".." in name:
+    if not isinstance(name, str) or not name:
+        raise ValueError(f"{kind} name must be a non-empty string")
+    if "\x00" in name:
+        raise ValueError(f"{kind} name {name!r} may not contain NUL")
+    if os.sep in name or (os.altsep and os.altsep in name) or "/" in name or "\\" in name or ".." in name:
         raise ValueError(f"{kind} name {name!r} may not contain a path separator or '..'")
     if name in reserved:
         raise ValueError(f"{kind} name {name!r} is reserved")
@@ -246,6 +261,7 @@ def _create_expedition(payload):
     (expedition_dir / "legs").mkdir(parents=True)
     atomic_json_write(expedition_dir / "expedition.json", expedition_fields)
     atomic_json_write(expedition_dir / "legs" / "cockpit.json", {})
+    _validate_expedition_or_leg_name("cockpit", "leg", reserved={"legs"})
     config.leg_dir(name, "cockpit").mkdir(parents=True, exist_ok=True)
     return {"ok": True, "name": name}
 
@@ -257,6 +273,7 @@ def _create_leg(payload):
         raise ValueError("'expedition' is required")
     if not name:
         raise ValueError("'name' is required")
+    _validate_expedition_or_leg_name(expedition, "expedition")
     _validate_expedition_or_leg_name(name, "leg", reserved={"legs"})
     expedition_dir = config.EXPEDITIONS_DIR / expedition
     if not (expedition_dir / "expedition.json").exists():
@@ -271,96 +288,167 @@ def _create_leg(payload):
     return {"ok": True, "expedition": expedition, "name": name}
 
 
-def _manifest_path():
-    return str(_require_out_dir() / "scored_manifest.json")
+def _scope_out_dir(expedition, leg):
+    if expedition is None or leg is None:
+        if expedition is not None or leg is not None:
+            raise ValueError("'expedition' and 'leg' must be provided together")
+        legacy_dir = _active_out_dir()
+        if legacy_dir is not None:
+            return legacy_dir
+        raise NoActiveLegError("no expedition/leg selected")
+    _validate_expedition_or_leg_name(expedition, "expedition")
+    _validate_expedition_or_leg_name(leg, "leg", reserved={"legs"})
+    return config.leg_dir(expedition, leg)
 
 
-def _get_scan_items():
+def _request_scope(expedition, leg):
+    """Validate an optional request scope before resolving any filesystem path."""
+    if expedition is None and leg is None:
+        active_expedition, active_leg = _active_scope()
+        if active_expedition is None or active_leg is None:
+            return active_expedition, active_leg
+        return _request_scope(active_expedition, active_leg)
+    if not isinstance(expedition, str) or not isinstance(leg, str):
+        raise ValueError("'expedition' and 'leg' must be strings")
+    _validate_scope_names(expedition, leg)
+    expedition_dir = config.EXPEDITIONS_DIR / expedition
+    if not (expedition_dir / "expedition.json").exists():
+        raise ValueError(f"unknown expedition {expedition!r}")
+    if not (config.EXPEDITIONS_DIR / expedition / "legs" / f"{leg}.json").exists() and not config.leg_dir(expedition, leg).exists():
+        raise ValueError(f"unknown leg {leg!r} in expedition {expedition!r}")
+    return expedition, leg
+
+
+def _validate_scope_names(expedition, leg):
+    if not isinstance(expedition, str) or not isinstance(leg, str):
+        raise ValueError("'expedition' and 'leg' must be strings")
+    _validate_expedition_or_leg_name(expedition, "expedition")
+    _validate_expedition_or_leg_name(leg, "leg", reserved={"legs"})
+    return expedition, leg
+
+
+def _active_scope():
+    expedition = _active_selection["expedition"]
+    leg = _active_selection["leg"]
+    if expedition is not None and leg is not None:
+        _validate_scope_names(expedition, leg)
+    active_dir = _active_out_dir()
+    if active_dir is not None and (
+        expedition is None
+        or leg is None
+        or active_dir.resolve() != config.leg_dir(expedition, leg).resolve()
+    ):
+        return None, None
+    return expedition, leg
+
+
+def _manifest_path(expedition, leg):
+    return _scope_out_dir(expedition, leg) / "scored_manifest.json"
+
+
+def _get_scan_items(expedition, leg):
+    scope = f"{expedition}:{leg}"
     _live_cache.get(
-        "similarity", similarity_index.compute_data,
-        watched_files=[_manifest_path()], sweep_dir=str(_active_out_dir()),
+        f"similarity:{scope}", similarity_index.compute_data,
+        watched_files=[str(_manifest_path(expedition, leg))],
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
     return _live_cache.get(
-        "scan", scan_gallery.compute_data,
-        watched_files=[_manifest_path()], depends_on=["similarity"], sweep_dir=str(_active_out_dir()),
+        f"scan:{scope}", scan_gallery.compute_data,
+        watched_files=[str(_manifest_path(expedition, leg))],
+        depends_on=[f"similarity:{scope}"],
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _solution_map_watched_files():
-    files = [_manifest_path()]
-    embs_file = str(_active_out_dir() / "solution_map_final_embs.pt")
+def _solution_map_watched_files(expedition, leg):
+    out_dir = _scope_out_dir(expedition, leg)
+    files = [str(_manifest_path(expedition, leg))]
+    embs_file = str(out_dir / "solution_map_final_embs.pt")
     if os.path.exists(embs_file):
         files.append(embs_file)
     return files
 
 
-def _get_solution_map_data():
+def _get_solution_map_data(expedition, leg):
+    scope = f"{expedition}:{leg}"
     return _live_cache.get(
-        "solution-map", solution_map.compute_data,
-        watched_files=_solution_map_watched_files(), sweep_dir=str(_active_out_dir()),
+        f"solution-map:{scope}", solution_map.compute_data,
+        watched_files=_solution_map_watched_files(expedition, leg),
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _get_map_data():
-    _get_solution_map_data()
+def _get_map_data(expedition, leg):
+    scope = f"{expedition}:{leg}"
+    _get_solution_map_data(expedition, leg)
     return _live_cache.get(
-        "map", map_view.compute_data,
-        watched_files=[], depends_on=["solution-map"], sweep_dir=str(_active_out_dir()),
+        f"map:{scope}", map_view.compute_data,
+        watched_files=[], depends_on=[f"solution-map:{scope}"],
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _get_redundancy_data():
-    _get_solution_map_data()
+def _get_redundancy_data(expedition, leg):
+    scope = f"{expedition}:{leg}"
+    _get_solution_map_data(expedition, leg)
     return _live_cache.get(
-        "redundancy", redundancy_view.compute_data,
-        watched_files=[], depends_on=["solution-map"], sweep_dir=str(_active_out_dir()),
+        f"redundancy:{scope}", redundancy_view.compute_data,
+        watched_files=[], depends_on=[f"solution-map:{scope}"],
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _get_manifest_cached(target_name, compute_fn):
+def _get_manifest_cached(target_name, compute_fn, expedition, leg):
+    scope = f"{expedition}:{leg}"
     return _live_cache.get(
-        target_name, compute_fn,
-        watched_files=[_manifest_path()], sweep_dir=str(_active_out_dir()),
+        f"{target_name}:{scope}", compute_fn,
+        watched_files=[str(_manifest_path(expedition, leg))],
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _prediction_watched_files():
+def _prediction_watched_files(expedition=None, leg=None):
     """Like _manifest_path() alone, but also watches the trained pairwise model so a retrain
     actually invalidates any cached page whose rendering depends on the model's predictions
     (predicted archive.html, preference_rank.html) instead of serving stale predictions until
     the manifest next changes or the server restarts."""
-    files = [_manifest_path()]
-    out_dir = _active_out_dir()
+    if expedition is None or leg is None:
+        expedition, leg = _active_scope()
+    files = [str(_manifest_path(expedition, leg))]
+    out_dir = _scope_out_dir(expedition, leg)
     model_files = (
         preference_pairwise_model.model_file(out_dir),
         preference_pairwise_model.model_meta_file(out_dir),
-    ) if out_dir else ()
+    )
     files.extend(str(f) for f in model_files)
     return files
 
 
-def _preference_status_watched_files():
+def _preference_status_watched_files(expedition, leg):
     files = []
-    out_dir = _active_out_dir()
+    out_dir = _scope_out_dir(expedition, leg)
     leg_files = (
         preference_pairwise_model.model_file(out_dir),
         preference_pairwise_model.model_meta_file(out_dir),
         out_dir / "preference_settings.json",
     ) if out_dir else ()
-    for f in (_comparisons_file(), *leg_files):
+    for f in (_comparisons_file(expedition, leg), *leg_files):
         if os.path.exists(f):
             files.append(str(f))
     return files
 
 
-def _get_preference_status_data():
+def _get_preference_status_data(expedition, leg):
+    scope = f"{expedition}:{leg}"
     return _live_cache.get(
-        "preference-status", preference_status.compute_data,
-        watched_files=_preference_status_watched_files(), sweep_dir=str(_active_out_dir()),
+        f"preference-status:{scope}", preference_status.compute_data,
+        watched_files=_preference_status_watched_files(expedition, leg),
+        sweep_dir=str(_scope_out_dir(expedition, leg)),
     )
 
 
-def _preference_retrain_gate_error():
+def _preference_retrain_gate_error(expedition=None, leg=None):
     """Mirrors preference_pairwise_model.train_and_save's own gates exactly, using
     build_training_set so a comparison referencing a tag without a cached embedding can't make
     this check pass while the real training call still has too few usable rows. Distinguishes
@@ -368,9 +456,9 @@ def _preference_retrain_gate_error():
     cached", and "comparisons exist and are cached but repeated judgments on the same pairs
     consolidated below the floor" (see preference_pairwise_model.n_consolidated_pairs) -- each has
     a different fix, and pointing someone at the wrong one wastes their time."""
-    comparisons = load_comparisons()
+    comparisons = load_comparisons(expedition, leg)
     n_raw_comparisons = len(comparisons)
-    tags, embeddings = embed_cache.load_cache(embed_cache.embeddings_file(_require_out_dir()))
+    tags, embeddings = embed_cache.load_cache(embed_cache.embeddings_file(_scope_out_dir(expedition, leg)))
     _, y = preference_pairwise_model.build_training_set(tags, embeddings, comparisons)
     n_usable = len(y) // 2
     if n_usable < preference_pairwise_model.MIN_COMPARISONS:
@@ -391,34 +479,34 @@ def _preference_retrain_gate_error():
 def _favorites_file(expedition=None, leg=None):
     if expedition is None or leg is None:
         return _require_out_dir() / "user_favorites.json"
-    return config.leg_dir(expedition, leg) / "user_favorites.json"
+    return _scope_out_dir(expedition, leg) / "user_favorites.json"
 
 
-def _comparisons_file():
-    return _require_out_dir() / "user_comparisons.json"
+def _comparisons_file(expedition=None, leg=None):
+    return _scope_out_dir(expedition, leg) / "user_comparisons.json"
 
 
-def _preference_rank_flags_file():
-    return _require_out_dir() / "preference_rank_flags.json"
+def _preference_rank_flags_file(expedition=None, leg=None):
+    return _scope_out_dir(expedition, leg) / "preference_rank_flags.json"
 
 
-def _counterfactuals_dir():
-    return _require_out_dir() / "counterfactuals"
+def _counterfactuals_dir(expedition=None, leg=None):
+    return _scope_out_dir(expedition, leg) / "counterfactuals"
 
 
-def _counterfactuals_file():
-    return _require_out_dir() / "user_counterfactuals.json"
+def _counterfactuals_file(expedition=None, leg=None):
+    return _scope_out_dir(expedition, leg) / "user_counterfactuals.json"
 
 
-def _cockpit_queue_file():
-    return _require_out_dir() / "cockpit_queue.json"
+def _cockpit_queue_file(expedition=None, leg=None):
+    return _scope_out_dir(expedition, leg) / "cockpit_queue.json"
 
 
-def _seeds_file():
+def _seeds_file(expedition=None, leg=None):
     # search/driver.py reads/writes this same file (out_dir / "seed_pool.json") as the shared
     # subject pool a leg draws from on plateau; using a different filename here silently
     # disconnects seeds topped up from this UI from anything the driver ever reads.
-    return _require_out_dir() / "seed_pool.json"
+    return _scope_out_dir(expedition, leg) / "seed_pool.json"
 
 
 DEFAULT_PORT = 8420
@@ -483,18 +571,19 @@ def save_store(path, store):
     os.replace(tmp, path)
 
 
-def load_comparisons():
-    if os.path.exists(_comparisons_file()):
-        with open(_comparisons_file()) as f:
+def load_comparisons(expedition=None, leg=None):
+    if os.path.exists(_comparisons_file(expedition, leg)):
+        with open(_comparisons_file(expedition, leg)) as f:
             return json.load(f)
     return []
 
 
-def save_comparisons(comparisons):
-    tmp = f"{_comparisons_file()}.tmp"
+def save_comparisons(comparisons, expedition=None, leg=None):
+    target = _comparisons_file(expedition, leg)
+    tmp = f"{target}.tmp"
     with open(tmp, "w") as f:
         json.dump(comparisons, f, indent=1)
-    os.replace(tmp, _comparisons_file())
+    os.replace(tmp, target)
 
 
 def record_comparison(comparisons, winner, loser, now):
@@ -503,17 +592,31 @@ def record_comparison(comparisons, winner, loser, now):
     return updated
 
 
-_pairwise_model_cache = {"model": None}
+_pairwise_model_cache: dict[str, Any] = {"model": None, "by_scope": {}}
 
 
-def _embeddings_for(items):
-    tags, embeddings = embed_cache.load_cache(embed_cache.embeddings_file(_require_out_dir()))
+def _cache_model(expedition, leg, model):
+    _pairwise_model_cache["by_scope"][(expedition, leg)] = model
+    # Keep the old inspection slot for existing callers and tests. Scoped reads never use it.
+    _pairwise_model_cache["model"] = model
+
+
+def _model_for_scope(expedition=None, leg=None):
+    if expedition is None or leg is None:
+        return _pairwise_model_cache["model"]
+    return _pairwise_model_cache["by_scope"].get((expedition, leg))
+
+
+def _embeddings_for(items, expedition=None, leg=None):
+    tags, embeddings = embed_cache.load_cache(
+        embed_cache.embeddings_file(_scope_out_dir(expedition, leg))
+    )
     tag_to_row = {t: i for i, t in enumerate(tags)}
     idx = [tag_to_row[m["tag"]] for m in items if m["tag"] in tag_to_row]
     return embeddings[idx]
 
 
-def _maybe_retrain_pairwise_model(comparisons):
+def _maybe_retrain_pairwise_model(comparisons, expedition=None, leg=None):
     """Retrains and refreshes the pairwise model cache at each training interval. Training is
     best-effort: the comparison has already been saved by the caller, so a training failure (e.g.
     a corrupt embedding cache) must not fail the comparison write. On failure the old cached model
@@ -522,14 +625,16 @@ def _maybe_retrain_pairwise_model(comparisons):
     if n < comparison_sampler.MIN_COMPARISONS or n % comparison_sampler.RETRAIN_EVERY != 0:
         return
     try:
-        result = preference_pairwise_model.train_and_save(comparisons, _active_out_dir())
+        result = preference_pairwise_model.train_and_save(
+            comparisons, _scope_out_dir(expedition, leg)
+        )
     except Exception as e:
         print(f"pairwise model auto-retrain failed at n={n}, keeping previous model: {e}",
               file=sys.stderr, flush=True)
         return
     if result is not None:
         with _lock:
-            _pairwise_model_cache["model"] = result["model"]
+            _cache_model(expedition, leg, result["model"])
 
 
 def _compared_pair_keys(comparisons):
@@ -537,12 +642,14 @@ def _compared_pair_keys(comparisons):
             if c.get("winner") and c.get("loser")}
 
 
-def next_compare_response(manifest, comparisons):
+def next_compare_response(manifest, comparisons, expedition=None, leg=None):
     """Returns a pair of item summaries, or {"done": True} when fewer than two images exist."""
-    model = _pairwise_model_cache["model"]
+    model = _model_for_scope(expedition, leg)
     candidate_manifest = manifest
     if model is not None:
-        tags, _ = embed_cache.load_cache(embed_cache.embeddings_file(_require_out_dir()))
+        tags, _ = embed_cache.load_cache(
+            embed_cache.embeddings_file(_scope_out_dir(expedition, leg))
+        )
         embedded = set(tags)
         embedded_manifest = [m for m in manifest if m["tag"] in embedded]
         if embedded_manifest:
@@ -559,14 +666,15 @@ def next_compare_response(manifest, comparisons):
                 seen[tag] = seen.get(tag, 0) + 1
     pair = comparison_sampler.pick_next_pair(
         candidate_manifest, len(comparisons), model=model,
-        score_fn=preference_pairwise_model.score, embeddings_for=_embeddings_for, seen=seen,
+         score_fn=preference_pairwise_model.score,
+         embeddings_for=lambda items: _embeddings_for(items, expedition, leg), seen=seen,
         exclude=_compared_pair_keys(comparisons),
     )
     if pair is None:
         return {"done": True}
     a, b = pair
-    return {"img1": item_summary(a, _active_out_dir()),
-            "img2": item_summary(b, _active_out_dir())}
+    out_dir = _scope_out_dir(expedition, leg)
+    return {"img1": item_summary(a, out_dir), "img2": item_summary(b, out_dir)}
 
 
 SAMPLERS = ("ddim", "dpmpp_2m", "euler")
@@ -594,10 +702,12 @@ def build_trial(payload, now, trial_id):
         raise ValueError("n/strength/steps/cfg must be numbers")
     mission = payload.get("mission") or "freeform"
     queue_title = cockpit.MISSIONS.get(mission, {}).get("queue", mission)
+    focus_id = payload.get("focus_id")
     return {
         "id": trial_id, "status": "draft", "mission": mission, "queue_title": queue_title,
         "prompt": prompt, "hypothesis": (payload.get("hypothesis") or "").strip(),
         "target": payload.get("target") or "", "target_cell": payload.get("target_cell"),
+        "focus_id": focus_id,
         "seed_strategy": seed_strategy, "n": n, "strength": strength,
         "sampler": sampler, "steps": steps, "cfg": cfg,
         "negative": payload.get("negative") or NEG_DEFAULT,
@@ -663,7 +773,7 @@ def _sibling_leg_exclusion_embeddings(expedition, leg, model):
     class _Cfg:
         pass
     fake_cfg = _Cfg()
-    fake_cfg.dir = config.leg_dir(expedition, leg)
+    fake_cfg.dir = _scope_out_dir(expedition, leg)
     fake_cfg.leg = leg
 
     sibling_manifest = _load_sibling_leg_manifests(fake_cfg)
@@ -867,26 +977,47 @@ def cockpit_evidence(manifest, prompt, favorites, comparisons, top_n=3, cell_tag
     return out
 
 
-_manifest_cache = {"manifest": None, "mtime": None, "by_tag": None}
+_manifest_cache: dict[
+    tuple[str | None, str | None], dict[str, object]
+] = {}
 _manifest_cache_lock = threading.Lock()
 
 
-def load_manifest():
-    path = _active_out_dir() / "scored_manifest.json"
+def load_manifest(expedition, leg):
+    path = _manifest_path(expedition, leg)
+    cache_key = (expedition, leg)
     with _manifest_cache_lock:
         mtime = os.path.getmtime(path)
-        if _manifest_cache["manifest"] is None or _manifest_cache["mtime"] != mtime:
+        cached = _manifest_cache.get(cache_key)
+        if cached is None or cached["mtime"] != mtime:
             with open(path) as f:
                 manifest = json.load(f)
-            _manifest_cache["manifest"] = manifest
-            _manifest_cache["by_tag"] = {m["tag"]: m for m in manifest}
-            _manifest_cache["mtime"] = mtime
-        return _manifest_cache["manifest"]
+            cached = {
+                "manifest": manifest,
+                "by_tag": {m["tag"]: m for m in manifest},
+                "mtime": mtime,
+            }
+            _manifest_cache[cache_key] = cached
+        return cached["manifest"]
 
 
-def manifest_entry_by_tag(tag):
-    load_manifest()
-    return _manifest_cache["by_tag"].get(tag)
+def manifest_entry_by_tag(tag, expedition, leg):
+    load_manifest(expedition, leg)
+    return _manifest_cache[(expedition, leg)]["by_tag"].get(tag)
+
+
+def _manifest_file_in_scope(entry, out_dir):
+    candidate = Path(entry["file"])
+    if not candidate.is_absolute():
+        candidate = out_dir / candidate
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(out_dir.resolve())
+    except ValueError as exc:
+        raise FileNotFoundError("manifest image is outside its leg directory") from exc
+    if not resolved.is_file():
+        raise FileNotFoundError(str(resolved))
+    return resolved
 
 
 _ROUTES = [
@@ -931,9 +1062,43 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_image_file(self, path):
+        body = path.read_bytes()
+        suffix = path.suffix.lower()
+        content_type = "image/png" if suffix == ".png" else "image/jpeg"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_scoped_generated_image(self, tag, context, thumbnail):
+        expedition, leg = self._page_scope(context)
+        out_dir = _scope_out_dir(expedition, leg)
+        match = manifest_entry_by_tag(tag, expedition, leg)
+        if match is None:
+            self.send_error(404, "no manifest entry for this tag")
+            return
+        try:
+            image_path = _manifest_file_in_scope(match, out_dir)
+        except (KeyError, FileNotFoundError):
+            self.send_error(404, "manifest image is unavailable")
+            return
+        if not thumbnail:
+            self._send_image_file(image_path)
+            return
+
+        thumbnail_path = out_dir / "thumbs" / f"{tag}.jpg"
+        if not thumbnail_path.exists():
+            thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+            generate_thumbnail(str(image_path), str(thumbnail_path))
+        self._send_image_file(thumbnail_path)
+
     def do_GET(self):
         try:
             self._do_GET()
+        except ContextQueryError as e:
+            self._send_context_error(e)
         except NoActiveLegError as e:
             self._send_no_active_leg_error(e)
         except Exception as e:
@@ -967,6 +1132,17 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
         except Exception:
             pass  # client already gone; nothing left to send
+
+    def _send_context_error(self, exc):
+        body = f"<h1>Invalid workspace context</h1><p>{html.escape(str(exc))}</p>".encode()
+        try:
+            self.send_response(400)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception:
+            pass
 
     def _send_json_error(self, exc):
         no_manifest = isinstance(exc, FileNotFoundError) and "scored_manifest.json" in str(exc)
@@ -1090,7 +1266,7 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
         else:
             n_entries = 0
             try:
-                manifest = load_manifest()
+                manifest = load_manifest(selection["expedition"], selection["leg"])
                 n_entries = len(manifest)
                 n_present = sum(1 for m in manifest if os.path.exists(m["file"]))
                 manifest_summary = f"{n_present}/{n_entries} manifest images present on disk"
@@ -1111,6 +1287,117 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _explore_state_records(self, directory, context):
+        if context.expedition is None or context.leg is None:
+            return []
+        root = config.STATE_DIR / directory / context.expedition / context.leg
+        records = []
+        if not root.is_dir():
+            return records
+        for path in sorted(root.glob("*.json")):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            if isinstance(record, dict):
+                records.append(record)
+        return records
+
+    def _explore_foci(self, context):
+        if context.expedition is None or context.leg is None:
+            return []
+        records = self._focus_store().list(Scope(context.expedition, context.leg), status="open")
+        manifest_by_tag = {}
+        try:
+            manifest_by_tag = {record["tag"]: record for record in load_manifest(context.expedition, context.leg)}
+        except FileNotFoundError:
+            pass
+        enriched = []
+        for record in records:
+            copy = dict(record)
+            source = record.get("source") or {}
+            generated = source.get("member_tags") or source.get("adjacent_member_tags") or []
+            anchors = source.get("real_anchor_tags") or []
+            copy["evidence"] = {
+                "generated_members": [
+                    ({"tag": tag, "record": manifest_by_tag[tag]} if tag in manifest_by_tag else {"tag": tag, "missing": True})
+                    for tag in generated
+                ],
+                "real_anchors": [
+                    ({"tag": tag} if (Path(REAL_DIR) / tag).is_file() else {"tag": tag, "missing": True})
+                    for tag in anchors
+                ],
+            }
+            enriched.append(copy)
+        return enriched
+
+    def _send_explore_page(self):
+        context = self._page_context()
+        trials = []
+        if context.expedition is not None and context.leg is not None:
+            stored_trials = load_store(
+                _scope_out_dir(context.expedition, context.leg) / "cockpit_queue.json"
+            )
+            if isinstance(stored_trials, dict):
+                trials = list(stored_trials.values())
+        data = explore_hub.build_explore_data(
+            context,
+            self._explore_foci(context),
+            trials=trials,
+            guide_threads=self._explore_state_records("guide_threads", context),
+            launches=self._explore_state_records("paid_launches", context),
+        )
+        body = explore_hub.render_html(
+            active_expedition=context.expedition,
+            active_leg=context.leg,
+            running=((run["expedition"], run["leg"]) if (run := run_manager.current_run()) else None),
+            data=data,
+            context=context,
+        ).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _page_context(self):
+        query = urllib.parse.parse_qs(
+            urllib.parse.urlparse(self.path).query, keep_blank_values=True
+        )
+        if "expedition" in query and "leg" in query:
+            try:
+                _validate_scope_names(query["expedition"][0], query["leg"][0])
+            except (IndexError, ValueError) as e:
+                raise ContextQueryError(str(e)) from e
+        return resolve_workspace_context(
+            self.path, _active_selection, self._focus_store()
+        )
+
+    def _page_render_context(self, context: WorkspaceContext):
+        query = urllib.parse.parse_qs(
+            urllib.parse.urlparse(self.path).query, keep_blank_values=True
+        )
+        if any(key in query for key in ("expedition", "leg", "focus_id")):
+            return context
+        return None
+
+    def _page_scope(self, context: WorkspaceContext):
+        query = urllib.parse.parse_qs(
+            urllib.parse.urlparse(self.path).query, keep_blank_values=True
+        )
+        if not any(key in query for key in ("expedition", "leg", "focus_id")):
+            expedition, leg = _active_scope()
+            if expedition is None or leg is None:
+                return expedition, leg
+            try:
+                return _validate_scope_names(expedition, leg)
+            except ValueError as e:
+                raise ContextQueryError(str(e)) from e
+        try:
+            return _validate_scope_names(context.expedition, context.leg)
+        except ValueError as e:
+            raise ContextQueryError(str(e)) from e
 
     def _status_page_data_body(self, manifest_summary):
         links = " &middot; ".join(f'<a href="{path}">{label}</a>' for path, label in _ROUTES)
@@ -1237,13 +1524,14 @@ needed.</p>
 </body></html>""".encode()
 
     def _do_GET(self):
+        route_path = urllib.parse.urlparse(self.path).path
         if self.path == "/api/active-leg":
             self._json_response(200, dict(_active_selection))
             return
         if self.path == "/api/expeditions":
             self._json_response(200, {"expeditions": _list_expeditions()})
             return
-        if self.path == "/api/searchrun/status":
+        if route_path == "/api/searchrun/status":
             self._json_response(200, run_manager.status())
             return
         if self.path.startswith("/api/searchrun/report"):
@@ -1253,43 +1541,66 @@ needed.</p>
             if not expedition or not leg:
                 self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
                 return
-            out_dir = config.leg_dir(expedition, leg)
+            try:
+                expedition, leg = _request_scope(expedition, leg)
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
+            out_dir = _scope_out_dir(expedition, leg)
             favorites = load_store(out_dir / "user_favorites.json")
             self._json_response(200, run_manager.build_report(out_dir, favorites=favorites))
             return
-        if self.path == "/api/compare/next":
+        if route_path == "/api/compare/next":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
             with _lock:
-                comparisons = load_comparisons()
-                response = next_compare_response(load_manifest(), comparisons)
+                comparisons = load_comparisons(expedition, leg)
+                response = next_compare_response(
+                    load_manifest(expedition, leg), comparisons, expedition, leg
+                )
             self._json_response(200, response)
             return
-        if self.path == "/api/favorites":
+        if route_path == "/api/favorites":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
             with _lock:
-                self._json_response(200, load_store(_favorites_file()))
+                self._json_response(200, load_store(_favorites_file(expedition, leg)))
             return
-        if self.path == "/api/preference_rank/flags":
+        if route_path == "/api/preference_rank/flags":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
             with _lock:
-                self._json_response(200, load_store(_preference_rank_flags_file()))
+                self._json_response(200, load_store(_preference_rank_flags_file(expedition, leg)))
             return
-        if self.path == "/api/counterfactuals":
+        if route_path == "/api/counterfactuals":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
             with _lock:
-                self._json_response(200, load_store(_counterfactuals_file()))
+                self._json_response(200, load_store(_counterfactuals_file(expedition, leg)))
             return
-        if self.path == "/api/seeds":
+        if route_path == "/api/seeds":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
             with _lock:
-                self._json_response(200, load_store(_seeds_file()))
+                self._json_response(200, load_store(_seeds_file(expedition, leg)))
             return
-        if self.path == "/api/cockpit/target_cells":
-            coverage_data = _get_manifest_cached("coverage", coverage_map.compute_data)
+        if route_path == "/api/cockpit/target_cells":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            coverage_data = _get_manifest_cached(
+                "coverage", coverage_map.compute_data, expedition, leg,
+            )
             cells = coverage_map.top_frontier_cells(coverage_data, n=3)
             self._json_response(200, {"cells": cells})
             return
         if self.path.startswith("/api/cockpit/evidence"):
             self._handle_cockpit_evidence()
             return
-        if self.path == "/api/cockpit/queue":
+        if route_path == "/api/cockpit/queue":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
             with _lock:
-                trials = load_store(_cockpit_queue_file())
+                trials = load_store(_cockpit_queue_file(expedition, leg))
             self._json_response(200, {"trials": sorted(trials.values(), key=lambda t: t["created_at"])})
             return
         if self.path.startswith("/api/foci"):
@@ -1300,8 +1611,12 @@ needed.</p>
             if parsed.path.startswith("/api/foci/"):
                 self._handle_focus_get(parsed)
                 return
-        if self.path == "/status.html":
+        if route_path == "/status.html":
             self._send_status_page()
+            return
+
+        if route_path in ("/", "/explore.html"):
+            self._send_explore_page()
             return
 
         if self.path in ("/favicon.ico", "/favicon.png"):
@@ -1338,9 +1653,13 @@ needed.</p>
             self.send_error(404, "unknown font asset")
             return
 
-        if self.path == "/scan.html" or self.path.startswith("/scan.html?"):
+        if route_path == "/scan.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
             html = scan_gallery.render_html(
-                _get_scan_items(), _active_selection["expedition"], _active_selection["leg"]
+                _get_scan_items(expedition, leg), context.expedition, context.leg,
+                context=self._page_render_context(context),
+                focus=context.focus,
             )
             body = html.encode()
             self.send_response(200)
@@ -1349,113 +1668,163 @@ needed.</p>
             self.end_headers()
             self.wfile.write(body)
             return
-        if self.path == "/scan_data.json":
-            self._json_response(200, _get_scan_items())
+        if route_path == "/scan_data.json":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            self._json_response(200, _get_scan_items(expedition, leg))
             return
 
-        if self.path == "/map.html":
-            html = map_view.render_html(_get_map_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
-            body = html.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if self.path == "/redundancy.html":
-            html = redundancy_view.render_html(_get_redundancy_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
-            body = html.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if self.path == "/coverage.html":
-            html = coverage_map.render_html(_get_manifest_cached("coverage", coverage_map.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
-            body = html.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if self.path == "/novelty_decay.html":
-            html = novelty_decay.render_html(_get_manifest_cached("novelty_decay", novelty_decay.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
-            body = html.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if self.path == "/lineage.html":
-            html = lineage_view.render_html(_get_manifest_cached("lineage", lineage_view.compute_data), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
-            body = html.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if self.path.startswith("/archive.html"):
-            out_dir = _active_out_dir()
-            use_predicted = (out_dir is not None
-                             and preference_settings.load(out_dir)["use_predicted_preference"])
-            target_name = "archive_predicted" if use_predicted else "archive_actual"
-            watched = _prediction_watched_files() if use_predicted else [_manifest_path()]
-            data = _live_cache.get(
-                target_name,
-                lambda sd: elite_archive.compute_data(sd, use_predicted_preference=use_predicted),
-                watched_files=watched, sweep_dir=str(_active_out_dir()),
-            )
-            html = elite_archive.render_html(data, active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
-            body = html.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if self.path == "/preference_rank.html":
-            data = _live_cache.get(
-                "preference_rank", preference_rank.compute_data,
-                watched_files=_prediction_watched_files(), sweep_dir=str(_active_out_dir()),
-            )
-            html = preference_rank.render_html(data, active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
-            body = html.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if self.path == "/preference_status.html":
-            html = preference_status.render_html(_get_preference_status_data(), active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)
-            body = html.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if self.path == "/api/preference_status":
-            self._json_response(200, _get_preference_status_data())
-            return
-
-        if self.path in ("/", "/explore.html"):
-            body = explore_hub.render_html(
-                active_expedition=_active_selection["expedition"],
-                active_leg=_active_selection["leg"],
+        if route_path == "/map.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = map_view.render_html(
+                _get_map_data(expedition, leg), active_expedition=context.expedition,
+                active_leg=context.leg,
                 running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None,
+                context=self._page_render_context(context),
+                focus=context.focus,
+            )
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if route_path == "/redundancy.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = redundancy_view.render_html(
+                _get_redundancy_data(expedition, leg), active_expedition=context.expedition,
+                active_leg=context.leg,
+                running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None,
+                context=self._page_render_context(context),
+                focus=context.focus,
+            )
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if route_path == "/coverage.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = coverage_map.render_html(
+                _get_manifest_cached("coverage", coverage_map.compute_data, expedition, leg),
+                active_expedition=context.expedition, active_leg=context.leg,
+                running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None,
+                context=self._page_render_context(context),
+                focus=context.focus,
+            )
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if route_path == "/novelty_decay.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = novelty_decay.render_html(_get_manifest_cached("novelty_decay", novelty_decay.compute_data, expedition, leg), active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None, focus=context.focus)
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if route_path == "/lineage.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = lineage_view.render_html(_get_manifest_cached("lineage", lineage_view.compute_data, expedition, leg), active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None, focus=context.focus)
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if route_path == "/archive.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            out_dir = _scope_out_dir(expedition, leg)
+            use_predicted = preference_settings.load(out_dir)["use_predicted_preference"]
+            target_name = "archive_predicted" if use_predicted else "archive_actual"
+            watched = _prediction_watched_files(expedition, leg) if use_predicted else [str(_manifest_path(expedition, leg))]
+            data = _live_cache.get(
+                f"{target_name}:{expedition}:{leg}",
+                lambda sd: elite_archive.compute_data(sd, use_predicted_preference=use_predicted),
+                watched_files=watched, sweep_dir=str(out_dir),
+            )
+            html = elite_archive.render_html(
+                data, active_expedition=context.expedition, active_leg=context.leg,
+                running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None,
+                context=self._page_render_context(context), focus=context.focus,
+            )
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if route_path == "/preference_rank.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            data = _live_cache.get(
+                f"preference_rank:{expedition}:{leg}", preference_rank.compute_data,
+                watched_files=_prediction_watched_files(expedition, leg),
+                sweep_dir=str(_scope_out_dir(expedition, leg)),
+            )
+            html = preference_rank.render_html(
+                data, active_expedition=context.expedition, active_leg=context.leg,
+                running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None,
+                context=self._page_render_context(context), focus=context.focus,
+            )
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if route_path == "/preference_status.html":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            html = preference_status.render_html(_get_preference_status_data(expedition, leg), active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None, focus=context.focus)
+            body = html.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if route_path == "/api/preference_status":
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            self._json_response(200, _get_preference_status_data(expedition, leg))
+            return
+
+        if route_path == "/seeds.html":
+            context = self._page_context()
+            body = seed_browser.render_html(
+                active_expedition=context.expedition,
+                active_leg=context.leg,
+                running=(_run["expedition"], _run["leg"])
+                if (_run := run_manager.current_run()) else None,
+                focus=context.focus,
+                explicit_scope=self._page_render_context(context) is not None,
             ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1464,8 +1833,9 @@ needed.</p>
             self.wfile.write(body)
             return
 
-        if self.path == "/seeds.html":
-            body = seed_browser.render_html(active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None).encode()
+        if route_path == "/compare.html":
+            context = self._page_context()
+            body = compare_page.render_html(active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None, focus=context.focus).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))
@@ -1473,32 +1843,15 @@ needed.</p>
             self.wfile.write(body)
             return
 
-        if self.path == "/compare.html":
-            body = compare_page.render_html(active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        if self.path == "/cockpit.html":
-            # Every cockpit route (queue, target_cells, evidence, run) resolves its working
-            # directory off the globally active leg, not an explicit cockpit-scoped path, so
-            # this switch is load-bearing: without it those routes would operate against
-            # whatever leg was last active elsewhere. That does mean opening this page from a
-            # second tab silently redirects the active leg out from under a first tab still
-            # curating a different leg; there is no cockpit-scoped directory resolution to fall
-            # back to instead. Known tradeoff, not accidental.
-            if (_active_selection["expedition"] is not None
-                    and _active_selection["leg"] != "cockpit"):
-                _set_active_selection(_active_selection["expedition"], "cockpit")
+        if route_path == "/cockpit.html":
+            context = self._page_context()
             body = cockpit.render_html(
                 expeditions=[e["name"] for e in _list_expeditions()],
-                current_expedition=_active_selection["expedition"],
-                active_expedition=_active_selection["expedition"],
-                active_leg=_active_selection["leg"],
+                current_expedition=context.expedition,
+                active_expedition=context.expedition,
+                active_leg=context.leg,
                 running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None,
+                focus=context.focus,
             ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
@@ -1507,8 +1860,16 @@ needed.</p>
             self.wfile.write(body)
             return
 
-        if self.path == "/runs.html":
-            body = runs_page.render_html(active_expedition=_active_selection["expedition"], active_leg=_active_selection["leg"], running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None).encode()
+        if route_path == "/runs.html":
+            context = self._page_context()
+            body = runs_page.render_html(
+                active_expedition=context.expedition,
+                active_leg=context.leg,
+                running=(_run["expedition"], _run["leg"])
+                if (_run := run_manager.current_run()) else None,
+                focus=context.focus,
+                explicit_scope=self._page_render_context(context) is not None,
+            ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))
@@ -1535,17 +1896,57 @@ needed.</p>
             self.wfile.write(body)
             return
 
-        if self.path.startswith("/thumbs/") and self.path.endswith(".jpg"):
-            thumb_path = str(_require_out_dir() / self.path.lstrip("/"))
+        query = urllib.parse.parse_qs(
+            urllib.parse.urlparse(self.path).query, keep_blank_values=True
+        )
+        has_scope_query = any(key in query for key in ("expedition", "leg", "focus_id"))
+
+        if route_path.startswith("/generated/"):
+            tag = urllib.parse.unquote(route_path[len("/generated/"):])
+            if not tag or "/" in tag or ".." in tag:
+                self.send_error(404, "invalid generated image tag")
+                return
+            self._send_scoped_generated_image(tag, self._page_context(), thumbnail=False)
+            return
+
+        if route_path.startswith("/thumbs/") and route_path.endswith(".jpg"):
+            if has_scope_query:
+                tag = urllib.parse.unquote(route_path[len("/thumbs/"):-len(".jpg")])
+                if not tag or "/" in tag:
+                    self.send_error(404, "invalid thumbnail tag")
+                    return
+                self._send_scoped_generated_image(tag, self._page_context(), thumbnail=True)
+                return
+
+            tag = urllib.parse.unquote(route_path[len("/thumbs/"):-len(".jpg")])
+            if not tag or "/" in tag or ".." in tag:
+                self.send_error(404, "invalid thumbnail tag")
+                return
+            thumb_path = str(_require_out_dir() / route_path.lstrip("/"))
             if not os.path.exists(thumb_path):
-                tag = os.path.basename(self.path)[: -len(".jpg")]
-                match = manifest_entry_by_tag(tag)
+                match = manifest_entry_by_tag(
+                    tag, *_active_scope()
+                )
                 if match is None:
                     self.send_error(404, "no manifest entry for this tag")
                     return
                 os.makedirs(os.path.dirname(thumb_path), exist_ok=True)
                 generate_thumbnail(match["file"], thumb_path)
             # fall through to super().do_GET() below, which now finds the file on disk
+
+        if route_path.startswith("/counterfactuals/"):
+            tag = urllib.parse.unquote(route_path[len("/counterfactuals/"):])
+            if not tag or "/" in tag or "\\" in tag:
+                self.send_error(404, "invalid counterfactual tag")
+                return
+            context = self._page_context()
+            expedition, leg = self._page_scope(context)
+            image_path = _counterfactuals_dir(expedition, leg) / f"{tag}.png"
+            if not image_path.is_file():
+                self.send_error(404, "counterfactual image is unavailable")
+                return
+            self._send_image_file(image_path)
+            return
 
         if self.path.startswith("/real_thumbs/"):
             # Mirrors /thumbs/ above but for REAL_DIR (corrected_dataset_extract/, read-only
@@ -1573,6 +1974,7 @@ needed.</p>
             self._send_json_error(e)
 
     def _do_POST(self):
+        route_path = urllib.parse.urlparse(self.path).path
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length) if length else b"{}"
         try:
@@ -1614,7 +2016,7 @@ needed.</p>
             self._json_response(200, result)
             return
 
-        if self.path == "/api/compare":
+        if route_path == "/api/compare":
             winner = payload.get("winner")
             loser = payload.get("loser")
             if not winner or not loser:
@@ -1623,23 +2025,37 @@ needed.</p>
             if winner == loser:
                 self._json_response(400, {"error": "'winner' and 'loser' must be different images"})
                 return
+            try:
+                expedition, leg = _request_scope(
+                    payload.get("expedition"), payload.get("leg")
+                )
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
             with _lock:
-                comparisons = load_comparisons()
+                comparisons = load_comparisons(expedition, leg)
                 comparisons = record_comparison(comparisons, winner, loser, datetime.now(timezone.utc).isoformat())
-                save_comparisons(comparisons)
+                save_comparisons(comparisons, expedition, leg)
             # Outside _lock: a full model fit can take a while, and every other route (favorites,
             # compare, cockpit) shares this same lock, so retraining here would block them for the
             # fit's whole duration instead of just the comparison write above.
-            _maybe_retrain_pairwise_model(comparisons)
+            _maybe_retrain_pairwise_model(comparisons, expedition, leg)
             self._json_response(200, {"ok": True, "count": len(comparisons)})
             return
 
-        if self.path == "/api/preference_toggle":
+        if route_path == "/api/preference_toggle":
             enabled = payload.get("enabled")
             if not isinstance(enabled, bool):
                 self._json_response(400, {"error": "missing or non-boolean 'enabled'"})
                 return
-            out_dir = _active_out_dir()
+            try:
+                expedition, leg = _request_scope(
+                    payload.get("expedition"), payload.get("leg")
+                )
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
+            out_dir = _scope_out_dir(expedition, leg)
             if out_dir is None:
                 self._json_response(400, {"error": "no active leg selected"})
                 return
@@ -1647,55 +2063,91 @@ needed.</p>
                 self._json_response(400, {"error": "no trained model yet; cannot enable predicted preference"})
                 return
             preference_settings.save(enabled, out_dir)
-            self._json_response(200, _get_preference_status_data())
+            self._json_response(200, _get_preference_status_data(
+                expedition, leg
+            ))
             return
 
-        if self.path == "/api/preference_rank/flag":
+        if route_path == "/api/preference_rank/flag":
             tag = payload.get("tag")
             flag = payload.get("flag")
             if not tag or flag not in {"matches", "questionable"}:
                 self._json_response(400, {"error": "'tag' and a valid 'flag' are required"})
                 return
+            try:
+                expedition, leg = _request_scope(
+                    payload.get("expedition"), payload.get("leg")
+                )
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
             with _lock:
-                flags = load_store(_preference_rank_flags_file())
+                flags = load_store(_preference_rank_flags_file(expedition, leg))
                 flags[tag] = {"flag": flag, "flagged_at": datetime.now(timezone.utc).isoformat()}
-                save_store(_preference_rank_flags_file(), flags)
+                save_store(_preference_rank_flags_file(expedition, leg), flags)
             self._json_response(200, {"ok": True, "tag": tag, "flag": flag})
             return
 
-        if self.path == "/api/preference_retrain":
+        if route_path == "/api/preference_retrain":
+            try:
+                expedition, leg = _request_scope(
+                    payload.get("expedition"), payload.get("leg")
+                )
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
             try:
                 with _lock:
-                    gate_error = _preference_retrain_gate_error()
+                    gate_error = _preference_retrain_gate_error(expedition, leg)
                     if gate_error:
                         self._json_response(400, {"error": gate_error})
                         return
-                    comparisons = load_comparisons()
+                    comparisons = load_comparisons(expedition, leg)
                 # Fit outside _lock: a full model fit can take a while, and every other route
                 # (favorites, compare, cockpit) shares this same lock, so holding it here blocks
                 # them for the fit's whole duration instead of just the state swap below.
-                result = preference_pairwise_model.train_and_save(comparisons, _active_out_dir())
+                result = preference_pairwise_model.train_and_save(
+                    comparisons, _scope_out_dir(expedition, leg)
+                )
                 if result is None:
                     self._json_response(500, {"error": "preference retrain failed: no usable comparisons"})
                     return
                 with _lock:
-                    _pairwise_model_cache["model"] = result["model"]
+                    _cache_model(expedition, leg, result["model"])
             except Exception as e:
                 self._json_response(500, {"error": f"preference retrain crashed: {e}"})
                 return
-            self._json_response(200, _get_preference_status_data())
+            self._json_response(200, _get_preference_status_data(
+                expedition, leg
+            ))
             return
 
-        if self.path == "/api/favorite":
+        if route_path == "/api/favorite":
             tag = payload.get("tag")
             if not tag:
                 self._json_response(400, {"error": "missing 'tag'"})
                 return
             expedition = payload.get("expedition")
             leg = payload.get("leg")
+            if (expedition is None) != (leg is None):
+                self._json_response(400, {"error": "'expedition' and 'leg' must be provided together"})
+                return
+            if expedition is not None:
+                try:
+                    expedition, leg = _request_scope(expedition, leg)
+                except ValueError as e:
+                    self._json_response(400, {"error": str(e)})
+                    return
             if expedition is None or leg is None:
                 _logger.warning("favorite mutation without expedition/leg is deprecated")
                 favorites_file = _favorites_file()
+            elif payload.get("focus_id") is not None:
+                try:
+                    self._validate_focus_for_scope(expedition, leg, payload["focus_id"])
+                except ValueError as e:
+                    self._json_response(400, {"error": str(e)})
+                    return
+                favorites_file = _favorites_file(expedition, leg)
             elif (expedition, leg) != (_active_selection["expedition"], _active_selection["leg"]):
                 self._json_response(409, {"error": "favorite mutation targets a stale expedition/leg"})
                 return
@@ -1709,13 +2161,29 @@ needed.</p>
             self._json_response(200, {"ok": True, "count": len(favorites)})
             return
 
-        if self.path == "/api/unfavorite":
+        if route_path == "/api/unfavorite":
             tag = payload.get("tag")
             expedition = payload.get("expedition")
             leg = payload.get("leg")
+            if (expedition is None) != (leg is None):
+                self._json_response(400, {"error": "'expedition' and 'leg' must be provided together"})
+                return
+            if expedition is not None:
+                try:
+                    expedition, leg = _request_scope(expedition, leg)
+                except ValueError as e:
+                    self._json_response(400, {"error": str(e)})
+                    return
             if expedition is None or leg is None:
                 _logger.warning("favorite mutation without expedition/leg is deprecated")
                 favorites_file = _favorites_file()
+            elif payload.get("focus_id") is not None:
+                try:
+                    self._validate_focus_for_scope(expedition, leg, payload["focus_id"])
+                except ValueError as e:
+                    self._json_response(400, {"error": str(e)})
+                    return
+                favorites_file = _favorites_file(expedition, leg)
             elif (expedition, leg) != (_active_selection["expedition"], _active_selection["leg"]):
                 self._json_response(409, {"error": "favorite mutation targets a stale expedition/leg"})
                 return
@@ -1730,21 +2198,33 @@ needed.</p>
 
         if self.path == "/api/cockpit/queue":
             trial_id = f"trial_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+            expedition = payload.get("expedition")
+            leg = payload.get("leg")
+            try:
+                expedition, leg = _request_scope(expedition, leg)
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
+            try:
+                self._validate_focus_for_scope(expedition, leg, payload.get("focus_id"))
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
             try:
                 trial = build_trial(payload, datetime.now(timezone.utc).isoformat(), trial_id)
             except ValueError as e:
                 self._json_response(400, {"error": str(e)})
                 return
             with _lock:
-                trials = load_store(_cockpit_queue_file())
+                trials = load_store(_cockpit_queue_file(expedition, leg))
                 trials[trial_id] = trial
-                save_store(_cockpit_queue_file(), trials)
+                save_store(_cockpit_queue_file(expedition, leg), trials)
             self._json_response(200, {"ok": True, "id": trial_id})
             return
 
-        if self.path.startswith("/api/cockpit/queue/") and self.path.endswith("/run"):
-            trial_id = self.path[len("/api/cockpit/queue/"):-len("/run")]
-            self._handle_cockpit_run(trial_id)
+        if route_path.startswith("/api/cockpit/queue/") and route_path.endswith("/run"):
+            trial_id = route_path[len("/api/cockpit/queue/"):-len("/run")]
+            self._handle_cockpit_run(trial_id, payload.get("expedition"), payload.get("leg"))
             return
 
         if self.path == "/api/foci":
@@ -1756,23 +2236,31 @@ needed.</p>
                 self._handle_focus_archive(parsed, payload)
                 return
 
-        if self.path == "/api/cockpit/autopilot":
-            self._handle_cockpit_autopilot()
+        if route_path == "/api/cockpit/autopilot":
+            self._handle_cockpit_autopilot(payload)
             return
 
-        if self.path == "/api/counterfactual":
+        if route_path == "/api/counterfactual":
             self._handle_counterfactual(payload)
             return
 
-        if self.path == "/api/seeds/generate":
-            self._handle_seed_generate(payload)
+        if route_path == "/api/seeds/generate":
+            query = urllib.parse.parse_qs(
+                urllib.parse.urlparse(self.path).query, keep_blank_values=True
+            )
+            if any(key in query for key in ("expedition", "leg", "focus_id")):
+                context = self._page_context()
+                expedition, leg = self._page_scope(context)
+                self._handle_seed_generate(payload, expedition, leg)
+            else:
+                self._handle_seed_generate(payload)
             return
 
-        if self.path == "/api/searchrun/launch":
+        if route_path == "/api/searchrun/launch":
             self._handle_searchrun_launch(payload)
             return
 
-        if self.path == "/api/searchrun/stop":
+        if route_path == "/api/searchrun/stop":
             self._json_response(200, run_manager.stop_run(
                 pid=payload.get("pid"), start_time_ticks=payload.get("start_time_ticks")))
             return
@@ -1810,12 +2298,28 @@ needed.</p>
         _active_out_dir() for their scope."""
         return FocusStore(config.STATE_DIR, Path(REAL_DIR))
 
+    def _validate_focus_for_scope(self, expedition, leg, focus_id):
+        """Ensure an optional Focus reference belongs to the request's expedition and leg."""
+        if focus_id is None:
+            return
+        try:
+            self._focus_store().get(Scope(expedition, leg), focus_id)
+        except (FocusNotFound, FocusIntegrityError, FocusValidationError) as exc:
+            raise ValueError(
+                f"invalid focus_id for {expedition}/{leg}: {focus_id!r}"
+            ) from exc
+
     def _handle_focus_list(self, parsed):
         query = urllib.parse.parse_qs(parsed.query)
         expedition = (query.get("expedition") or [None])[0]
         leg = (query.get("leg") or [None])[0]
         if not expedition or not leg:
             self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
+            return
+        try:
+            expedition, leg = _validate_scope_names(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
             return
         status = (query.get("status") or [None])[0]
         scope = Scope(expedition, leg)
@@ -1841,6 +2345,11 @@ needed.</p>
         if not expedition or not leg:
             self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
             return
+        try:
+            expedition, leg = _validate_scope_names(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         scope = Scope(expedition, leg)
         try:
             record = self._focus_store().get(scope, focus_id)
@@ -1865,8 +2374,13 @@ needed.</p>
         if not expedition or not leg:
             self._json_response(400, {"error": "'scope.expedition' and 'scope.leg' are required"})
             return
+        try:
+            expedition, leg = _request_scope(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         scope = Scope(expedition, leg)
-        leg_dir = config.leg_dir(expedition, leg)
+        leg_dir = _scope_out_dir(expedition, leg)
         manifest_path = leg_dir / "scored_manifest.json"
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text())
@@ -1907,6 +2421,11 @@ needed.</p>
         if not expedition or not leg:
             self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
             return
+        try:
+            expedition, leg = _validate_scope_names(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         scope = Scope(expedition, leg)
         expected_revision = payload.get("expected_revision")
         changes = payload.get("changes")
@@ -1946,6 +2465,11 @@ needed.</p>
         if not expedition or not leg:
             self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
             return
+        try:
+            expedition, leg = _validate_scope_names(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         scope = Scope(expedition, leg)
         expected_revision = payload.get("expected_revision")
         if isinstance(expected_revision, bool) or not isinstance(expected_revision, int):
@@ -1973,13 +2497,10 @@ needed.</p>
         if not expedition or not leg:
             self._json_response(400, {"error": "'expedition' and 'leg' are required"})
             return
-        leg_file = config.EXPEDITIONS_DIR / expedition / "legs" / f"{leg}.json"
-        expedition_file = config.EXPEDITIONS_DIR / expedition / "expedition.json"
-        if not expedition_file.exists():
-            self._json_response(400, {"error": f"unknown expedition {expedition!r}"})
-            return
-        if not leg_file.exists() and leg != "cockpit":
-            self._json_response(400, {"error": f"unknown leg {leg!r} in expedition {expedition!r}"})
+        try:
+            expedition, leg = _request_scope(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
             return
 
         api_key = os.environ.get("RUNPOD_API_KEY")
@@ -1987,7 +2508,7 @@ needed.</p>
             self._json_response(400, {"error": "RUNPOD_API_KEY not set in server environment"})
             return
 
-        out_dir = config.leg_dir(expedition, leg)
+        out_dir = _scope_out_dir(expedition, leg)
         try:
             info = run_manager.launch_run(
                 expedition, leg, out_dir, api_key,
@@ -2005,6 +2526,8 @@ needed.</p>
         self._json_response(200, {"ok": True, **info})
 
     def _handle_cockpit_evidence(self):
+        context = self._page_context()
+        expedition, leg = self._page_scope(context)
         query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         prompt = (query.get("prompt") or [""])[0]
         cell = (query.get("cell") or [""])[0]
@@ -2015,24 +2538,32 @@ needed.</p>
             except ValueError:
                 fb = nb = None
             if fb is not None:
-                coverage_data = _get_manifest_cached("coverage", coverage_map.compute_data)
+                coverage_data = _get_manifest_cached(
+                    "coverage", coverage_map.compute_data, expedition, leg,
+                )
                 cell_tags = coverage_map.neighbor_tags(coverage_data, fb, nb)
         with _lock:
-            favorites = load_store(_favorites_file())
-            comparisons = load_comparisons()
-        nearest = cockpit_evidence(load_manifest(), prompt, favorites, comparisons, cell_tags=cell_tags)
+            favorites = load_store(_favorites_file(expedition, leg))
+            comparisons = load_comparisons(expedition, leg)
+        nearest = cockpit_evidence(
+            load_manifest(expedition, leg),
+            prompt, favorites, comparisons, cell_tags=cell_tags,
+        )
         self._json_response(200, {"nearest": nearest})
 
-    def _handle_cockpit_run(self, trial_id):
+    def _handle_cockpit_run(self, trial_id, expedition=None, leg=None):
+        try:
+            expedition, leg = _request_scope(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         api_key = os.environ.get("RUNPOD_API_KEY")
         if not api_key:
             self._json_response(400, {"error": "RUNPOD_API_KEY not set in server environment"})
             return
 
-        expedition = _active_selection["expedition"]
-        leg = _active_selection["leg"]
-        out_dir = _require_out_dir()
-        queue_file = _cockpit_queue_file()
+        out_dir = _scope_out_dir(expedition, leg)
+        queue_file = _cockpit_queue_file(expedition, leg)
 
         with _lock:
             trials = load_store(queue_file)
@@ -2090,6 +2621,19 @@ needed.</p>
         if not origin_tag or not prompt:
             self._json_response(400, {"error": "missing 'origin_tag' or 'prompt'"})
             return
+        try:
+            expedition, leg = _request_scope(
+                payload.get("expedition"), payload.get("leg")
+            )
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
+        focus_id = payload.get("focus_id")
+        try:
+            self._validate_focus_for_scope(expedition, leg, focus_id)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
 
         try:
             n = int(payload.get("n", 1))
@@ -2128,6 +2672,7 @@ needed.</p>
                 record = self._submit_and_wait_for_counterfactual(
                     api_key, origin_tag, prompt, strength, cfg, seed, steps, sampler, negative,
                     payload.get("overridden", []), i,
+                    expedition, leg, focus_id,
                 )
             except (RuntimeError, TimeoutError) as e:
                 self._json_response(502, {"ok": False, "error": str(e), "results": results})
@@ -2137,7 +2682,8 @@ needed.</p>
         self._json_response(200, {"ok": True, "results": results})
 
     def _submit_and_wait_for_counterfactual(self, api_key, origin_tag, prompt, strength, cfg,
-                                             seed, steps, sampler, negative, overridden, batch_index):
+                                             seed, steps, sampler, negative, overridden, batch_index,
+                                             expedition=None, leg=None, focus_id=None):
         wf = build_workflow(prompt, seed, strength, cfg, steps, sampler, negative)
         try:
             res = comfy_post("/run", wf, api_key)
@@ -2162,22 +2708,28 @@ needed.</p>
                 # uuid suffix (not just batch_index) avoids two concurrent requests for the same
                 # origin_tag racing on the same filename and corrupting each other's PNG.
                 new_tag = f"cf_{int(time.time())}_{batch_index}_{uuid.uuid4().hex[:8]}_{origin_tag[:30]}"
-                os.makedirs(_counterfactuals_dir(), exist_ok=True)
-                fname = str(_counterfactuals_dir() / f"{new_tag}.png")
+                os.makedirs(_counterfactuals_dir(expedition, leg), exist_ok=True)
+                fname = str(_counterfactuals_dir(expedition, leg) / f"{new_tag}.png")
                 with open(fname, "wb") as f:
                     f.write(base64.b64decode(images[0]["data"]))
+                image_url = f"/counterfactuals/{urllib.parse.quote(new_tag, safe='')}"
+                query = {"expedition": expedition, "leg": leg}
+                if focus_id:
+                    query["focus_id"] = focus_id
+                if expedition is not None and leg is not None:
+                    image_url += "?" + urllib.parse.urlencode(query)
                 record = {
                     "tag": new_tag, "origin_tag": origin_tag, "prompt": prompt,
                     "strength": strength, "cfg": cfg, "seed": seed, "steps": steps,
                     "sampler": sampler, "negative": negative,
-                    "file": f"counterfactuals/{new_tag}.png",
+                    "file": image_url,
                     "overridden": overridden,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
                 with _lock:
-                    records = load_store(_counterfactuals_file())
+                    records = load_store(_counterfactuals_file(expedition, leg))
                     records[new_tag] = record
-                    save_store(_counterfactuals_file(), records)
+                    save_store(_counterfactuals_file(expedition, leg), records)
                 return record
             if status in ("FAILED", "CANCELLED"):
                 raise RuntimeError(f"generation job {status.lower()}: {res}")
@@ -2185,14 +2737,15 @@ needed.</p>
 
         raise TimeoutError(f"generation timed out after {GENERATION_TIMEOUT_S}s")
 
-    def _handle_seed_generate(self, payload):
+    def _handle_seed_generate(self, payload, expedition=None, leg=None):
         n = int(payload.get("n", 20))
         n = max(1, min(n, 40))
+        out_dir = _scope_out_dir(expedition, leg)
         with _lock:
-            seeds = load_store(_seeds_file())
+            seeds = load_store(_seeds_file(expedition, leg))
         existing = list(seeds.keys())
 
-        tmp_path = str(_active_out_dir() / f"candidate_seeds_gen_{int(time.time())}.json")
+        tmp_path = str(out_dir / f"candidate_seeds_gen_{int(time.time())}.json")
         prompt = (
             f"Write {n} short, vivid, concrete visual scene or subject descriptions (5-15 words "
             f"each, no artist-style words, no medium words) suitable for testing where a "
@@ -2238,24 +2791,35 @@ needed.</p>
             return
 
         with _lock:
-            seeds = load_store(_seeds_file())
+            seeds = load_store(_seeds_file(expedition, leg))
             updated, added = seed_pool_merge(
                 seeds, new_subjects,
                 source="gpt5.5",
                 created_at=datetime.now(timezone.utc).isoformat(),
             )
-            save_store(_seeds_file(), updated)
+            save_store(_seeds_file(expedition, leg), updated)
         self._json_response(200, {"ok": True, "added": added, "count": len(updated)})
 
-    def _handle_cockpit_autopilot(self):
+    def _handle_cockpit_autopilot(self, payload=None):
+        payload = payload or {}
+        try:
+            expedition, leg = _request_scope(
+                payload.get("expedition"), payload.get("leg")
+            )
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         with _lock:
-            favorites = load_store(_favorites_file())
-            comparisons = load_comparisons()
-        manifest = load_manifest()
-        coverage_data = _get_manifest_cached("coverage", coverage_map.compute_data)
+            favorites = load_store(_favorites_file(expedition, leg))
+            comparisons = load_comparisons(expedition, leg)
+        manifest = load_manifest(expedition, leg)
+        coverage_data = _get_manifest_cached(
+            "coverage", coverage_map.compute_data,
+            expedition, leg,
+        )
         context = build_autopilot_context(coverage_data, manifest, favorites, comparisons)
 
-        tmp_path = str(_active_out_dir() / f"cockpit_autopilot_{int(time.time())}.json")
+        tmp_path = str(_scope_out_dir(expedition, leg) / f"cockpit_autopilot_{int(time.time())}.json")
         prompt = (
             "You are proposing 2-3 next generation trials for a LoRA style-transfer search tool "
             "called CLAWMARKS. Ground every suggestion ONLY in the data below; do not invent "

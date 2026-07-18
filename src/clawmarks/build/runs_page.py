@@ -21,11 +21,21 @@ from clawmarks.shared_ui import (
     SULFUR_CSS,
     SULFUR_FONT_CSS,
     TOPNAV_CSS,
+    json_script,
     nav_bar_html,
+    scoped_href,
 )
 
 
-def render_html(active_expedition=None, active_leg=None, running=None):
+def render_html(active_expedition=None, active_leg=None, running=None, focus=None,
+                explicit_scope=None):
+    if explicit_scope is None:
+        explicit_scope = bool(active_expedition and active_leg)
+    context = {
+        "expedition": active_expedition,
+        "leg": active_leg,
+        "focus_id": (focus or {}).get("focus_id") if focus else None,
+    }
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <title>CLAWMARKS search runs</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -78,7 +88,7 @@ button.danger:disabled {{ opacity:0.4; cursor:not-allowed;
   box-shadow:1px 1px 0 var(--ink); transform:translate(2px,2px); }}
 </style></head><body>
 
-{nav_bar_html('runs.html', active_expedition=active_expedition, active_leg=active_leg, running=running)}
+{nav_bar_html('runs.html', active_expedition=active_expedition, active_leg=active_leg, running=running, focus=focus)}
 <h1>Search runs</h1>
 <p class="sub">Launch an overnight search round from here instead of SSHing in. Every launch
 backs up the round's out_dir first and refuses to start if that backup can't be verified by file
@@ -109,7 +119,7 @@ already running.</p>
     <svg id="spark" viewBox="0 0 100 40" preserveAspectRatio="none"></svg>
   </div>
   <div id="categoryBreakdown"></div>
-  <p id="completedLinks" class="idle" style="display:none;"><a href="scan.html" onclick="openReportTool(event, 'scan.html')">Scan images</a> · <a href="coverage.html" onclick="openReportTool(event, 'coverage.html')">Check coverage</a> · <a href="novelty_decay.html" onclick="openReportTool(event, 'novelty_decay.html')">Review novelty decay</a></p>
+  <p id="completedLinks" class="idle" style="display:none;"><a href="{scoped_href('/scan.html', active_expedition, active_leg, focus)}" onclick="openReportTool(event, 'scan.html')">Scan images</a> · <a href="{scoped_href('/coverage.html', active_expedition, active_leg, focus)}" onclick="openReportTool(event, 'coverage.html')">Check coverage</a> · <a href="{scoped_href('/novelty_decay.html', active_expedition, active_leg, focus)}" onclick="openReportTool(event, 'novelty_decay.html')">Review novelty decay</a></p>
 </div>
 
 <script>
@@ -126,6 +136,18 @@ const launchError = document.getElementById('launchError');
 let expeditionsData = [];
 let lastStatusPid = null;
 let lastStatusStartTicks = null;
+const CONTEXT = {json_script(context)};
+const HAS_EXPLICIT_SCOPE = {str(explicit_scope).lower()};
+
+function scopedApi(path) {{
+  const url = new URL(path, window.location.origin);
+  if (HAS_EXPLICIT_SCOPE) {{
+    ['expedition', 'leg', 'focus_id'].forEach(key => {{
+      if (CONTEXT[key] && !url.searchParams.has(key)) url.searchParams.set(key, CONTEXT[key]);
+    }});
+  }}
+  return url.toString();
+}}
 
 function populateLegs() {{
   const exp = expeditionsData.find(e => e.name === expeditionSel.value);
@@ -134,10 +156,13 @@ function populateLegs() {{
 }}
 
 function loadExpeditions() {{
+  const activeRequest = HAS_EXPLICIT_SCOPE
+    ? Promise.resolve(CONTEXT)
+    : fetch(scopedApi('/api/active-leg')).then(r => r.ok ? r.json() : {{}});
   return Promise.all([
     fetch('/api/expeditions').then(r => r.json()),
-    fetch('/api/active-leg').then(r => r.ok ? r.json() : {{}}),
-    fetch('/api/searchrun/status').then(r => r.json()),
+    activeRequest,
+    fetch(scopedApi('/api/searchrun/status')).then(r => r.json()),
   ]).then(([expeditionsResp, active, status]) => {{
     expeditionsData = expeditionsResp.expeditions || [];
     expeditionSel.innerHTML = expeditionsData.map(e =>
@@ -171,7 +196,7 @@ function renderSpark(points) {{
 function refreshReport() {{
   if (!expeditionSel.value || !legSel.value) return;
   const params = new URLSearchParams({{expedition: expeditionSel.value, leg: legSel.value}});
-  fetch('/api/searchrun/report?' + params).then(r => r.json()).then(d => {{
+  fetch(scopedApi('/api/searchrun/report?' + params)).then(r => r.json()).then(d => {{
     document.getElementById('statGen').textContent = d.generation;
     document.getElementById('statPlateau').textContent = d.plateau_count;
     document.getElementById('statImages').textContent = d.total_images;
@@ -189,18 +214,16 @@ function refreshReport() {{
 
 function openReportTool(event, path) {{
   event.preventDefault();
-  if (!expeditionSel.value || !legSel.value) return;
-  fetch('/api/active-leg', {{
-    method: 'POST', headers: {{'Content-Type': 'application/json'}},
-    body: JSON.stringify({{expedition: expeditionSel.value, leg: legSel.value}}),
-  }}).then(async r => {{
-    if (!r.ok) throw new Error((await r.json()).error || 'selection failed');
-    location.href = path;
-  }}).catch(e => {{ launchError.textContent = String(e); }});
+  const target = new URL(event.currentTarget.href, window.location.href);
+  const current = new URLSearchParams(window.location.search);
+  ['expedition', 'leg', 'focus_id'].forEach(key => {{
+    if (current.has(key)) target.searchParams.set(key, current.get(key));
+  }});
+  location.href = target.pathname + (target.search ? target.search : '');
 }}
 
 function refreshStatus() {{
-  fetch('/api/searchrun/status').then(r => r.json()).then(d => {{
+  fetch(scopedApi('/api/searchrun/status')).then(r => r.json()).then(d => {{
     if (d.running) {{
       lastStatusPid = d.pid;
       lastStatusStartTicks = d.start_time_ticks;
@@ -230,7 +253,7 @@ launchBtn.addEventListener('click', () => {{
   if (!confirm(msg)) return;
   launchBtn.disabled = true;
   launchBtn.textContent = 'Backing up and launching...';
-  fetch('/api/searchrun/launch', {{
+  fetch(scopedApi('/api/searchrun/launch'), {{
     method: 'POST', headers: {{'Content-Type': 'application/json'}},
     body: JSON.stringify({{expedition: expeditionSel.value, leg: legSel.value}}),
   }}).then(async r => {{
@@ -255,7 +278,7 @@ stopBtn.addEventListener('click', () => {{
   if (!confirm(msg)) return;
   stopBtn.disabled = true;
   const body = JSON.stringify({{pid: confirmedPid, start_time_ticks: confirmedStart}});
-  fetch('/api/searchrun/stop', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body}})
+  fetch(scopedApi('/api/searchrun/stop'), {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body}})
     .then(r => r.json()).then(res => {{
       if (res.error) {{ alert(res.error); stopBtn.disabled = false; }}
       else refreshStatus();

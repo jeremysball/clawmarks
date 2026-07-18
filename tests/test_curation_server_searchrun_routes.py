@@ -169,6 +169,18 @@ def test_report_reflects_state_and_manifest_on_disk(running_server):
     assert data["total_images"] == 1
 
 
+def test_report_rejects_unsafe_scope_names(running_server):
+    server, _ = running_server
+    port = server.server_address[1]
+
+    status, data = _get_json(
+        f"http://127.0.0.1:{port}/api/searchrun/report?expedition=../escape&leg=leg1"
+    )
+
+    assert status == 400
+    assert "path separator" in data["error"]
+
+
 def test_stop_terminates_a_running_run(running_server, monkeypatch):
     server, _ = running_server
     port = server.server_address[1]

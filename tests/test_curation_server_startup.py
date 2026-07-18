@@ -65,6 +65,23 @@ def test_status_page_shows_no_leg_selected_without_error_string(running_server_n
     assert "could not read manifest" not in body
 
 
+def test_root_and_explore_are_active_desk_while_status_keeps_picker(running_server_no_leg):
+    port = running_server_no_leg.server_address[1]
+
+    def get_text(path):
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}") as response:
+            return response.read().decode()
+
+    root = get_text("/")
+    explore = get_text("/explore.html")
+    status = get_text("/status.html")
+
+    assert 'id="workflowStepper"' in root
+    assert 'id="workflowStepper"' in explore
+    assert 'id="active-leg-form"' in status
+    assert 'id="active-leg-form"' not in root
+
+
 # Regression tests for the None-guard crash class: _require_out_dir() (curation_server.py) turns
 # a bare _active_out_dir() dereference (a NoneType/str TypeError -> 500 stack trace) into a clean
 # 400 with a "no expedition/leg selected" message. These three routes were confirmed to 500

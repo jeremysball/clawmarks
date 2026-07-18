@@ -64,3 +64,35 @@ def test_seeds_generate_persists_across_the_real_save_path(running_server, monke
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/seeds") as resp:
         seeds = json.loads(resp.read().decode())
     assert "a quiet flooded parking lot at dusk" in seeds
+
+
+def test_scoped_seed_generation_writes_to_the_requested_leg(running_server, monkeypatch, tmp_path):
+    server, _ = running_server
+    monkeypatch.setattr(cs.config, "EXPEDITIONS_DIR", tmp_path / "expeditions")
+    scoped_dir = cs.config.leg_dir("demo", "round1")
+    scoped_dir.mkdir(parents=True)
+
+    def fake_run(cmd, capture_output, text, timeout):
+        out_path = re.search(r"the file (\S+\.json)", cmd[-1]).group(1)
+        Path(out_path).write_text(json.dumps(["a scoped seed"]))
+
+        class Result:
+            returncode = 0
+            stdout = "=== DONE ==="
+
+        return Result()
+
+    monkeypatch.setattr(cs.subprocess, "run", fake_run)
+    port = server.server_address[1]
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}/api/seeds/generate?expedition=demo&leg=round1",
+        data=json.dumps({"n": 1}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(request) as resp:
+        assert json.loads(resp.read())["ok"] is True
+
+    assert "a scoped seed" in cs.load_store(scoped_dir / "seed_pool.json")
+    assert "a scoped seed" not in cs.load_store(tmp_path / "seed_pool.json")
