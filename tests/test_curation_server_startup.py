@@ -65,7 +65,7 @@ def test_status_page_shows_no_leg_selected_without_error_string(running_server_n
     assert "could not read manifest" not in body
 
 
-def test_root_and_explore_are_active_desk_while_status_keeps_picker(running_server_no_leg):
+def test_root_and_explore_are_active_desk_while_status_is_a_pure_status_page(running_server_no_leg):
     port = running_server_no_leg.server_address[1]
 
     def get_text(path):
@@ -78,8 +78,8 @@ def test_root_and_explore_are_active_desk_while_status_keeps_picker(running_serv
 
     assert 'id="workflowStepper"' in root
     assert 'id="workflowStepper"' in explore
-    assert 'id="active-leg-form"' in status
-    assert 'id="active-leg-form"' not in root
+    assert "choose context" in status
+    assert 'id="workflowStepper"' not in status
 
 
 # Regression tests for the None-guard crash class: _require_out_dir() (curation_server.py) turns
