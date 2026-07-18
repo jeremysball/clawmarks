@@ -531,3 +531,59 @@ def test_shared_ui_js_wires_up_create_expedition_and_create_leg():
     assert "contextNewLegToggle" in js
     assert "/api/expeditions'" in js or '/api/expeditions"' in js
     assert "/api/legs'" in js or '/api/legs"' in js
+
+
+# ---------------------------------------------------------------------------
+# Task 3: Shared Glossary And Information Controls
+# ---------------------------------------------------------------------------
+
+
+def test_glossary_holds_plain_and_formal_metric_names_together():
+    assert shared_ui.GLOSSARY["faithfulness"][0] == "Similarity to real art"
+    assert "DINOv2 cosine similarity" in shared_ui.GLOSSARY["faithfulness"][1]
+    assert shared_ui.GLOSSARY["novelty"][0] == "How new or different"
+
+
+def test_info_btn_with_glossary_key_is_accessible_button():
+    markup = shared_ui.info_btn("novelty")
+    assert markup.startswith('<button type="button"')
+    assert '>i</button>' in markup
+    assert 'aria-label="More information about How new or different"' in markup
+    assert "?" not in markup
+
+
+def test_info_btn_with_raw_text_fallback_still_works():
+    markup = shared_ui.info_btn("Some fallback raw tip text")
+    assert markup.startswith('<span class="infobtn"')
+    assert 'data-tip="Some fallback raw tip text"' in markup
+    assert "?" in markup
+
+
+def test_info_btn_glossary_key_has_no_question_mark():
+    markup = shared_ui.info_btn("faithfulness")
+    assert "?" not in markup
+
+
+def test_glossary_defines_required_entries():
+    for key in ("faithfulness", "novelty", "map_elites_cell", "umap", "redundancy"):
+        assert key in shared_ui.GLOSSARY
+        label, definition = shared_ui.GLOSSARY[key]
+        assert label
+        assert definition
+
+
+def test_info_btn_sets_aria_expanded_false():
+    markup = shared_ui.info_btn("novelty")
+    assert 'aria-expanded="false"' in markup
+
+
+def test_infotip_js_updates_aria_expanded_and_handles_escape():
+    js = shared_ui.INFOTIP_JS
+    assert 'setAttribute("aria-expanded"' in js or "setAttribute('aria-expanded'" in js
+    assert "Escape" in js or "escape" in js.lower() or "27" in js
+    assert ".focus()" in js
+
+
+def test_mobile_base_css_keeps_overflow_wrap_anywhere():
+    assert "overflow-wrap:anywhere" in shared_ui.MOBILE_BASE_CSS
+    assert "code, pre { overflow-wrap:anywhere; }" in shared_ui.MOBILE_BASE_CSS

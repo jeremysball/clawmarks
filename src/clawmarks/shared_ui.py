@@ -410,6 +410,47 @@ button.context-label:active { transform:translate(2px,2px); box-shadow:none; }
 }
 """
 
+GLOSSARY = {
+    "faithfulness": (
+        "Similarity to real art",
+        "DINOv2 cosine similarity between the image's embedding and the centroid (average "
+        "position) of the real training images. A score of 1 means the image is at the same "
+        "position as the average real photo; 0 means it is in completely unrelated territory.",
+    ),
+    "novelty": (
+        "How new or different",
+        "Novelty measures how different an image is from everything the search has already "
+        "explored: the real training photos and every image a prior generation produced. A "
+        "score of 1 means nothing seen so far looks like it; 0 means it is a near-duplicate "
+        "of something already found.",
+    ),
+    "map_elites_cell": (
+        "MAP-Elites cell",
+        "This is a MAP-Elites search: it keeps a grid of faithfulness \u00d7 novelty bins "
+        "and tries to fill every bin with a good example, mapping the whole space instead of "
+        "hill-climbing toward one 'best' image. Each generation makes new images two ways: "
+        "Explore jobs draw a fresh random subject/texture combination unrelated to anything "
+        "made before (finding new territory). Exploit jobs nudge an existing strong image's "
+        "parameters slightly, hoping a small step nearby does even better (refining what is "
+        "already working).",
+    ),
+    "umap": (
+        "UMAP projection",
+        "UMAP (Uniform Manifold Approximation and Projection) is a dimensionality-reduction "
+        "algorithm that maps the high-dimensional DINOv2 embedding space (768 numbers per "
+        "image) down to 2D so we can see the overall shape of the image landscape: clusters "
+        "of similar images, gaps in coverage, and how faithfulness and novelty relate to "
+        "position.",
+    ),
+    "redundancy": (
+        "Redundancy cluster",
+        "Redundancy clusters group near-identical images (by DINOv2 embedding distance) so "
+        "you can see how many effectively duplicate versions of the same concept the search "
+        "produced. High redundancy means the search is stuck in a local area; low redundancy "
+        "means it is still exploring new territory.",
+    ),
+}
+
 _infotip_counter = 0
 
 DINO_TIP = (
@@ -420,13 +461,27 @@ DINO_TIP = (
 
 
 def info_btn(tip):
-    """A small tappable (?) icon that shows `tip` in a popover. Click-based, not hover-only, so
-    it works on touch: this whole project is meant to become a general tool for exploring an
-    AI-generated image space, not a one-off for this dataset, so every non-obvious concept
-    (faithfulness, novelty, picking, favoriting...) gets one of these next to it instead of
-    assuming the reader already knows the vocabulary."""
+    """An accessible information button. When `tip` is a key in GLOSSARY, uses the glossary
+    entry's plain label for the aria-label and its formal definition as the popover content
+    (visible icon is "i"). When `tip` is not a glossary key (backward-compatibility path for
+    raw definition text), uses "?" as the visible icon with a generic aria-label."""
     global _infotip_counter
     _infotip_counter += 1
+
+    if tip in GLOSSARY:
+        label, definition = GLOSSARY[tip]
+        aria_label = f"More information about {label}"
+        tip_escaped = definition.replace('"', "&quot;")
+        aria_escaped = aria_label.replace('"', "&quot;")
+        return (
+            f'<button type="button" class="infobtn" '
+            f'data-id="tip{_infotip_counter}" data-tip="{tip_escaped}" '
+            f'aria-label="{aria_escaped}" '
+            f'aria-expanded="false">'
+            f'i'
+            f'</button>'
+        )
+
     tip_escaped = tip.replace('"', "&quot;")
     return f'<span class="infobtn" data-id="tip{_infotip_counter}" data-tip="{tip_escaped}">?</span>'
 
@@ -435,7 +490,7 @@ INFOTIP_CSS = """
 .infobtn { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px;
   border-radius:50%; background:rgba(154,154,164,0.18); color:#9a9aa4; font-size:10.5px;
   cursor:pointer; border:1px solid rgba(154,154,164,0.35); flex-shrink:0; user-select:none;
-  font-weight:600; line-height:1; }
+  font-weight:600; line-height:1; padding:0; font-family:inherit; }
 .infobtn:hover, .infobtn.active { background:rgba(124,158,255,0.25); color:#eaeaee; border-color:#7c9eff; }
 .infopop { position:fixed; z-index:2000; max-width:280px; background:#1d1d22; border:1px solid #2a2a30;
   border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.55; color:#dcdce2;
@@ -448,18 +503,35 @@ INFOTIP_CSS = """
 
 INFOTIP_JS = """
 (function(){
+  var currentButton = null;
+
+  function closePopover(pop){
+    if (!pop) return;
+    pop.classList.remove('open');
+    var relatedBtn = document.querySelector('.infobtn[data-id="' + pop.dataset.for + '"]');
+    if (relatedBtn) {
+      relatedBtn.classList.remove('active');
+      relatedBtn.setAttribute('aria-expanded', 'false');
+    }
+  }
+
   document.addEventListener('click', function(e){
     var btn = e.target.closest ? e.target.closest('.infobtn') : null;
     document.querySelectorAll('.infopop.open').forEach(function(p){
-      if (!btn || p.dataset.for !== btn.dataset.id) p.classList.remove('open');
+      if (!btn || p.dataset.for !== btn.dataset.id) {
+        closePopover(p);
+      }
     });
     document.querySelectorAll('.infobtn.active').forEach(function(b){
-      if (b !== btn) b.classList.remove('active');
+      if (b !== btn) {
+        b.classList.remove('active');
+        b.setAttribute('aria-expanded', 'false');
+      }
     });
     if (!btn) return;
     e.stopPropagation();
-    // infobtn spans are nested inside <label> elements wrapping the filter control they
-    // annotate (e.g. <label>Sort<span class="infobtn">...</span> <select>...). Without this,
+    // infobtn buttons are nested inside <label> elements wrapping the filter control they
+    // annotate (e.g. <label>Sort<button class="infobtn">i</button> <select>...). Without this,
     // the label's default action re-fires a synthetic click at that control right after this
     // one, which bubbles to document a second time with no infobtn target and immediately
     // closes the tooltip this same click just opened.
@@ -484,6 +556,21 @@ INFOTIP_JS = """
     var willOpen = !pop.classList.contains('open');
     pop.classList.toggle('open', willOpen);
     btn.classList.toggle('active', willOpen);
+    btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    if (willOpen) currentButton = btn;
+  });
+
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') {
+      var openPop = document.querySelector('.infopop.open');
+      if (openPop) {
+        closePopover(openPop);
+        if (currentButton) {
+          currentButton.focus();
+          currentButton = null;
+        }
+      }
+    }
   });
 })();
 """
@@ -492,6 +579,7 @@ INFOTIP_JS = """
 MOBILE_BASE_CSS = """
 html, body { max-width:100vw; overflow-x:hidden; }
 * { -webkit-tap-highlight-color: transparent; }
+code, pre { overflow-wrap:anywhere; }
 @media (max-width:700px) {
   body { padding:10px !important; font-size:15px !important; line-height:1.55 !important; }
   h1 { font-size:18px !important; }
@@ -878,9 +966,9 @@ _LIGHTBOX_JS = r"""(function(){
   <div class="lb-actions">
     <button class="lb-back" style="display:none;">&#8592; back</button>
     <button class="lb-favorite">&#9825; favorite</button>
-    <span class="infobtn" data-id="lb-tip-favorite" data-tip="Favoriting just bookmarks this image for your own reference (e.g. for a writeup). Unlike picking, it has no effect on the search: use it for images you like but don't want the next generation to build on.">?</span>
+    <button type="button" class="infobtn" data-id="lb-tip-favorite" data-tip="Favoriting just bookmarks this image for your own reference (e.g. for a writeup). Unlike picking, it has no effect on the search: use it for images you like but don't want the next generation to build on." aria-label="More information" aria-expanded="false">i</button>
     <button class="lb-cf-toggle">&#8635; generate counterfactual</button>
-    <span class="infobtn" data-id="lb-tip-cf" data-tip="A counterfactual asks 'what if this image had used different settings' by generating a brand-new image right now, keeping whichever fields you don't change and varying the ones you do. It costs real generation time/money (seconds if the endpoint is warm, minutes if it has to cold-start) and never feeds back into the search on its own: it's a side-by-side comparison tool, not a pick.">?</span>
+    <button type="button" class="infobtn" data-id="lb-tip-cf" data-tip="A counterfactual asks 'what if this image had used different settings' by generating a brand-new image right now, keeping whichever fields you don't change and varying the ones you do. It costs real generation time/money (seconds if the endpoint is warm, minutes if it has to cold-start) and never feeds back into the search on its own: it's a side-by-side comparison tool, not a pick." aria-label="More information" aria-expanded="false">i</button>
   </div>
   <div class="lb-cf-panel">
     <label>Prompt</label>
