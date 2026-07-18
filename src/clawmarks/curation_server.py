@@ -177,9 +177,16 @@ _load_active_selection()
 
 
 def _active_out_dir():
-    if _active_selection["expedition"] is None:
+    expedition = _active_selection["expedition"]
+    leg = _active_selection["leg"]
+    if expedition is None or leg is None:
         return None
-    return config.leg_dir(_active_selection["expedition"], _active_selection["leg"])
+    try:
+        _validate_expedition_or_leg_name(expedition, "expedition")
+        _validate_expedition_or_leg_name(leg, "leg", reserved={"legs"})
+    except (TypeError, ValueError):
+        return None
+    return config.leg_dir(expedition, leg)
 
 
 class NoActiveLegError(Exception):
@@ -197,9 +204,7 @@ def _require_out_dir():
 
 
 def _set_active_selection(expedition, leg):
-    expedition_file = config.EXPEDITIONS_DIR / expedition / "expedition.json"
-    if not expedition_file.exists():
-        raise ValueError(f"unknown expedition {expedition!r}")
+    _request_scope(expedition, leg)
     _active_selection["expedition"] = expedition
     _active_selection["leg"] = leg
     atomic_json_write(config.ACTIVE_LEG_FILE, dict(_active_selection))
@@ -289,16 +294,26 @@ def _scope_out_dir(expedition, leg):
 def _request_scope(expedition, leg):
     """Validate an optional request scope before resolving any filesystem path."""
     if expedition is None and leg is None:
-        return _active_scope()
+        active_expedition, active_leg = _active_scope()
+        if active_expedition is None or active_leg is None:
+            return active_expedition, active_leg
+        return _request_scope(active_expedition, active_leg)
+    if not isinstance(expedition, str) or not isinstance(leg, str):
+        raise ValueError("'expedition' and 'leg' must be strings")
+    _validate_scope_names(expedition, leg)
+    expedition_dir = config.EXPEDITIONS_DIR / expedition
+    if not (expedition_dir / "expedition.json").exists():
+        raise ValueError(f"unknown expedition {expedition!r}")
+    if not (config.EXPEDITIONS_DIR / expedition / "legs" / f"{leg}.json").exists() and not config.leg_dir(expedition, leg).exists():
+        raise ValueError(f"unknown leg {leg!r} in expedition {expedition!r}")
+    return expedition, leg
+
+
+def _validate_scope_names(expedition, leg):
     if not isinstance(expedition, str) or not isinstance(leg, str):
         raise ValueError("'expedition' and 'leg' must be strings")
     _validate_expedition_or_leg_name(expedition, "expedition")
     _validate_expedition_or_leg_name(leg, "leg", reserved={"legs"})
-    expedition_dir = config.EXPEDITIONS_DIR / expedition
-    if not (expedition_dir / "expedition.json").exists():
-        raise ValueError(f"unknown expedition {expedition!r}")
-    if not (expedition_dir / "legs" / f"{leg}.json").exists() and not config.leg_dir(expedition, leg).exists():
-        raise ValueError(f"unknown leg {leg!r} in expedition {expedition!r}")
     return expedition, leg
 
 
@@ -1331,6 +1346,14 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
         self.wfile.write(body)
 
     def _page_context(self):
+        query = urllib.parse.parse_qs(
+            urllib.parse.urlparse(self.path).query, keep_blank_values=True
+        )
+        if "expedition" in query and "leg" in query:
+            try:
+                _validate_scope_names(query["expedition"][0], query["leg"][0])
+            except (IndexError, ValueError) as e:
+                raise ContextQueryError(str(e)) from e
         return resolve_workspace_context(
             self.path, _active_selection, self._focus_store()
         )
@@ -1348,8 +1371,17 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
             urllib.parse.urlparse(self.path).query, keep_blank_values=True
         )
         if not any(key in query for key in ("expedition", "leg", "focus_id")):
-            return _active_scope()
-        return context.expedition, context.leg
+            expedition, leg = _active_scope()
+            if expedition is None or leg is None:
+                return expedition, leg
+            try:
+                return _validate_scope_names(expedition, leg)
+            except ValueError as e:
+                raise ContextQueryError(str(e)) from e
+        try:
+            return _validate_scope_names(context.expedition, context.leg)
+        except ValueError as e:
+            raise ContextQueryError(str(e)) from e
 
     def _status_page_data_body(self, manifest_summary):
         links = " &middot; ".join(f'<a href="{path}">{label}</a>' for path, label in _ROUTES)
@@ -2377,6 +2409,11 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         if not expedition or not leg:
             self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
             return
+        try:
+            expedition, leg = _validate_scope_names(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         status = (query.get("status") or [None])[0]
         scope = Scope(expedition, leg)
         try:
@@ -2401,6 +2438,11 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         if not expedition or not leg:
             self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
             return
+        try:
+            expedition, leg = _validate_scope_names(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         scope = Scope(expedition, leg)
         try:
             record = self._focus_store().get(scope, focus_id)
@@ -2424,6 +2466,11 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         leg = scope_field.get("leg")
         if not expedition or not leg:
             self._json_response(400, {"error": "'scope.expedition' and 'scope.leg' are required"})
+            return
+        try:
+            expedition, leg = _request_scope(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
             return
         scope = Scope(expedition, leg)
         leg_dir = config.leg_dir(expedition, leg)
@@ -2467,6 +2514,11 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         if not expedition or not leg:
             self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
             return
+        try:
+            expedition, leg = _validate_scope_names(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         scope = Scope(expedition, leg)
         expected_revision = payload.get("expected_revision")
         changes = payload.get("changes")
@@ -2506,6 +2558,11 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         if not expedition or not leg:
             self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
             return
+        try:
+            expedition, leg = _validate_scope_names(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         scope = Scope(expedition, leg)
         expected_revision = payload.get("expected_revision")
         if isinstance(expected_revision, bool) or not isinstance(expected_revision, int):
@@ -2533,13 +2590,10 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         if not expedition or not leg:
             self._json_response(400, {"error": "'expedition' and 'leg' are required"})
             return
-        leg_file = config.EXPEDITIONS_DIR / expedition / "legs" / f"{leg}.json"
-        expedition_file = config.EXPEDITIONS_DIR / expedition / "expedition.json"
-        if not expedition_file.exists():
-            self._json_response(400, {"error": f"unknown expedition {expedition!r}"})
-            return
-        if not leg_file.exists() and leg != "cockpit":
-            self._json_response(400, {"error": f"unknown leg {leg!r} in expedition {expedition!r}"})
+        try:
+            expedition, leg = _request_scope(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
             return
 
         api_key = os.environ.get("RUNPOD_API_KEY")
@@ -2591,13 +2645,16 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         self._json_response(200, {"nearest": nearest})
 
     def _handle_cockpit_run(self, trial_id, expedition=None, leg=None):
+        try:
+            expedition, leg = _request_scope(expedition, leg)
+        except ValueError as e:
+            self._json_response(400, {"error": str(e)})
+            return
         api_key = os.environ.get("RUNPOD_API_KEY")
         if not api_key:
             self._json_response(400, {"error": "RUNPOD_API_KEY not set in server environment"})
             return
 
-        if expedition is None or leg is None:
-            expedition, leg = _active_scope()
         out_dir = _scope_out_dir(expedition, leg)
         queue_file = _cockpit_queue_file(expedition, leg)
 

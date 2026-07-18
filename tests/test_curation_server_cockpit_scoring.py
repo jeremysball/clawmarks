@@ -223,6 +223,8 @@ def test_cockpit_recipe_panel_uses_recessed_readout_and_evidence_uses_mounted_ev
 
 
 def test_cockpit_route_selects_cockpit_leg_and_passes_expeditions(monkeypatch):
+    (config.EXPEDITIONS_DIR / "demo" / "legs" / "round1.json").write_text("{}")
+    config.leg_dir("demo", "round1").mkdir(parents=True)
     (config.EXPEDITIONS_DIR / "other" / "legs").mkdir(parents=True)
     (config.EXPEDITIONS_DIR / "other" / "expedition.json").write_text("{}")
     cs._set_active_selection("demo", "round1")

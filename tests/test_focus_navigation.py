@@ -1,4 +1,5 @@
 import re
+import pytest
 
 from clawmarks.build import (
     cockpit,
@@ -16,6 +17,7 @@ from clawmarks.build import (
     seed_browser,
 )
 from clawmarks import curation_server as cs
+from clawmarks.workspace_context import ContextQueryError, WorkspaceContext
 from clawmarks.shared_ui import _LIGHTBOX_JS
 
 
@@ -80,3 +82,16 @@ def test_scoped_model_cache_does_not_cross_contaminate_legs():
     finally:
         cache.clear()
         cache.update(original)
+
+
+def test_page_scope_rejects_unsafe_explicit_query_scope():
+    handler = object.__new__(cs.Handler)
+    handler.path = "/cockpit.html?expedition=../escape&leg=round1"
+
+    with pytest.raises(ContextQueryError, match="path separator"):
+        handler._page_scope(WorkspaceContext("../escape", "round1"))
+
+
+def test_active_leg_selection_rejects_unsafe_leg_name():
+    with pytest.raises(ValueError, match="path separator"):
+        cs._set_active_selection("demo", "../escape")
