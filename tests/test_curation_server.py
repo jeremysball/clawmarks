@@ -2,7 +2,9 @@
 from clawmarks import curation_server as cs
 
 
-def test_next_compare_response_returns_two_item_summaries():
+def test_next_compare_response_returns_two_item_summaries(monkeypatch):
+    monkeypatch.setitem(cs._active_selection, "expedition", "demo")
+    monkeypatch.setitem(cs._active_selection, "leg", "round1")
     manifest = [
         {"tag": "a", "prompt_name": "p", "prompt_type": "style", "centroid_sim": 0.5,
          "novelty": 0.3, "strength": 1.0, "cfg": 7.0, "file": "a.png"},
@@ -22,7 +24,9 @@ def test_next_compare_response_reports_done_with_one_image():
     assert result == {"done": True}
 
 
-def test_next_compare_response_never_repeats_the_only_already_judged_pair():
+def test_next_compare_response_never_repeats_the_only_already_judged_pair(monkeypatch):
+    monkeypatch.setitem(cs._active_selection, "expedition", "demo")
+    monkeypatch.setitem(cs._active_selection, "leg", "round1")
     manifest = [
         {"tag": "a", "prompt_name": "p", "prompt_type": "style", "centroid_sim": 0.5,
          "novelty": 0.3, "strength": 1.0, "cfg": 7.0, "file": "a.png"},
