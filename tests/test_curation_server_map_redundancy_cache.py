@@ -17,7 +17,7 @@ def test_get_map_data_is_cached_and_depends_on_solution_map(tmp_path, monkeypatc
     )
     monkeypatch.setattr(
         cs.map_view, "compute_data",
-        lambda sweep_dir, deps: map_calls.append(1) or {"from_solution_map": deps["solution-map:demo:round1"]},
+        lambda sweep_dir, deps: map_calls.append(1) or {"from_solution_map": deps["solution-map"]},
     )
 
     first = cs._get_map_data("demo", "round1")
@@ -40,7 +40,7 @@ def test_get_redundancy_data_is_cached_and_depends_on_solution_map(tmp_path, mon
     redundancy_calls = []
     monkeypatch.setattr(
         cs.redundancy_view, "compute_data",
-        lambda sweep_dir, deps: redundancy_calls.append(1) or {"from_solution_map": deps["solution-map:demo:round1"]},
+        lambda sweep_dir, deps: redundancy_calls.append(1) or {"from_solution_map": deps["solution-map"]},
     )
 
     first = cs._get_redundancy_data("demo", "round1")
