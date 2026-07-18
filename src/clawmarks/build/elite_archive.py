@@ -33,6 +33,7 @@ from clawmarks.shared_ui import (
     json_script,
     nav_bar_html,
 )
+from clawmarks.workspace_context import WorkspaceContext, generated_image_url
 
 N_BINS = 4  # matches gallery.html's display grid
 
@@ -132,8 +133,30 @@ def compute_data(sweep_dir, use_predicted_preference=False):
             "faith_bins": faith_bins, "novelty_bins": novelty_bins}
 
 
-def render_html(data, active_expedition=None, active_leg=None, running=None):
+def render_html(
+    data, active_expedition=None, active_leg=None, running=None,
+    context: WorkspaceContext | None = None,
+    focus=None,
+):
+    focus = focus or (context.focus if context is not None else None)
     cells = data["cells"]
+    if context is not None:
+        cells = [
+            {
+                **cell,
+                "items": [
+                    {
+                        **item,
+                        "thumb": generated_image_url(
+                            item["tag"], context, thumbnail=True
+                        ),
+                        "file": generated_image_url(item["tag"], context),
+                    }
+                    for item in cell["items"]
+                ],
+            }
+            for cell in cells
+        ]
     data_json = json_script(cells)
     faith_bins_json = json_script(data.get("faith_bins", []))
     novelty_bins_json = json_script(data.get("novelty_bins", []))
@@ -211,7 +234,7 @@ a.navlink {{ color:var(--ink); font-size:12.5px; text-decoration:underline; }}
 {INFOTIP_CSS}
 </style></head><body>
 
-{nav_bar_html('archive.html', active_expedition=active_expedition, active_leg=active_leg, running=running)}
+{nav_bar_html('archive.html', active_expedition=active_expedition, active_leg=active_leg, running=running, focus=focus)}
 <h1>Elite archive{elite_tip}</h1>
 <p class="sub">One image per occupied cell of the faithfulness x novelty grid: the actual
 MAP-Elites archive, not the full population. Gold-bordered cells are favorited winners;
@@ -364,7 +387,9 @@ document.addEventListener('keydown', e => {{
   if (e.key === 'Escape') closeModal();
 }});
 
-fetch('/api/favorites').then(r => r.json()).then(favorites => {{
+const favoritesUrl = new URL('/api/favorites', window.location.origin);
+['expedition', 'leg'].forEach(key => {{ if (new URLSearchParams(window.location.search).has(key)) favoritesUrl.searchParams.set(key, new URLSearchParams(window.location.search).get(key)); }});
+fetch(favoritesUrl).then(r => r.json()).then(favorites => {{
   picks = {{}};
   Object.keys(favorites).forEach(tag => {{ picks[tag] = true; }});
   render();

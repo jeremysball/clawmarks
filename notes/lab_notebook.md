@@ -2836,3 +2836,59 @@ explicitly excludes plain anchors (`a:not(.navlink):not(.nav-activeleg)`). Fixed
 addition to the existing mobile media query in `shared_ui.py`; re-verified zero small targets
 afterward. Final gate: `uv run pytest -q` 494 passed, Ruff and MyPy clean, `git diff --check`
 clean. Opened as PR #51 against `main`.
+
+### 2026-07-17: Research workspace navigation Task 2 complete
+
+Task 2 of the Research Workspace Navigation plan made live page data scope-explicit. Manifest
+lookups and every live-cache key now include the requested expedition and leg, so two browser tabs
+cannot reuse one another's computed page data. Focus-scoped GET routes resolve one immutable
+`WorkspaceContext` per request and leave the global active-leg selection and `active_leg.json`
+untouched. The new `/generated/<tag>` route and the scoped `/thumbs/<tag>.jpg` path resolve the tag
+inside the requested leg's manifest and reject manifest file paths outside that leg directory.
+
+TDD verification added real two-leg HTTP fixtures, full-image reads, thumbnail generation, and
+outside-leg path rejection. The focused suite passed 13 tests, the full suite passed 554 tests,
+Ruff passed, and MyPy passed across 49 source files. The full suite still reports existing
+third-party scikit-learn and UMAP warnings.
+
+The follow-up review found that the first implementation scoped data and direct image endpoints but
+left renderer-generated relative thumbnail URLs on the global active-leg directory. The fix passes
+explicit `WorkspaceContext` into scan, map, redundancy, coverage, archive, and preference-rank
+renderers, which now emit scope-bearing generated-image URLs while preserving bare legacy URLs. The
+thumbnail route also preserves blank query keys during parsing, so blank expedition, leg, and
+Focus values now receive the same HTTP 400 validation as other malformed workspace queries. The
+focused suite passed 16 tests and the full suite passed 557 tests; Ruff and MyPy remained clean.
+
+### 2026-07-18: Focus navigation review fixes
+
+A whole-branch review found six navigation regressions, and this pass fixed each one. The legacy
+thumbnail fallback now validates the decoded tag before constructing a cache path, so traversal
+requests cannot write outside the active leg. Shared navigation links preserve expedition and leg
+scope even when no Focus is selected. The Seeds and Runs pages now embed their rendered scope and
+forward it through every leg-scoped API call; scoped seed generation also writes to the requested
+leg rather than reusing the global active leg. Trial records retain `focus_id`, and the Cockpit
+queue displays that provenance. Favorite and unfavorite mutations resolve a supplied Focus through
+the FocusStore and reject references that are missing or belong to another leg before writing.
+
+Regression coverage includes the traversal rejection, no-Focus navigation URL, scoped Seeds and
+Runs renderer calls, requested-leg seed generation, Focus trial provenance, queue display, and both
+favorite mutation endpoints. The final verification passed 602 tests, Ruff across `src tests`,
+MyPy across `src`, and `git diff --check`. Existing scikit-learn optimization warnings remain.
+
+### 2026-07-18: Follow-up review closed the remaining workspace authorization gaps
+
+The follow-up review of commit `4671456` found two regression tests that could pass through
+unrelated 404 paths and one paid-generation authorization gap. The legacy `/thumbs/` regression
+now adds an `outside` manifest tag to the active fixture, matching the tag that the old
+`os.path.basename()` extraction would have produced from `/thumbs/../../outside.jpg`, and checks
+the actual escaped path outside the active leg. The `/generated/` regression uses a manifest
+lookup sentinel so a traversal-shaped URL tag must be rejected before manifest contents are read.
+
+The counterfactual POST handler now validates an optional `focus_id` against the resolved
+expedition and leg before checking the RunPod balance or submitting a generation. Its regression
+creates a Focus in `round2`, requests a counterfactual for `round1`, and confirms both mocked
+RunPod calls remain untouched while the endpoint returns HTTP 400.
+
+The focused tests passed 20 tests. Final verification passed 604 tests, Ruff across `src tests`,
+MyPy across `src`, and `git diff --check`. The full suite emitted the existing scikit-learn
+`OptimizeWarning` messages about the `iprint` solver option.
