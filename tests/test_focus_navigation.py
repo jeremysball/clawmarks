@@ -97,6 +97,16 @@ def test_active_leg_selection_rejects_unsafe_leg_name():
         cs._set_active_selection("demo", "../escape")
 
 
+def test_active_scope_defensively_rejects_unsafe_in_memory_selection():
+    original = dict(cs._active_selection)
+    try:
+        cs._active_selection.update(expedition="demo", leg="../escape")
+        with pytest.raises(ValueError, match="path separator"):
+            cs._active_scope()
+    finally:
+        cs._active_selection.update(original)
+
+
 @pytest.mark.parametrize("name", ["", "bad\x00name", r"bad\\name"])
 def test_scope_name_validator_rejects_empty_nul_and_backslash(name):
     with pytest.raises(ValueError):

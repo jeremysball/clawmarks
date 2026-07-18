@@ -330,6 +330,8 @@ def _validate_scope_names(expedition, leg):
 def _active_scope():
     expedition = _active_selection["expedition"]
     leg = _active_selection["leg"]
+    if expedition is not None and leg is not None:
+        _validate_scope_names(expedition, leg)
     active_dir = _active_out_dir()
     if active_dir is not None and (
         expedition is None
