@@ -31,23 +31,20 @@ def json_script(data):
 
 
 NAV_GROUPS = [
-    ("Explore", [("/", "all tools (hub)"),
-                 ("/status.html", "session status"),
-                 ("/map.html", "scout: solution map (UMAP)"),
-                 ("/redundancy.html", "explain: redundancy clusters"),
-                 ("/cockpit.html", "act: generation cockpit"),
-                 ("/runs.html", "learn: search runs")]),
-    ("Generate", [("cockpit.html", "generation cockpit"), ("runs.html", "search runs"),
-                  ("seeds.html", "candidate seeds")]),
-    ("Curate", [("compare.html", "compare images (head-to-head)"),
-                ("scan.html", "scan gallery"), ("archive.html", "elite archive")]),
-    ("Understand search", [("map.html", "solution map (UMAP)"),
-                           ("coverage.html", "coverage / void map"),
-                           ("redundancy.html", "redundancy clusters"),
-                           ("novelty_decay.html", "novelty decay watchlist"),
-                           ("lineage.html", "lineage tree")]),
-    ("Preference model", [("preference_status.html", "preference status"),
-                          ("preference_rank.html", "predicted preference")]),
+    ("Look at images", [("/scan.html", "Browse all images"),
+                        ("/archive.html", "Best images by area"),
+                        ("/compare.html", "Choose between two images")]),
+    ("Make new images", [("/cockpit.html", "Generation cockpit"),
+                         ("/runs.html", "Run or monitor a search"),
+                         ("/seeds.html", "Candidate seeds")]),
+    ("Understand the search", [("/map.html", "Solution map (UMAP)"),
+                               ("/coverage.html", "Find gaps in the image space"),
+                               ("/redundancy.html", "Redundancy clusters"),
+                               ("/novelty_decay.html", "Novelty decay watchlist"),
+                               ("/lineage.html", "Lineage tree")]),
+    ("Preference model", [("/preference_status.html", "Preference status"),
+                          ("/preference_rank.html", "Predicted preference"),
+                          ("/compare.html", "Choose between two images")]),
 ]
 NAV_OPTIONS = [option for _group, options in NAV_GROUPS for option in options]
 
@@ -213,14 +210,7 @@ BTN_CSS = """
 
 
 def _page_name_for(current):
-    """Derive a human-readable page label for the header from NAV_GROUPS. The detailed groups
-    (Generate, Curate, Understand search, Preference model) hold the cleaner human names; the
-    Explore group lists stage-prefixed entries for quick access, so a destination that appears
-    in both should prefer the detailed-group label. Falls back to a humanized filename for
-    routes not present anywhere (e.g. the hub page itself, where `current` may be "/")."""
-    detailed = [g for g in NAV_GROUPS if g[0] != "Explore"]
-    quick = [g for g in NAV_GROUPS if g[0] == "Explore"]
-    for _group, options in detailed + quick:
+    for _group, options in NAV_GROUPS:
         for href, label in options:
             if href == current:
                 return label[:1].upper() + label[1:]

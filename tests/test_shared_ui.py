@@ -2,39 +2,39 @@
 import json
 
 from clawmarks import shared_ui
-from clawmarks.shared_ui import NAV_OPTIONS, _LIGHTBOX_JS, json_script, nav_bar_html
+from clawmarks.shared_ui import NAV_GROUPS, NAV_OPTIONS, _LIGHTBOX_JS, json_script, nav_bar_html
 
 
 def test_nav_options_includes_preference_status_page():
     hrefs = [href for href, _label in NAV_OPTIONS]
-    assert "preference_status.html" in hrefs
+    assert "/preference_status.html" in hrefs
 
 
 def test_nav_options_has_compare_not_rate():
     hrefs = [href for href, _ in NAV_OPTIONS]
-    assert "compare.html" in hrefs
-    assert "rate.html" not in hrefs
+    assert "/compare.html" in hrefs
+    assert "/rate.html" not in hrefs
 
 
 def test_nav_bar_html_marks_preference_status_selected_when_current():
-    html = nav_bar_html("preference_status.html")
-    assert 'value="preference_status.html" selected' in html
+    html = nav_bar_html("/preference_status.html")
+    assert 'value="/preference_status.html" selected' in html
 
 
 def test_nav_bar_html_omits_active_leg_without_selection():
-    html = nav_bar_html("scan.html")
+    html = nav_bar_html("/scan.html")
 
     assert 'class="nav-activeleg"' not in html
 
 
 def test_nav_bar_groups_tools_and_links_active_context_to_home():
     html = nav_bar_html(
-        "compare.html", active_expedition="demo", active_leg="round1"
+        "/compare.html", active_expedition="demo", active_leg="round1"
     )
 
-    assert '<optgroup label="Generate">' in html
-    assert '<optgroup label="Curate">' in html
-    assert '<optgroup label="Understand search">' in html
+    assert '<optgroup label="Look at images">' in html
+    assert '<optgroup label="Make new images">' in html
+    assert '<optgroup label="Understand the search">' in html
     assert '<optgroup label="Preference model">' in html
     assert 'href="/?expedition=demo&amp;leg=round1"' in html
     assert "demo/round1" in html
@@ -45,7 +45,7 @@ def test_nav_bar_active_context_button_announces_dialog_and_carries_data():
     button that opens the context-switcher dialog. The data attributes and accessible
     relationships are how SHARED_UI_JS knows which (expedition, leg) to mark active and
     which dialog to show; verify they're wired correctly."""
-    html = nav_bar_html("scan.html", active_expedition="demo", active_leg="leg-b")
+    html = nav_bar_html("/scan.html", active_expedition="demo", active_leg="leg-b")
 
     assert 'id="contextPicker"' in html
     assert 'data-expedition="demo"' in html
@@ -71,26 +71,47 @@ def test_json_script_round_trips_normal_data():
 
 
 def test_nav_bar_shows_active_leg():
-    html = nav_bar_html("compare.html", active_expedition="uncanny_frontier", active_leg="round2")
+    html = nav_bar_html("/compare.html", active_expedition="uncanny_frontier", active_leg="round2")
     assert "uncanny_frontier" in html
     assert "round2" in html
 
 
 def test_nav_bar_omits_label_when_no_selection():
-    html = nav_bar_html("compare.html")
+    html = nav_bar_html("/compare.html")
     assert "nav-activeleg" not in html
 
 
 def test_nav_bar_shows_running_indicator():
-    html = nav_bar_html("runs.html", running=("trent_v3_epoch4", "freeform1"))
+    html = nav_bar_html("/runs.html", running=("trent_v3_epoch4", "freeform1"))
     assert "RUNNING" in html
     assert "trent_v3_epoch4/freeform1" in html
 
 
 def test_nav_bar_omits_running_indicator_when_none():
-    html = nav_bar_html("runs.html")
+    html = nav_bar_html("/runs.html")
     assert "nav-running" not in html
     assert "RUNNING" not in html
+
+
+def test_nav_groups_use_plain_task_labels():
+    groups = dict(NAV_GROUPS)
+    assert tuple(groups) == (
+        "Look at images", "Make new images", "Understand the search", "Preference model",
+    )
+    assert groups["Look at images"] == [
+        ("/scan.html", "Browse all images"),
+        ("/archive.html", "Best images by area"),
+        ("/compare.html", "Choose between two images"),
+    ]
+    assert ("/runs.html", "Run or monitor a search") in groups["Make new images"]
+    assert ("/coverage.html", "Find gaps in the image space") in groups["Understand the search"]
+
+
+def test_nav_has_no_workflow_stage_group():
+    html = nav_bar_html("/")
+    assert 'optgroup label="Explore"' not in html
+    for label in ("Orient", "Scout", "Explain", "Act", "Learn"):
+        assert f">{label}<" not in html
 
 
 def test_dark_tokens_defines_pick_as_gold():
@@ -448,7 +469,7 @@ def test_lightbox_undo_flow_honors_recovery_contract():
 
 def test_header_names_page_scope_focus_and_guide():
     markup = nav_bar_html(
-        "map.html", "demo", "round1",
+        "/map.html", "demo", "round1",
         focus={"focus_id": "focus_11111111111111111111111111111111", "label": "Ink anchor", "revision": 3},
     )
     assert "CLAWMARKS" in markup
@@ -462,7 +483,7 @@ def test_header_names_page_scope_focus_and_guide():
 
 def test_nav_bar_scopes_every_tool_link_to_focus():
     markup = nav_bar_html(
-        "map.html", "demo", "round1",
+        "/map.html", "demo", "round1",
         focus={"focus_id": "focus_11111111111111111111111111111111", "label": "Ink anchor", "revision": 3},
     )
 
@@ -490,7 +511,7 @@ def test_context_dialog_offers_create_expedition_and_create_leg_forms():
     """Approved via Lavish review (2026-07-18): expedition/leg creation, previously only
     available on /status.html, now lives in the shared contextDialog so it's reachable from
     every page, not just the one that used to own the picker."""
-    markup = nav_bar_html("map.html", "demo", "round1")
+    markup = nav_bar_html("/map.html", "demo", "round1")
     assert 'id="contextNewExpToggle"' in markup
     assert 'id="contextNewExpForm"' in markup
     assert 'id="contextNewExpName"' in markup
