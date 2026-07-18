@@ -595,7 +595,8 @@ function renderQueue(){{
   $('queuePane').innerHTML = draftsAndRunning.length ? draftsAndRunning.map(t=>`
     <div class="trial-row"><div><b>${{escapeHtml(t.queue_title||t.mission)}}</b><br>
     <span class="small">${{escapeHtml((t.prompt||'').split('\\n')[0].slice(0,80))}}</span><br>
-    <span class="small">${{t.n}} images &middot; ${{escapeHtml(t.seed_strategy)}} seeds &middot; ${{t.strength.toFixed(2)}} strength &middot; ${{escapeHtml(t.sampler)}} / ${{t.steps}} / ${{t.cfg}}</span></div>
+    <span class="small">${{t.n}} images &middot; ${{escapeHtml(t.seed_strategy)}} seeds &middot; ${{t.strength.toFixed(2)}} strength &middot; ${{escapeHtml(t.sampler)}} / ${{t.steps}} / ${{t.cfg}}</span>
+    ${{t.focus_id ? `<br><span class="small">Focus: ${{escapeHtml(t.focus_id)}}</span>` : ''}}</div>
     <span class="status ${{t.status}}">${{t.status}}${{t.error?': '+escapeHtml(t.error):''}}</span>
     ${{t.status==='draft'?`<button data-run="${{t.id}}" type="button">Review and run</button>`:''}}</div>`).join('')
     : '<div class="empty-note">No trials queued yet.</div>';

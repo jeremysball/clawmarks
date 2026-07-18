@@ -2858,3 +2858,19 @@ renderers, which now emit scope-bearing generated-image URLs while preserving ba
 thumbnail route also preserves blank query keys during parsing, so blank expedition, leg, and
 Focus values now receive the same HTTP 400 validation as other malformed workspace queries. The
 focused suite passed 16 tests and the full suite passed 557 tests; Ruff and MyPy remained clean.
+
+### 2026-07-18: Focus navigation review fixes
+
+A whole-branch review found six navigation regressions, and this pass fixed each one. The legacy
+thumbnail fallback now validates the decoded tag before constructing a cache path, so traversal
+requests cannot write outside the active leg. Shared navigation links preserve expedition and leg
+scope even when no Focus is selected. The Seeds and Runs pages now embed their rendered scope and
+forward it through every leg-scoped API call; scoped seed generation also writes to the requested
+leg rather than reusing the global active leg. Trial records retain `focus_id`, and the Cockpit
+queue displays that provenance. Favorite and unfavorite mutations resolve a supplied Focus through
+the FocusStore and reject references that are missing or belong to another leg before writing.
+
+Regression coverage includes the traversal rejection, no-Focus navigation URL, scoped Seeds and
+Runs renderer calls, requested-leg seed generation, Focus trial provenance, queue display, and both
+favorite mutation endpoints. The final verification passed 602 tests, Ruff across `src tests`,
+MyPy across `src`, and `git diff --check`. Existing scikit-learn optimization warnings remain.

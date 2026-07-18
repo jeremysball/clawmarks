@@ -54,7 +54,7 @@ NAV_OPTIONS = [option for _group, options in NAV_GROUPS for option in options]
 
 def scoped_href(path, active_expedition=None, active_leg=None, focus=None):
     """Return an HTML-escaped link carrying the page's explicit workspace scope."""
-    if not active_expedition or not active_leg or focus is None:
+    if not active_expedition or not active_leg:
         return html.escape(path, quote=True)
     context = WorkspaceContext(active_expedition, active_leg, focus)
     return html.escape(context_url(path, context), quote=True)

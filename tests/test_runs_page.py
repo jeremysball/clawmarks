@@ -20,6 +20,21 @@ def test_completed_report_links_preserve_scope_before_navigation():
     assert 'onclick="openReportTool(event, \'novelty_decay.html\')"' in html
 
 
+def test_render_html_uses_explicit_scope_for_initial_state_and_api_calls():
+    html = runs_page.render_html(
+        active_expedition="demo",
+        active_leg="round1",
+        focus={"focus_id": "focus_11111111111111111111111111111111"},
+    )
+
+    assert "const CONTEXT =" in html
+    assert "const HAS_EXPLICIT_SCOPE = true;" in html
+    assert "fetch(scopedApi('/api/searchrun/status'))" in html
+    assert "fetch(scopedApi('/api/searchrun/launch')" in html
+    assert "fetch(scopedApi('/api/searchrun/stop')" in html
+    assert "fetch(scopedApi('/api/searchrun/report?' + params)" in html
+
+
 def test_render_html_uses_sulfur_proof_shell():
     """Task 5 render contract: the page sits on the Sulfur Proof foundation, includes the
     shared header's context-switcher script, ships a semantic <header>, and has no

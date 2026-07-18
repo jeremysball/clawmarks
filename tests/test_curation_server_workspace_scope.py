@@ -137,6 +137,15 @@ def test_explicit_generated_image_and_thumbnail_use_requested_leg(server_fixture
     assert thumb_body.startswith(b"\xff\xd8")
 
 
+def test_legacy_thumbnail_rejects_path_traversal_before_cache_write(server_fixture):
+    server, _ = server_fixture
+
+    status, _ = get_response(server, "/thumbs/../../outside.jpg")
+
+    assert status == 404
+    assert not (config.EXPEDITIONS_DIR / "demo" / "legs" / "outside.jpg").exists()
+
+
 def test_generated_image_rejects_manifest_path_outside_requested_leg(server_fixture, tmp_path):
     server, _ = server_fixture
     outside = tmp_path / "outside.png"

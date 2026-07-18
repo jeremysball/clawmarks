@@ -208,7 +208,7 @@ def test_status_page_selected_empty_body_uses_sulfur_proof_shell(running_server_
     assert "shared-ui.js" in body
     assert "<header" in body
     assert "prefers-color-scheme: dark" not in body
-    assert 'href="/status.html"' in body
+    assert 'href="/status.html?expedition=uncanny_frontier&amp;leg=cockpit"' in body
     # The legacy /runs.html prose link is still present as additional guidance.
     assert 'href="/runs.html"' in body
     assert "DARK_TOKENS" not in body
@@ -328,6 +328,40 @@ def test_unfavorite_rejects_payload_for_stale_leg(running_server_with_leg):
 
     assert exc_info.value.code == 409
     assert json.loads((leg_a / "user_favorites.json").read_text()) == favorites_a
+
+
+@pytest.mark.parametrize("endpoint", ["/api/favorite", "/api/unfavorite"])
+def test_favorite_mutation_rejects_focus_from_a_different_leg(running_server_with_leg, endpoint):
+    cs._create_leg({"expedition": "uncanny_frontier", "name": "round2"})
+    leg_dir = config.leg_dir("uncanny_frontier", "cockpit")
+    image_path = leg_dir / "gen1_a.png"
+    image_path.write_bytes(b"image")
+    focus = cs.FocusStore(config.STATE_DIR, cs.REAL_DIR).create(
+        cs.Scope("uncanny_frontier", "cockpit"),
+        {"label": "Cockpit focus", "source": {"view": "map", "kind": "map_members",
+         "member_tags": ["gen1_a"], "real_anchor_tags": []}, "question": "q",
+         "observation": "o", "hypothesis_text": "h", "test_contract": None},
+        [{"tag": "gen1_a", "file": str(image_path)}],
+    )
+    payload = {
+        "tag": "gen1_a",
+        "expedition": "uncanny_frontier",
+        "leg": "round2",
+        "focus_id": focus["focus_id"],
+    }
+    port = running_server_with_leg.server_address[1]
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}{endpoint}",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(request)
+
+    assert exc_info.value.code == 400
+    assert not (config.leg_dir("uncanny_frontier", "round2") / "user_favorites.json").exists()
 
 
 def test_create_leg_writes_empty_overrides_and_scaffolds_its_dir():

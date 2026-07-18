@@ -20,11 +20,21 @@ from clawmarks.shared_ui import (
     SULFUR_FONT_CSS,
     TOPNAV_CSS,
     info_btn,
+    json_script,
     nav_bar_html,
 )
 
 
-def render_html(active_expedition=None, active_leg=None, running=None, focus=None):
+def render_html(active_expedition=None, active_leg=None, running=None, focus=None,
+                explicit_scope=None):
+    context = {
+        "expedition": active_expedition,
+        "leg": active_leg,
+        "focus_id": (focus or {}).get("focus_id") if focus else None,
+    }
+    if explicit_scope is None:
+        explicit_scope = bool(active_expedition and active_leg)
+    has_explicit_scope = explicit_scope
     seeds_tip = info_btn(
         "A candidate seed is a short subject/texture description (e.g. \"empty parking garage at "
         "night, one flickering light\") that an \"explore\" job can draw when building a fresh, "
@@ -121,8 +131,20 @@ function render(seeds) {{
     </div>`).join('');
 }}
 
+const CONTEXT = {json_script(context)};
+const HAS_EXPLICIT_SCOPE = {str(has_explicit_scope).lower()};
+function scopedApi(path) {{
+  const url = new URL(path, window.location.origin);
+  if (HAS_EXPLICIT_SCOPE) {{
+    ['expedition', 'leg', 'focus_id'].forEach(key => {{
+      if (CONTEXT[key]) url.searchParams.set(key, CONTEXT[key]);
+    }});
+  }}
+  return url.toString();
+}}
+
 function load() {{
-  fetch('/api/seeds').then(r => r.json()).then(render).catch(() => {{
+  fetch(scopedApi('/api/seeds')).then(r => r.json()).then(render).catch(() => {{
     document.getElementById('count').textContent = 'failed to load seeds';
   }});
 }}
@@ -135,7 +157,7 @@ document.getElementById('genBtn').onclick = function() {{
   status.classList.remove('err');
   status.textContent = 'Asking GPT-5.5 for ' + n + ' new seeds... up to a few minutes.';
 
-  fetch('/api/seeds/generate', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{n}})}})
+  fetch(scopedApi('/api/seeds/generate'), {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{n}})}})
     .then(r => r.json().then(data => ({{ok: r.ok, data}})))
     .then(({{ok, data}}) => {{
       btn.disabled = false;
@@ -145,7 +167,7 @@ document.getElementById('genBtn').onclick = function() {{
         return;
       }}
       status.textContent = `Added ${{data.added.length}} new seeds (${{data.count}} total).`;
-      fetch('/api/seeds').then(r => r.json()).then(seeds => {{
+      fetch(scopedApi('/api/seeds')).then(r => r.json()).then(seeds => {{
         render(seeds);
         data.added.forEach(text => {{
           const el = document.querySelector(`.seed[data-text="${{text.replace(/"/g, '&quot;')}}"]`);

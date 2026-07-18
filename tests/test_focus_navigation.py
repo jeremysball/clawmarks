@@ -59,6 +59,12 @@ def test_all_focus_tool_links_preserve_complete_context():
         assert all(suffix in value for value in option_values)
 
 
+def test_cockpit_queue_markup_surfaces_trial_focus_provenance():
+    html = cockpit.render_html(active_expedition="demo", active_leg="round1", focus=FOCUS)
+
+    assert "t.focus_id" in html
+
+
 def test_lightbox_scopes_script_relative_scan_data_url():
     branch = _LIGHTBOX_JS[_LIGHTBOX_JS.index("function dataUrl"):]
     script_branch = branch[branch.index("if (s.src"):branch.index("return url.toString()", branch.index("if (s.src"))]

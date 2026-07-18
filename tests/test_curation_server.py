@@ -146,6 +146,16 @@ def test_build_trial_defaults_and_shape():
     assert trial["queue_title"]  # resolved from cockpit.MISSIONS["gap"]
 
 
+def test_build_trial_preserves_focus_provenance():
+    trial = cs.build_trial(
+        {"prompt": "owl portrait", "focus_id": "focus_11111111111111111111111111111111"},
+        now="t0",
+        trial_id="trial_1",
+    )
+
+    assert trial["focus_id"] == "focus_11111111111111111111111111111111"
+
+
 def _trial(**overrides):
     trial = cs.build_trial({"prompt": "owl portrait", "mission": "gap", "n": 3}, now="t0", trial_id="trial_x")
     trial.update(overrides)

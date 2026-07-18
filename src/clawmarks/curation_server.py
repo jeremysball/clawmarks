@@ -702,10 +702,12 @@ def build_trial(payload, now, trial_id):
         raise ValueError("n/strength/steps/cfg must be numbers")
     mission = payload.get("mission") or "freeform"
     queue_title = cockpit.MISSIONS.get(mission, {}).get("queue", mission)
+    focus_id = payload.get("focus_id")
     return {
         "id": trial_id, "status": "draft", "mission": mission, "queue_title": queue_title,
         "prompt": prompt, "hypothesis": (payload.get("hypothesis") or "").strip(),
         "target": payload.get("target") or "", "target_cell": payload.get("target_cell"),
+        "focus_id": focus_id,
         "seed_strategy": seed_strategy, "n": n, "strength": strength,
         "sampler": sampler, "steps": steps, "cfg": cfg,
         "negative": payload.get("negative") or NEG_DEFAULT,
@@ -1698,7 +1700,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         if self.path == "/api/expeditions":
             self._json_response(200, {"expeditions": _list_expeditions()})
             return
-        if self.path == "/api/searchrun/status":
+        if route_path == "/api/searchrun/status":
             self._json_response(200, run_manager.status())
             return
         if self.path.startswith("/api/searchrun/report"):
@@ -1985,7 +1987,14 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
 
         if route_path == "/seeds.html":
             context = self._page_context()
-            body = seed_browser.render_html(active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None, focus=context.focus).encode()
+            body = seed_browser.render_html(
+                active_expedition=context.expedition,
+                active_leg=context.leg,
+                running=(_run["expedition"], _run["leg"])
+                if (_run := run_manager.current_run()) else None,
+                focus=context.focus,
+                explicit_scope=self._page_render_context(context) is not None,
+            ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))
@@ -2022,7 +2031,14 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
 
         if route_path == "/runs.html":
             context = self._page_context()
-            body = runs_page.render_html(active_expedition=context.expedition, active_leg=context.leg, running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None, focus=context.focus).encode()
+            body = runs_page.render_html(
+                active_expedition=context.expedition,
+                active_leg=context.leg,
+                running=(_run["expedition"], _run["leg"])
+                if (_run := run_manager.current_run()) else None,
+                focus=context.focus,
+                explicit_scope=self._page_render_context(context) is not None,
+            ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))
@@ -2056,7 +2072,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
 
         if route_path.startswith("/generated/"):
             tag = urllib.parse.unquote(route_path[len("/generated/"):])
-            if not tag or "/" in tag:
+            if not tag or "/" in tag or ".." in tag:
                 self.send_error(404, "invalid generated image tag")
                 return
             self._send_scoped_generated_image(tag, self._page_context(), thumbnail=False)
@@ -2071,9 +2087,12 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
                 self._send_scoped_generated_image(tag, self._page_context(), thumbnail=True)
                 return
 
+            tag = urllib.parse.unquote(route_path[len("/thumbs/"):-len(".jpg")])
+            if not tag or "/" in tag or ".." in tag:
+                self.send_error(404, "invalid thumbnail tag")
+                return
             thumb_path = str(_require_out_dir() / route_path.lstrip("/"))
             if not os.path.exists(thumb_path):
-                tag = os.path.basename(route_path)[: -len(".jpg")]
                 match = manifest_entry_by_tag(
                     tag, *_active_scope()
                 )
@@ -2272,7 +2291,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             ))
             return
 
-        if self.path == "/api/favorite":
+        if route_path == "/api/favorite":
             tag = payload.get("tag")
             if not tag:
                 self._json_response(400, {"error": "missing 'tag'"})
@@ -2291,7 +2310,14 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             if expedition is None or leg is None:
                 _logger.warning("favorite mutation without expedition/leg is deprecated")
                 favorites_file = _favorites_file()
-            elif payload.get("focus_id") is None and (expedition, leg) != (_active_selection["expedition"], _active_selection["leg"]):
+            elif payload.get("focus_id") is not None:
+                try:
+                    self._validate_focus_for_scope(expedition, leg, payload["focus_id"])
+                except ValueError as e:
+                    self._json_response(400, {"error": str(e)})
+                    return
+                favorites_file = _favorites_file(expedition, leg)
+            elif (expedition, leg) != (_active_selection["expedition"], _active_selection["leg"]):
                 self._json_response(409, {"error": "favorite mutation targets a stale expedition/leg"})
                 return
             else:
@@ -2320,7 +2346,14 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             if expedition is None or leg is None:
                 _logger.warning("favorite mutation without expedition/leg is deprecated")
                 favorites_file = _favorites_file()
-            elif payload.get("focus_id") is None and (expedition, leg) != (_active_selection["expedition"], _active_selection["leg"]):
+            elif payload.get("focus_id") is not None:
+                try:
+                    self._validate_focus_for_scope(expedition, leg, payload["focus_id"])
+                except ValueError as e:
+                    self._json_response(400, {"error": str(e)})
+                    return
+                favorites_file = _favorites_file(expedition, leg)
+            elif (expedition, leg) != (_active_selection["expedition"], _active_selection["leg"]):
                 self._json_response(409, {"error": "favorite mutation targets a stale expedition/leg"})
                 return
             else:
@@ -2338,6 +2371,11 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             leg = payload.get("leg")
             try:
                 expedition, leg = _request_scope(expedition, leg)
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
+            try:
+                self._validate_focus_for_scope(expedition, leg, payload.get("focus_id"))
             except ValueError as e:
                 self._json_response(400, {"error": str(e)})
                 return
@@ -2375,15 +2413,23 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self._handle_counterfactual(payload)
             return
 
-        if self.path == "/api/seeds/generate":
-            self._handle_seed_generate(payload)
+        if route_path == "/api/seeds/generate":
+            query = urllib.parse.parse_qs(
+                urllib.parse.urlparse(self.path).query, keep_blank_values=True
+            )
+            if any(key in query for key in ("expedition", "leg", "focus_id")):
+                context = self._page_context()
+                expedition, leg = self._page_scope(context)
+                self._handle_seed_generate(payload, expedition, leg)
+            else:
+                self._handle_seed_generate(payload)
             return
 
-        if self.path == "/api/searchrun/launch":
+        if route_path == "/api/searchrun/launch":
             self._handle_searchrun_launch(payload)
             return
 
-        if self.path == "/api/searchrun/stop":
+        if route_path == "/api/searchrun/stop":
             self._json_response(200, run_manager.stop_run(
                 pid=payload.get("pid"), start_time_ticks=payload.get("start_time_ticks")))
             return
@@ -2420,6 +2466,17 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
         routes never touch the active leg, so they never go through _require_out_dir() or
         _active_out_dir() for their scope."""
         return FocusStore(config.STATE_DIR, Path(REAL_DIR))
+
+    def _validate_focus_for_scope(self, expedition, leg, focus_id):
+        """Ensure an optional Focus reference belongs to the request's expedition and leg."""
+        if focus_id is None:
+            return
+        try:
+            self._focus_store().get(Scope(expedition, leg), focus_id)
+        except (FocusNotFound, FocusIntegrityError, FocusValidationError) as exc:
+            raise ValueError(
+                f"invalid focus_id for {expedition}/{leg}: {focus_id!r}"
+            ) from exc
 
     def _handle_focus_list(self, parsed):
         query = urllib.parse.parse_qs(parsed.query)
@@ -2844,14 +2901,15 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
 
         raise TimeoutError(f"generation timed out after {GENERATION_TIMEOUT_S}s")
 
-    def _handle_seed_generate(self, payload):
+    def _handle_seed_generate(self, payload, expedition=None, leg=None):
         n = int(payload.get("n", 20))
         n = max(1, min(n, 40))
+        out_dir = _scope_out_dir(expedition, leg)
         with _lock:
-            seeds = load_store(_seeds_file())
+            seeds = load_store(_seeds_file(expedition, leg))
         existing = list(seeds.keys())
 
-        tmp_path = str(_active_out_dir() / f"candidate_seeds_gen_{int(time.time())}.json")
+        tmp_path = str(out_dir / f"candidate_seeds_gen_{int(time.time())}.json")
         prompt = (
             f"Write {n} short, vivid, concrete visual scene or subject descriptions (5-15 words "
             f"each, no artist-style words, no medium words) suitable for testing where a "
@@ -2897,13 +2955,13 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             return
 
         with _lock:
-            seeds = load_store(_seeds_file())
+            seeds = load_store(_seeds_file(expedition, leg))
             updated, added = seed_pool_merge(
                 seeds, new_subjects,
                 source="gpt5.5",
                 created_at=datetime.now(timezone.utc).isoformat(),
             )
-            save_store(_seeds_file(), updated)
+            save_store(_seeds_file(expedition, leg), updated)
         self._json_response(200, {"ok": True, "added": added, "count": len(updated)})
 
     def _handle_cockpit_autopilot(self, payload=None):

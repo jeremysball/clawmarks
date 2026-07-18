@@ -36,7 +36,7 @@ def test_nav_bar_groups_tools_and_links_active_context_to_home():
     assert '<optgroup label="Curate">' in html
     assert '<optgroup label="Understand search">' in html
     assert '<optgroup label="Preference model">' in html
-    assert 'href="/"' in html
+    assert 'href="/?expedition=demo&amp;leg=round1"' in html
     assert "demo/round1" in html
 
 
@@ -435,6 +435,12 @@ def test_nav_bar_scopes_every_tool_link_to_focus():
 
     assert 'value="/redundancy.html?expedition=demo&amp;leg=round1&amp;focus_id=focus_11111111111111111111111111111111"' in markup
     assert 'href="/status.html?expedition=demo&amp;leg=round1&amp;focus_id=focus_11111111111111111111111111111111"' in markup
+
+
+def test_scoped_href_preserves_leg_scope_without_focus():
+    assert shared_ui.scoped_href("/map.html", "demo", "round1") == (
+        "/map.html?expedition=demo&amp;leg=round1"
+    )
 
 
 def test_narrow_header_keeps_context_and_guide_labels():
