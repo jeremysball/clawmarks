@@ -135,6 +135,7 @@ canvas {{ background:var(--guide-surface); border:1px solid var(--ink); cursor:c
 #selectionList label {{ display:block; padding:5px 7px; border-bottom:1px solid var(--rule); font-size:11px; cursor:pointer; }}
 #selectionList label:last-child {{ border-bottom:0; }}
 #selectionList label:hover {{ background:var(--sulfur); }}
+#selectionList label.missing {{ color:var(--text-soft); font-style:italic; }}
 #selectionList input {{ margin-right:7px; accent-color:var(--ink); }}
 #focusLabel, #focusQuestion, #realAnchor {{ width:100%; box-sizing:border-box; background:var(--paper); color:var(--ink); border:1px solid var(--ink); padding:6px; margin-top:4px; font:12px var(--font-body); }}
 #focusQuestion {{ min-height:50px; resize:vertical; }}
@@ -384,7 +385,12 @@ function selectedTagsFromPolygon(points, polygon) {{
   ));
 }}
 
-function normalizedPoint([x, y]) {{ return [x / W, y / H]; }}
+function normalizedPoint([x, y]) {{
+  return [
+    Math.max(0, Math.min(1, x / W)),
+    Math.max(0, Math.min(1, y / H)),
+  ];
+}}
 
 function visibleCanvasPoints() {{
   const genMax = parseInt(document.getElementById('genSlider').value);
@@ -396,10 +402,17 @@ function visibleCanvasPoints() {{
 
 function renderSelectionList() {{
   const list = document.getElementById('selectionList');
-  list.innerHTML = POINTS.map(point => `
+  const available = POINTS.map(point => `
     <label><input type="checkbox" data-tag="${{escHtml(point.tag)}}" ${{selectedTags.has(point.tag) ? 'checked' : ''}}>
       <span>${{escHtml(point.tag)}}</span> <span class="mono">gen ${{point.gen}}</span>
     </label>`).join('');
+  const missing = Array.from(selectedTags)
+    .filter(tag => !POINTS.some(point => point.tag === tag))
+    .map(tag => `
+      <label class="missing"><input type="checkbox" data-tag="${{escHtml(tag)}}" checked disabled>
+        <span>${{escHtml(tag)}} (not in current view)</span>
+      </label>`).join('');
+  list.innerHTML = available + missing;
   list.querySelectorAll('input[data-tag]').forEach(input => input.addEventListener('change', () => {{
     if (input.checked) selectedTags.add(input.dataset.tag); else selectedTags.delete(input.dataset.tag);
     updateSelectionReadout();
