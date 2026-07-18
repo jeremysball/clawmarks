@@ -301,7 +301,7 @@ def test_focus_scoped_cockpit_get_does_not_change_active_leg(monkeypatch):
 
 def test_cockpit_marks_run_trial_as_billable_action():
     page = cockpit.render_html()
-    assert 'class="billable-action"' in page
+    assert 'class="primary-action billable-action"' in page
     assert "Spends money" in page
 
 

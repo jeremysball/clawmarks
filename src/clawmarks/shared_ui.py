@@ -209,10 +209,6 @@ decided Sulfur Proof v2 Lavish artifact's sulfur-theme `.mark-button`. */
 .billable-action {
   position:relative; border-left:3px solid var(--cost) !important;
 }
-.billable-action::before {
-  content:''; position:absolute; left:0; top:2px; bottom:2px; width:3px;
-  background:var(--cost);
-}
 .cost-badge {
   display:inline-block; background:var(--cost); color:#efe7e0;
   font:600 10px/1 var(--font-body); padding:3px 7px; text-transform:uppercase;

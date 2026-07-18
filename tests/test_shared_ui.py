@@ -627,3 +627,7 @@ def test_billable_action_css_references_cost_token():
         end = full_css.index("}", start)
         block = full_css[start:end]
         assert "var(--cost)" in block, f"{cls} must reference --cost"
+
+
+def test_billable_action_no_redundant_before_stripe():
+    assert ".billable-action::before" not in shared_ui.CONTROL_CSS

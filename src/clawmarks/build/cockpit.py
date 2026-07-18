@@ -598,7 +598,7 @@ function renderQueue(){{
     <span class="small">${{t.n}} images &middot; ${{escapeHtml(t.seed_strategy)}} seeds &middot; ${{t.strength.toFixed(2)}} strength &middot; ${{escapeHtml(t.sampler)}} / ${{t.steps}} / ${{t.cfg}}</span>
     ${{t.focus_id ? `<br><span class="small">Focus: ${{escapeHtml(t.focus_id)}}</span>` : ''}}</div>
     <span class="status ${{t.status}}">${{t.status}}${{t.error?': '+escapeHtml(t.error):''}}</span>
-    ${{t.status==='draft'?`<button data-run="${{t.id}}" type="button" class="billable-action">Review and run</button><span class="cost-badge">Spends money</span>`:''}}</div>`).join('')
+    ${{t.status==='draft'?`<button data-run="${{t.id}}" type="button" class="primary-action billable-action">Review and run</button><span class="cost-badge">Spends money</span>`:''}}</div>`).join('')
     : '<div class="empty-note">No trials queued yet.</div>';
   $('queuePane').querySelectorAll('[data-run]').forEach(button=>button.onclick=()=>reviewTrial(button.dataset.run));
 
