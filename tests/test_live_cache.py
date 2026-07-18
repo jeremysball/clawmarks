@@ -76,6 +76,29 @@ def test_depends_on_passes_dependency_data_and_propagates_invalidation(tmp_path)
     assert second == {"from_base": 2, "dependent_n": 2}
 
 
+def test_depends_on_with_scoped_target_name_exposes_plain_logical_key(tmp_path):
+    """Regression test: curation_server.py registers scoped targets like
+    "solution-map:demo:round1", but compute_fns (map_view.py, redundancy_view.py,
+    scan_gallery.py) look their dependency up by the plain logical name, e.g.
+    deps["solution-map"], not the full scoped cache key."""
+    watched = tmp_path / "scored_manifest.json"
+    watched.write_text("[]")
+
+    def compute_base(sweep_dir):
+        return {"base_n": 1}
+
+    def compute_dependent(sweep_dir, deps):
+        return deps["solution-map"]["base_n"]
+
+    cache = LiveCache()
+    cache.get("solution-map:demo:round1", compute_base, watched_files=[str(watched)])
+    result = cache.get(
+        "map:demo:round1", compute_dependent, watched_files=[],
+        depends_on=["solution-map:demo:round1"],
+    )
+    assert result == 1
+
+
 def test_concurrent_get_only_computes_once(tmp_path):
     import threading
 

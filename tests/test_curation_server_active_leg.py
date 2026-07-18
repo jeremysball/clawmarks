@@ -23,6 +23,8 @@ def test_active_out_dir_is_none_before_any_selection():
 def test_set_active_selection_persists_and_resolves(tmp_path):
     (config.EXPEDITIONS_DIR / "demo").mkdir(parents=True)
     (config.EXPEDITIONS_DIR / "demo" / "expedition.json").write_text("{}")
+    (config.EXPEDITIONS_DIR / "demo" / "legs").mkdir()
+    (config.EXPEDITIONS_DIR / "demo" / "legs" / "leg1.json").write_text("{}")
 
     cs._set_active_selection("demo", "leg1")
 

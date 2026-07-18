@@ -46,7 +46,10 @@ class LiveCache:
                             f"Call cache.get({dep_name!r}, ...) before {target_name!r}."
                         )
                     dep_entry = self._entries[dep_name]
-                    deps[dep_name] = dep_entry["data"]
+                    # dep_name is "{logical_name}:{scope}" (curation_server.py's convention);
+                    # compute_fns key deps by the plain logical_name, not the scoped cache key.
+                    logical_name = dep_name.split(":", 1)[0]
+                    deps[logical_name] = dep_entry["data"]
                     dep_mtimes[dep_name] = dep_entry["mtimes"]
 
             mtimes = self._current_mtimes(watched_files)

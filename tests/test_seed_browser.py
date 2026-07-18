@@ -7,6 +7,16 @@ def test_render_html_includes_seed_generation_ui():
     assert "genBtn" in html
 
 
+def test_render_html_scopes_seed_api_calls_to_the_rendered_context():
+    html = seed_browser.render_html("demo", "round1", focus={"focus_id": "focus_abc"})
+
+    assert "const CONTEXT =" in html
+    assert "function scopedApi(path)" in html
+    assert "fetch(scopedApi('/api/seeds'))" in html
+    assert "fetch(scopedApi('/api/seeds/generate')" in html
+    assert "focus_id" in html
+
+
 def test_render_html_uses_sulfur_proof_shell():
     """Task 5 render contract: the page sits on the Sulfur Proof foundation, includes the
     shared header's context-switcher script, ships a semantic <header>, and has no

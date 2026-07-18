@@ -8,6 +8,7 @@ import pytest
 
 from clawmarks import curation_server as cs
 from clawmarks import config
+from clawmarks.workspace_context import WorkspaceContext
 
 
 @pytest.fixture(autouse=True)
@@ -37,6 +38,11 @@ def running_server_with_leg():
 
 def test_list_expeditions_empty_when_none_exist():
     assert cs._list_expeditions() == []
+
+
+def test_create_leg_rejects_unsafe_expedition_name():
+    with pytest.raises(ValueError, match="path separator"):
+        cs._create_leg({"expedition": "../escape", "name": "new-leg"})
 
 
 def test_create_expedition_writes_config_and_scaffolds_cockpit_leg():
@@ -78,7 +84,7 @@ def test_list_expeditions_reports_every_leg():
 
 def test_status_page_shows_selected_leg_with_no_data(running_server_with_leg):
     port = running_server_with_leg.server_address[1]
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/status.html") as resp:
         body = resp.read()
 
     assert b"no expedition/leg selected" not in body.lower()
@@ -96,7 +102,7 @@ def test_status_page_warns_when_manifest_images_are_missing(running_server_with_
     (leg_dir / "scored_manifest.json").write_text(json.dumps(manifest))
 
     port = running_server_with_leg.server_address[1]
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/status.html") as resp:
         body = resp.read().decode()
 
     assert "missing" in body.lower() or "data integrity" in body.lower()
@@ -147,7 +153,7 @@ def running_server_with_leg_and_data(tmp_path):
 
 def test_status_page_data_branch_surfaces_comparison_count(running_server_with_leg_and_data):
     port = running_server_with_leg_and_data.server_address[1]
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/status.html") as resp:
         body = resp.read().decode()
 
     assert 'id="cmpStat"' in body
@@ -160,7 +166,7 @@ def test_status_page_data_body_uses_sulfur_proof_shell(running_server_with_leg_a
     header's context-switcher script, and ships a semantic <header>. The legacy
     DARK_TOKENS/BTN_CSS imports are gone from the page-local <style>."""
     port = running_server_with_leg_and_data.server_address[1]
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/status.html") as resp:
         body = resp.read().decode()
     assert "--paper:#C3C5BA" in body
     assert "shared-ui.js" in body
@@ -178,7 +184,7 @@ def test_status_page_no_selection_body_uses_sulfur_proof_shell(running_server_wi
     port = running_server_with_leg.server_address[1]
     cs._active_selection["expedition"] = None
     cs._active_selection["leg"] = None
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/status.html") as resp:
         body = resp.read().decode()
     assert "--paper:#C3C5BA" in body
     assert "shared-ui.js" in body
@@ -196,13 +202,13 @@ def test_status_page_selected_empty_body_uses_sulfur_proof_shell(running_server_
     session-status link is the natural place; the existing /runs.html prose link stays as
     additional, still-valid guidance)."""
     port = running_server_with_leg.server_address[1]
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/status.html") as resp:
         body = resp.read().decode()
     assert "--paper:#C3C5BA" in body
     assert "shared-ui.js" in body
     assert "<header" in body
     assert "prefers-color-scheme: dark" not in body
-    assert 'href="/status.html"' in body
+    assert 'href="/status.html?expedition=uncanny_frontier&amp;leg=cockpit"' in body
     # The legacy /runs.html prose link is still present as additional guidance.
     assert 'href="/runs.html"' in body
     assert "DARK_TOKENS" not in body
@@ -224,7 +230,7 @@ def test_status_page_data_integrity_error_body_uses_sulfur_proof_shell(running_s
     (leg_dir / "scored_manifest.json").write_text(json.dumps(manifest))
 
     port = running_server_with_leg.server_address[1]
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/status.html") as resp:
         body = resp.read().decode()
     assert "--paper:#C3C5BA" in body
     assert "shared-ui.js" in body
@@ -244,17 +250,57 @@ def test_status_page_data_integrity_error_body_uses_sulfur_proof_shell(running_s
     assert "border-radius:8px" not in body
 
 
-def test_status_html_route_serves_the_same_page_as_root(running_server_with_leg):
+def test_root_and_explore_routes_serve_the_same_active_desk(running_server_with_leg):
     """Task 5 closes the /status.html route gap: Task 3's nav_bar_html emits a link to
     /status.html, but only \"/\" was wired to _send_status_page. After Task 5 both paths
     must serve the identical page (200, identical body)."""
     port = running_server_with_leg.server_address[1]
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as root_resp:
         root_body = root_resp.read()
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/explore.html") as explore_resp:
+        explore_body = explore_resp.read()
+        assert explore_resp.status == 200
+    assert root_body == explore_body
+
+
+def test_status_html_route_keeps_the_picker_page(running_server_with_leg):
+    port = running_server_with_leg.server_address[1]
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/status.html") as status_resp:
         status_body = status_resp.read()
-        assert status_resp.status == 200
-    assert root_body == status_body
+    assert status_resp.status == 200
+    assert b"no scored" in status_body.lower()
+    assert b'active-leg-form' in status_body
+
+
+def test_explore_foci_retains_present_and_missing_evidence(monkeypatch, tmp_path):
+    focus = {
+        "focus_id": "focus_11111111111111111111111111111111",
+        "source": {
+            "member_tags": ["generated-present", "generated-missing"],
+            "real_anchor_tags": ["anchor-present", "anchor-missing"],
+        },
+    }
+
+    class Store:
+        def list(self, scope, status=None):
+            return [focus]
+
+    monkeypatch.setattr(cs.Handler, "_focus_store", lambda _self: Store())
+    monkeypatch.setattr(cs, "load_manifest", lambda _expedition, _leg: [{"tag": "generated-present"}])
+    monkeypatch.setattr(cs, "REAL_DIR", tmp_path)
+    (tmp_path / "anchor-present").write_bytes(b"real")
+
+    handler = object.__new__(cs.Handler)
+    enriched = handler._explore_foci(WorkspaceContext("demo", "round1"))[0]
+
+    assert enriched["evidence"]["generated_members"] == [
+        {"tag": "generated-present", "record": {"tag": "generated-present"}},
+        {"tag": "generated-missing", "missing": True},
+    ]
+    assert enriched["evidence"]["real_anchors"] == [
+        {"tag": "anchor-present"},
+        {"tag": "anchor-missing", "missing": True},
+    ]
 
 
 def test_unfavorite_rejects_payload_for_stale_leg(running_server_with_leg):
@@ -282,6 +328,40 @@ def test_unfavorite_rejects_payload_for_stale_leg(running_server_with_leg):
 
     assert exc_info.value.code == 409
     assert json.loads((leg_a / "user_favorites.json").read_text()) == favorites_a
+
+
+@pytest.mark.parametrize("endpoint", ["/api/favorite", "/api/unfavorite"])
+def test_favorite_mutation_rejects_focus_from_a_different_leg(running_server_with_leg, endpoint):
+    cs._create_leg({"expedition": "uncanny_frontier", "name": "round2"})
+    leg_dir = config.leg_dir("uncanny_frontier", "cockpit")
+    image_path = leg_dir / "gen1_a.png"
+    image_path.write_bytes(b"image")
+    focus = cs.FocusStore(config.STATE_DIR, cs.REAL_DIR).create(
+        cs.Scope("uncanny_frontier", "cockpit"),
+        {"label": "Cockpit focus", "source": {"view": "map", "kind": "map_members",
+         "member_tags": ["gen1_a"], "real_anchor_tags": []}, "question": "q",
+         "observation": "o", "hypothesis_text": "h", "test_contract": None},
+        [{"tag": "gen1_a", "file": str(image_path)}],
+    )
+    payload = {
+        "tag": "gen1_a",
+        "expedition": "uncanny_frontier",
+        "leg": "round2",
+        "focus_id": focus["focus_id"],
+    }
+    port = running_server_with_leg.server_address[1]
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{port}{endpoint}",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(request)
+
+    assert exc_info.value.code == 400
+    assert not (config.leg_dir("uncanny_frontier", "round2") / "user_favorites.json").exists()
 
 
 def test_create_leg_writes_empty_overrides_and_scaffolds_its_dir():

@@ -83,5 +83,5 @@ def test_scan_html_shows_the_active_expedition_and_leg(running_server, monkeypat
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/scan.html") as resp:
         body = resp.read().decode()
 
-    assert 'href="/"' in body
+    assert 'href="/?expedition=demo&amp;leg=leg-b"' in body
     assert "demo/leg-b" in body

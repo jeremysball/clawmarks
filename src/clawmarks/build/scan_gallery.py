@@ -28,6 +28,7 @@ from clawmarks.shared_ui import (
     json_script,
     nav_bar_html,
 )
+from clawmarks.workspace_context import WorkspaceContext, generated_image_url
 
 
 def round_of(tag):
@@ -91,8 +92,22 @@ def compute_data(sweep_dir, deps):
     return items
 
 
-def render_html(items, active_expedition=None, active_leg=None):
-    data_json = json_script(items)
+def render_html(
+    items, active_expedition=None, active_leg=None, context: WorkspaceContext | None = None,
+    focus=None,
+):
+    focus = focus or (context.focus if context is not None else None)
+    render_items = items
+    if context is not None:
+        render_items = [
+            {
+                **item,
+                "thumb": generated_image_url(item["tag"], context, thumbnail=True),
+                "file": generated_image_url(item["tag"], context),
+            }
+            for item in items
+        ]
+    data_json = json_script(render_items)
 
     faith_tip = info_btn(
         "Faithfulness measures how close an image stays to the original training photos, on a scale "
@@ -211,7 +226,7 @@ def render_html(items, active_expedition=None, active_leg=None):
 {INFOTIP_CSS}
 </style></head><body>
 
-{nav_bar_html('scan.html', active_expedition, active_leg)}
+{nav_bar_html('scan.html', active_expedition, active_leg, focus=focus)}
 <div id="bar">
    <h1>CLAWMARKS <span>uncanny scan</span></h1>
   <label>Sort{novelty_tip} <select id="sortKey">
@@ -267,8 +282,14 @@ const DATA = {data_json};
 let view = DATA.slice();
 let picks = {{}};
 let favorites = {{}};
+const SCOPE_QUERY = new URLSearchParams(window.location.search);
+function scopedApi(path) {{
+  const url = new URL(path, window.location.origin);
+  ['expedition', 'leg'].forEach(key => {{ if (SCOPE_QUERY.has(key)) url.searchParams.set(key, SCOPE_QUERY.get(key)); }});
+  return url.toString();
+}}
 
-fetch('/api/favorites').then(r => r.json()).then(f => {{
+fetch(scopedApi('/api/favorites')).then(r => r.json()).then(f => {{
   favorites = f;
   picks = {{}};
   Object.keys(favorites).forEach(tag => {{ picks[tag] = true; }});
@@ -288,6 +309,9 @@ const FILTER_IDS = ['sortKey', 'typeFilter', 'catFilter', 'promptFilter', 'faith
 
 function syncStateToUrl() {{
   const params = new URLSearchParams();
+  ['expedition', 'leg', 'focus_id'].forEach(key => {{
+    if (SCOPE_QUERY.has(key)) params.set(key, SCOPE_QUERY.get(key));
+  }});
   FILTER_IDS.forEach(id => {{
     const el = document.getElementById(id);
     const val = el.type === 'checkbox' ? (el.checked ? '1' : '') : el.value;
