@@ -1378,6 +1378,8 @@ At 390x844 mobile, checked `/`, `/scan.html`, `/seeds.html`, and `/runs.html`:
 
 No defects fixed beyond the two Task 4 review findings. No new issues found during the gate.
 
+Stopped the server after verification (`kill 857060`). Post-task `pgrep -af "clawmarks serve|clawmarks.curation_server" || true` confirmed no server process remained running. No generation state was created, deleted, overwritten, or transformed during the entire gate.
+
 Note: I was unable to find the `.claude/skills/run/SKILL.md` file referenced in the task brief. The
 project's `cli.py` already has a `clawmarks serve` command that calls `curation_server.main([])`,
 using `CLAWMARKS_HOST` env var for binding. This workaround was used without issue.
