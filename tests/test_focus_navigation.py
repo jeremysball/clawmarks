@@ -95,3 +95,9 @@ def test_page_scope_rejects_unsafe_explicit_query_scope():
 def test_active_leg_selection_rejects_unsafe_leg_name():
     with pytest.raises(ValueError, match="path separator"):
         cs._set_active_selection("demo", "../escape")
+
+
+@pytest.mark.parametrize("name", ["", "bad\x00name", r"bad\\name"])
+def test_scope_name_validator_rejects_empty_nul_and_backslash(name):
+    with pytest.raises(ValueError):
+        cs._validate_expedition_or_leg_name(name, "leg")

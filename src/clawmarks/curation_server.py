@@ -228,7 +228,11 @@ def _validate_expedition_or_leg_name(name, kind, reserved=()):
     or collide with a reserved path segment that directory uses for its own config
     (e.g. a leg literally named "legs" would resolve config.leg_dir() to the same directory
     that holds every other leg's legs/<leg>.json config file)."""
-    if os.sep in name or (os.altsep and os.altsep in name) or "/" in name or ".." in name:
+    if not isinstance(name, str) or not name:
+        raise ValueError(f"{kind} name must be a non-empty string")
+    if "\x00" in name:
+        raise ValueError(f"{kind} name {name!r} may not contain NUL")
+    if os.sep in name or (os.altsep and os.altsep in name) or "/" in name or "\\" in name or ".." in name:
         raise ValueError(f"{kind} name {name!r} may not contain a path separator or '..'")
     if name in reserved:
         raise ValueError(f"{kind} name {name!r} is reserved")
@@ -257,6 +261,7 @@ def _create_expedition(payload):
     (expedition_dir / "legs").mkdir(parents=True)
     atomic_json_write(expedition_dir / "expedition.json", expedition_fields)
     atomic_json_write(expedition_dir / "legs" / "cockpit.json", {})
+    _validate_expedition_or_leg_name("cockpit", "leg", reserved={"legs"})
     config.leg_dir(name, "cockpit").mkdir(parents=True, exist_ok=True)
     return {"ok": True, "name": name}
 
@@ -268,6 +273,7 @@ def _create_leg(payload):
         raise ValueError("'expedition' is required")
     if not name:
         raise ValueError("'name' is required")
+    _validate_expedition_or_leg_name(expedition, "expedition")
     _validate_expedition_or_leg_name(name, "leg", reserved={"legs"})
     expedition_dir = config.EXPEDITIONS_DIR / expedition
     if not (expedition_dir / "expedition.json").exists():
@@ -284,10 +290,14 @@ def _create_leg(payload):
 
 def _scope_out_dir(expedition, leg):
     if expedition is None or leg is None:
+        if expedition is not None or leg is not None:
+            raise ValueError("'expedition' and 'leg' must be provided together")
         legacy_dir = _active_out_dir()
         if legacy_dir is not None:
             return legacy_dir
         raise NoActiveLegError("no expedition/leg selected")
+    _validate_expedition_or_leg_name(expedition, "expedition")
+    _validate_expedition_or_leg_name(leg, "leg", reserved={"legs"})
     return config.leg_dir(expedition, leg)
 
 
@@ -467,7 +477,7 @@ def _preference_retrain_gate_error(expedition=None, leg=None):
 def _favorites_file(expedition=None, leg=None):
     if expedition is None or leg is None:
         return _require_out_dir() / "user_favorites.json"
-    return config.leg_dir(expedition, leg) / "user_favorites.json"
+    return _scope_out_dir(expedition, leg) / "user_favorites.json"
 
 
 def _comparisons_file(expedition=None, leg=None):
@@ -759,7 +769,7 @@ def _sibling_leg_exclusion_embeddings(expedition, leg, model):
     class _Cfg:
         pass
     fake_cfg = _Cfg()
-    fake_cfg.dir = config.leg_dir(expedition, leg)
+    fake_cfg.dir = _scope_out_dir(expedition, leg)
     fake_cfg.leg = leg
 
     sibling_manifest = _load_sibling_leg_manifests(fake_cfg)
@@ -1322,7 +1332,9 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
         context = self._page_context()
         trials = []
         if context.expedition is not None and context.leg is not None:
-            stored_trials = load_store(config.leg_dir(context.expedition, context.leg) / "cockpit_queue.json")
+            stored_trials = load_store(
+                _scope_out_dir(context.expedition, context.leg) / "cockpit_queue.json"
+            )
             if isinstance(stored_trials, dict):
                 trials = list(stored_trials.values())
         data = explore_hub.build_explore_data(
@@ -1694,7 +1706,12 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             if not expedition or not leg:
                 self._json_response(400, {"error": "'expedition' and 'leg' query params are required"})
                 return
-            out_dir = config.leg_dir(expedition, leg)
+            try:
+                expedition, leg = _request_scope(expedition, leg)
+            except ValueError as e:
+                self._json_response(400, {"error": str(e)})
+                return
+            out_dir = _scope_out_dir(expedition, leg)
             favorites = load_store(out_dir / "user_favorites.json")
             self._json_response(200, run_manager.build_report(out_dir, favorites=favorites))
             return
@@ -2473,7 +2490,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self._json_response(400, {"error": str(e)})
             return
         scope = Scope(expedition, leg)
-        leg_dir = config.leg_dir(expedition, leg)
+        leg_dir = _scope_out_dir(expedition, leg)
         manifest_path = leg_dir / "scored_manifest.json"
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text())
@@ -2601,7 +2618,7 @@ document.querySelectorAll('.leg-btn').forEach(btn => btn.addEventListener('click
             self._json_response(400, {"error": "RUNPOD_API_KEY not set in server environment"})
             return
 
-        out_dir = config.leg_dir(expedition, leg)
+        out_dir = _scope_out_dir(expedition, leg)
         try:
             info = run_manager.launch_run(
                 expedition, leg, out_dir, api_key,

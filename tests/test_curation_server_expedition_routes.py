@@ -40,6 +40,11 @@ def test_list_expeditions_empty_when_none_exist():
     assert cs._list_expeditions() == []
 
 
+def test_create_leg_rejects_unsafe_expedition_name():
+    with pytest.raises(ValueError, match="path separator"):
+        cs._create_leg({"expedition": "../escape", "name": "new-leg"})
+
+
 def test_create_expedition_writes_config_and_scaffolds_cockpit_leg():
     payload = {
         "name": "demo", "trigger_word": "trentbuckle style, ",
