@@ -207,7 +207,6 @@ def build_report(out_dir, favorites=None, current_balance=None):
         "novelty_trajectory": state.get("novelty_history", []),
         "plateau_count": state.get("plateau_count", 0),
         "generation": state.get("generation", 0),
-        "start_balance": state.get("start_balance"),
         "total_images": len(manifest),
         "explore_exploit_split": {cat: v["count"] for cat, v in by_category.items()},
         "pick_rate_by_category": {
