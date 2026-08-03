@@ -20,6 +20,14 @@ def running_server(tmp_path, monkeypatch):
     thread.join(timeout=2)
 
 
+def test_security_headers_present_on_every_response(running_server):
+    port = running_server.server_address[1]
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/shared-ui.js") as resp:
+        assert resp.headers["X-Content-Type-Options"] == "nosniff"
+        assert resp.headers["X-Frame-Options"] == "DENY"
+        assert "default-src 'self'" in resp.headers["Content-Security-Policy"]
+
+
 def test_lightbox_js_served_without_being_written_to_disk(running_server, tmp_path):
     port = running_server.server_address[1]
     assert not (tmp_path / "lightbox.js").exists()

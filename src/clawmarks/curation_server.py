@@ -1059,6 +1059,13 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "public, max-age=31536000, immutable")
         elif path.endswith((".html", ".json")):
             self.send_header("Cache-Control", "no-cache, must-revalidate")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'",
+        )
         super().end_headers()
 
     def _json_response(self, status, obj):
