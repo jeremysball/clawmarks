@@ -680,11 +680,20 @@ def next_compare_response(manifest, comparisons, expedition=None, leg=None):
 SAMPLERS = ("ddim", "dpmpp_2m", "euler")
 
 
+def _validate_trial_text(field, value, default=""):
+    value = value or default
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
+    if "<" in value or ">" in value:
+        raise ValueError(f"{field} may not contain HTML markup")
+    return value
+
+
 def build_trial(payload, now, trial_id):
     """Validates and shapes a draft trial for cockpit_queue.json. Raises ValueError with a
     user-facing message on any invalid field, so the POST handler can turn it straight into a
     400 without duplicating validation logic."""
-    prompt = (payload.get("prompt") or "").strip()
+    prompt = _validate_trial_text("prompt", payload.get("prompt")).strip()
     if not prompt:
         raise ValueError("missing 'prompt'")
     seed_strategy = payload.get("seed_strategy") or "random"
@@ -701,16 +710,20 @@ def build_trial(payload, now, trial_id):
     except (TypeError, ValueError):
         raise ValueError("n/strength/steps/cfg must be numbers")
     mission = payload.get("mission") or "freeform"
-    queue_title = cockpit.MISSIONS.get(mission, {}).get("queue", mission)
+    if not isinstance(mission, str) or mission not in cockpit.MISSIONS:
+        raise ValueError(f"mission must be one of {tuple(cockpit.MISSIONS)}")
+    queue_title = cockpit.MISSIONS[mission]["queue"]
     focus_id = payload.get("focus_id")
     return {
         "id": trial_id, "status": "draft", "mission": mission, "queue_title": queue_title,
-        "prompt": prompt, "hypothesis": (payload.get("hypothesis") or "").strip(),
-        "target": payload.get("target") or "", "target_cell": payload.get("target_cell"),
+        "prompt": prompt, "hypothesis": _validate_trial_text(
+            "hypothesis", payload.get("hypothesis")
+        ).strip(),
+        "target": _validate_trial_text("target", payload.get("target")), "target_cell": payload.get("target_cell"),
         "focus_id": focus_id,
         "seed_strategy": seed_strategy, "n": n, "strength": strength,
         "sampler": sampler, "steps": steps, "cfg": cfg,
-        "negative": payload.get("negative") or NEG_DEFAULT,
+        "negative": _validate_trial_text("negative", payload.get("negative"), NEG_DEFAULT),
         "created_at": now, "result_tags": [], "error": None,
     }
 
@@ -2050,6 +2063,9 @@ needed.</p>
             if not winner or not loser:
                 self._json_response(400, {"error": "missing 'winner' or 'loser'"})
                 return
+            if not isinstance(winner, str) or not isinstance(loser, str):
+                self._json_response(400, {"error": "'winner' and 'loser' must be manifest tags"})
+                return
             if winner == loser:
                 self._json_response(400, {"error": "'winner' and 'loser' must be different images"})
                 return
@@ -2059,6 +2075,12 @@ needed.</p>
                 )
             except ValueError as e:
                 self._json_response(400, {"error": str(e)})
+                return
+            if manifest_entry_by_tag(winner, expedition, leg) is None:
+                self._json_response(400, {"error": "winner is not in the current manifest"})
+                return
+            if manifest_entry_by_tag(loser, expedition, leg) is None:
+                self._json_response(400, {"error": "loser is not in the current manifest"})
                 return
             with _lock:
                 comparisons = load_comparisons(expedition, leg)
