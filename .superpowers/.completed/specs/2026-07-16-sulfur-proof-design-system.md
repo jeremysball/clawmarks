@@ -15,9 +15,13 @@ Those documents still govern behavior that this specification does not replace.
 The page is a working print proof, not a paper-themed dashboard.
 
 - Olive-gray paper forms one continuous workspace.
+- Visible fine ruling and mild tonal variation make the workspace read as proofing paper rather
+  than a flat gray application background.
 - Dense black ink creates hierarchy through type scale, rules, reversal, and negative space.
 - Sulfur behaves like translucent annotation material: underlines, hatching, registration halos,
   selected states, and compact active marks.
+- Abstract skeuomorphism gives important controls and decision surfaces crisp physical depth without
+  imitating a specific real-world object.
 - Real CLAWMARKS images carry visual weight. Interface chrome remains restrained.
 - Sections use spacing and rules before containers. A bordered panel needs a functional reason,
   such as clipping a map or separating the Guide from its source page.
@@ -83,6 +87,36 @@ and 15px on mobile; explanatory text must not shrink into 10px dashboard copy.
 - Three-column evidence layouts collapse to one column before text becomes cramped.
 - Horizontal overflow is reserved for image strips, data grids, and the compact workflow stepper.
 
+## Dimensional Grammar
+
+The interface uses tactile, dimensional cues instead of soft neumorphism:
+
+- raised controls use a 1px to 2px light inner edge on the top and left, a darker inner edge on the
+  bottom and right, and a hard 3px to 6px offset shadow with no blur;
+- recessed instrument areas reverse the inner light and dark edges and use no outer shadow;
+- press states remove the outer shadow and move the control into its former offset;
+- hover states increase the hard offset by 1px to 2px;
+- paper, deep paper, and ink create depth; sulfur remains a small registration or active-state mark;
+- data rows, prose, and ordinary section boundaries stay flat so depth continues to signal meaning.
+
+Use raised surfaces for actions, selected decisions, map callouts, paid-payload confirmation, and
+bounded evidence objects. Use recessed surfaces for context receipts, composers, counters, and
+instrument readouts. Do not place every section in a raised container.
+
+Depth has three approved strengths:
+
+1. **Shallow raised readout:** a 1px rule, 1px inner edges, and a hard 3px shadow. Use this for the
+   active research question and compact working-state summaries.
+2. **Mounted working piece:** 1px to 2px inner edges and a hard 4px to 5px shadow. Use this for
+   labeled evidence images and the Next Decision plate.
+3. **Light detent:** a 1px rule and 1px to 2px reversed inner edges with no outer shadow. Use this
+   for chronological activity rows and other history that should recede without looking deeply
+   inset.
+
+Do not mix those strengths arbitrarily. A shallow readout must remain visibly quieter than mounted
+evidence and the decision plate. Light detents must never resemble deep wells, text inputs, or
+disabled controls.
+
 ## Shared Header
 
 The shared header contains, in order:
@@ -103,7 +137,8 @@ button remains visible.
 ### Primary actions
 
 Primary actions use black fill with paper text. Sulfur appears as a bottom registration mark or
-short underline. Large sulfur-filled call-to-action blocks are prohibited.
+short underline. Their tactile edge and hard offset shadow distinguish them from flat data rows.
+Large sulfur-filled call-to-action blocks are prohibited.
 
 ### Selected controls
 
@@ -112,9 +147,10 @@ shape, weight, or `aria-current`; color is not the only cue.
 
 ### Workflow stepper
 
-Orient, Scout, Explain, Act, and Learn form one connected black navigation rail with real button
-elements. The active stage has one strong selected state. One shared detail/action strip sits below
-the rail. Five bordered cards or five repeated descriptions are prohibited.
+Orient, Scout, Explain, Act, and Learn form one compact stepper of light raised keys with real button
+elements. The active stage becomes one black key with a sulfur hard shadow or registration edge.
+One shared detail/action strip sits below the stepper. Five content cards or five repeated
+descriptions are prohibited.
 
 ### Links and secondary actions
 
@@ -142,12 +178,15 @@ The side explanation states that the cell is empty but adjacent to populated evi
 
 ### Images
 
-Images avoid decorative frames. Use consistent cropping only in grids and preserve access to the
-full image. Focus members, real anchors, and trial results receive text labels or patterned marks,
-not color-only borders. Evidence images need meaningful `alt` text or an adjacent caption that names
-their evidence role. Decorative texture uses empty alt text. Solution Map and Coverage provide an
-accessible list or table equivalent for every selected point, region, frontier, and value exposed
-only through the visual canvas.
+Evidence images use consistent hard-edged mounts: a thin ink border, small paper margin, inner light
+edge, and a 4px to 5px unblurred shadow. The mount communicates that the image is a bounded working
+piece, not decoration. Avoid ornamental mats, rounded frames, and frame treatments on incidental
+imagery. Use consistent cropping only in grids and preserve access to the full image. Focus members,
+real anchors, and trial results receive text labels or patterned marks, not color-only borders.
+Evidence images need meaningful `alt` text or an adjacent caption that names their evidence role.
+Decorative texture uses empty alt text. Solution Map and Coverage provide an accessible list or
+table equivalent for every selected point, region, frontier, and value exposed only through the
+visual canvas.
 
 ### Data and metadata
 
@@ -160,6 +199,9 @@ The Guide uses `--guide-surface` and `--guide-ink` as one continuous dark layer.
 context receipt, assistant label, focus state, and active composer controls. Messages separate with
 rules and spacing rather than chat bubbles.
 
+Context receipts and composers appear recessed through crisp inner edges. Guide actions use the
+same hard raised-control treatment as the paper workspace.
+
 The desktop drawer casts one restrained left shadow. The mobile sheet uses rounded top corners and
 a drag handle because those shapes communicate the sheet interaction; this exception does not
 license rounded cards elsewhere.
@@ -169,10 +211,22 @@ license rounded cards elsewhere.
 ### Explore
 
 Place the connected workflow stepper directly below the shared header. Follow with the current
-Focus as a compact working heading, then a continuous ruled research surface: evidence and saved
-observations across the main width, one next-decision column, and a chronological activity ledger.
-Use images as labeled evidence, not a decorative collage. Prohibit an oversized welcome hero,
-marketing copy, feature cards, and broad empty space that makes the tool resemble a SaaS homepage.
+Focus and Saved Observations as two explicit tabs. The Focus tab contains a compact identity block,
+a shallow raised research-question readout, scope metadata, and Edit Focus. The question remains
+sentence case and visually quieter than the evidence wall.
+
+Place the five-image evidence wall across the full useful width. Each image uses the mounted working
+piece treatment and a mono evidence-role caption. A real-art anchor may use a sulfur border or hard
+shadow in addition to its text label. Use images as labeled evidence, not a decorative collage.
+
+Below the evidence wall, place the chronological Focus activity on the left and Next Decision on the
+right. Activity rows use light detents with no outer shadow. Next Decision uses the mounted working
+piece treatment as one raised abstract plate, including a crisp inner light edge and hard black
+shadow. Its readiness values remain ruled rows inside the plate. Sulfur marks the active action and
+small registration details; it does not fill the plate.
+
+Prohibit an oversized welcome hero, marketing copy, feature cards, deep activity wells, and broad
+empty space that makes the tool resemble a SaaS homepage.
 
 Without a selected Focus, show a compact ruled Focus ledger and direct evidence-creation actions.
 Do not replace the missing work with a promotional empty state.
@@ -209,9 +263,14 @@ ordinary empty states.
 
 ## Motion and Texture
 
-Paper grain may use subtle CSS gradients. It must not reduce text contrast or create large paint
-effects. Motion is limited to drawer/sheet transitions, progress updates, and direct manipulation.
-Honor `prefers-reduced-motion` by removing nonessential transitions.
+Paper texture must be visible enough to distinguish the surface from a flat gray fill. Use fine 1px
+ruling, a second faint cross-grain, and broad low-contrast tonal variation. Texture remains below
+text, rules, images, and controls; it must not reduce text contrast, shimmer during scrolling, or
+create large paint effects. Raised surfaces inherit the same paper family rather than switching to
+clean digital white.
+
+Motion is limited to drawer/sheet transitions, progress updates, and direct manipulation. Honor
+`prefers-reduced-motion` by removing nonessential transitions.
 
 ## Responsive Behavior
 
@@ -237,6 +296,7 @@ Screen-reader order follows the visual evidence order rather than hidden layout 
 ## Non-Goals
 
 - The system does not imitate torn-paper scrapbook decoration on every surface.
+- The system does not use soft, blur-heavy neumorphism or literal replicas of physical controls.
 - Sulfur is not a general brand fill or decorative accent.
 - The redesign does not erase dense research data to create marketing-page whitespace.
 - Cards, pills, shadows, and rounded corners are not default grouping tools.
@@ -246,9 +306,14 @@ Screen-reader order follows the visual evidence order rather than hidden layout 
 - Shared tokens, typography, header, controls, and Guide treatment apply across every live tool.
 - Explore's workflow reads and operates as a connected stepper, not five cards.
 - Explore reads as an active research desk, not a product or SaaS landing page.
+- Explore uses the approved depth allocation: shallow raised question readout, mounted evidence
+  images, shallow activity detents, and one raised Next Decision plate.
+- Paper texture remains visibly present at desktop and 390px mobile widths without reducing
+  legibility.
 - Secondary normal text meets WCAG AA contrast on paper.
 - Every selected map region and frontier has a direct non-color label.
 - Primary actions remain black-led with restrained sulfur annotation.
+- Raised and recessed states use the same crisp abstract-skeuomorphic depth grammar across pages.
 - No production page fetches fonts from an external runtime service.
 - Keyboard focus, reduced motion, 200% zoom, and 390px mobile layouts remain usable.
 - Screen-reader checks cover the shared header, workflow stepper, map and Coverage equivalents,

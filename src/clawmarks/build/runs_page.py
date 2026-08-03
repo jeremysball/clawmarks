@@ -1,7 +1,7 @@
 """
 Generates runs.html: launch, monitor, and stop an overnight search run (search/driver.py)
 from the browser instead of an SSH session, per
-docs/superpowers/specs/2026-07-12-overnight-search-launch-design.md. Bakes in no data at
+.superpowers/.completed/specs/2026-07-12-overnight-search-launch-design.md. Bakes in no data at
 render time; every dynamic piece is a live fetch against curation_server.py:
   GET  /api/expeditions                          -> [{name, legs: [...]}] to populate the pickers
   GET  /api/searchrun/status                      -> {running, pid, expedition, leg, started_at,

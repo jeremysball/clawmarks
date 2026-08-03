@@ -2,7 +2,7 @@
 label: "yes", so "pick as winner" can be retired without losing the existing picks. Safe to
 rerun: any tag that already has a rating is left alone. Not wired into `clawmarks` as a
 permanent CLI subcommand since it's a one-shot migration, not a recurring operation. See
-docs/superpowers/specs/2026-07-09-preference-classifier-design.md, Component 2a.
+.superpowers/.completed/specs/2026-07-09-preference-classifier-design.md, Component 2a.
 
 Run with: python -m clawmarks.search.migrate_picks_to_ratings --expedition <name> --leg <name>
 """

@@ -9,7 +9,7 @@ Elite selection per cell: a favorited image (notes/uncanny_sweep/user_favorites.
 one exists in that cell, since a person's judgment substitutes for the coherence/quality scorer
 this project doesn't have (lab_notebook.md Section 3b). This used to be driven by binary image
 ratings, but yes/no ratings were replaced by head-to-head comparisons (see
-docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md), which have no per-image
+.superpowers/.completed/specs/2026-07-11-head-to-head-preference-design.md), which have no per-image
 manual-override signal of their own, so favoriting fills that role instead. Otherwise falls back
 to highest novelty in the cell, matching the ranking the search itself uses to build its
 automated "elites" list.

@@ -4,7 +4,7 @@ first, so the model's judgment can be eyeballed against the user's own taste bef
 lets it steer anything live. Requires search/preference_pairwise_model.py to have already
 produced notes/uncanny_sweep/preference_pairwise_model.joblib (needs 50+ comparisons — see
 search/preference_pairwise_model.py's MIN_COMPARISONS). See
-docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md.
+.superpowers/.completed/specs/2026-07-11-head-to-head-preference-design.md.
 
 Served live at /preference_rank.html by curation_server.py.
 """

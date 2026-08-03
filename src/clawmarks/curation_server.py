@@ -18,7 +18,7 @@ build artifacts (solution_map_data.json, similarity.json) are gone; nothing here
 Comparisons are stored in notes/uncanny_sweep/user_comparisons.json, a list of
 {winner, loser, compared_at} records. search/preference_pairwise_model.py trains a Bradley-
 Terry-style model on this data (see
-docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md). The selection of which
+.superpowers/.completed/specs/2026-07-11-head-to-head-preference-design.md). The selection of which
 pair to compare next is stratified across the faithfulness x novelty grid below
 comparison_sampler.MIN_COMPARISONS, then model-uncertainty-guided above it; this server retrains
 the model every comparison_sampler.RETRAIN_EVERY comparisons once the floor is cleared.

@@ -2,7 +2,7 @@
 Shows whether the preference classifier (search/preference_pairwise_model.py) is trained and
 ready, and exposes the single persisted toggle (search/preference_settings.py) that both
 archive.html and `clawmarks run allnight` read to decide whether to use its predictions. See
-docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md.
+.superpowers/.completed/specs/2026-07-11-head-to-head-preference-design.md.
 
 Served live at /preference_status.html by curation_server.py.
 """

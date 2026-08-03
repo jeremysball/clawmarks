@@ -29,6 +29,15 @@ Selecting a leg remains a `POST /api/active-leg` operation followed by a page re
 user selects `trent_v3_epoch4/freeform1` on `/status.html`, Scan Gallery receives that leg's
 manifest. Selecting an empty `cockpit` leg still presents the existing status explanation.
 
+## Explore Composition
+
+Explore uses the approved active-desk composition from
+`2026-07-16-research-workspace-navigation-design.md` and the depth allocation from
+`2026-07-16-sulfur-proof-design-system.md`: raised workflow keys, Focus and Saved Observations tabs,
+a shallow raised question readout, a full-width wall of mounted evidence images, shallow activity
+detents, and one raised Next Decision plate. The stronger proofing-paper texture remains visible
+through flat workspace areas.
+
 ## Error Handling
 
 The route split does not change selection validation or data-integrity behavior. A missing

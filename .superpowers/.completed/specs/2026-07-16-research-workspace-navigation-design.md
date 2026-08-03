@@ -33,19 +33,48 @@ researcher can return from Explain to Scout or from Learn to Explain without los
 - the active expedition and leg;
 - the active visual question, when a Focus is open;
 - a compact five-stage workflow control;
-- the active Focus's evidence scope, saved observations, next decision, and activity ledger;
+- Focus and Saved Observations tabs;
+- the active Focus's evidence wall, next decision, and activity ledger;
 - direct access to the full tool index.
 
 Explore is an active research desk, not a landing page. It has no oversized welcome headline,
 decorative collage, product pitch, or row of feature cards. The workflow control sits directly below
-the shared header. The current Focus follows as a practical working heading, roughly 28px to 48px,
-with revision, scope, member count, and last edit. One continuous ruled surface gives evidence most
-of the width and a narrower column to the next decision. A dense chronological ledger closes the
-surface.
+the shared header. Focus and Saved Observations form two tabs below the shared workflow explanation.
+The Focus tab presents identity and revision beside a compact research-question readout with scope,
+member count, real-anchor count, and last edit. A full-width evidence wall follows. The lower surface
+pairs a dense chronological activity ledger with a narrower Next Decision column. The Sulfur Proof
+design-system specification defines their approved depth hierarchy.
 
 Without a Focus query, Explore shows a ruled list of open Foci for the explicit expedition and leg,
 plus Create from Map and Create from Coverage actions. It does not silently choose the most recent
 Focus. Resuming one navigates to a URL that names the full scope and Focus ID.
+
+Saved Observations is not another mutable record type. It is a ruled index of the current scope's
+Focus records that shows each Focus label, verbatim observation, status, revision, and last edit.
+Selecting one opens its explicit Focus URL. The tab may include archived Foci but never silently
+changes the active Focus.
+
+The five-image evidence wall uses deterministic stored order: up to four generated members, then
+the first real anchor. If no real anchor exists, it fills the remaining positions with generated
+members up to five. Missing files keep their position and render a labeled missing-evidence mount;
+the UI never substitutes a current nearest neighbor.
+
+The activity ledger is a read-only merge of existing authoritative records: Focus creation and
+current revision timestamps, Guide messages, trials, paid-launch state changes, results, and human
+evaluation. It sorts by timestamp and stable record ID. The initial version does not add a second
+audit-log store or pretend overwritten intermediate Focus edits remain available.
+
+Explore derives the active stage and Next Decision from persisted readiness in this order:
+
+1. no Focus: Orient, with Create from Map and Create from Coverage;
+2. incomplete six-part test contract: Explain, with Edit Focus;
+3. no confirmed, active, or completed trial for the current Focus revision: Act, with Open Cockpit;
+4. a confirmed, launching, or running trial: Act, with Open Trial or Runs;
+5. a completed or failed trial without human evaluation: Learn, with Review Result;
+6. an evaluated latest trial: Learn, with Revise Focus or Archive Focus.
+
+The server returns the readiness facts. Client-side workflow-button exploration may show another
+stage's explanation, but it cannot change the persisted or initially active stage.
 
 ### Workflow control
 
@@ -83,11 +112,25 @@ Solution Map scouts visual neighborhoods. A lasso or selected group can create a
 tags and high-dimensional image neighbors define the durable selection; the 2D projection only
 helps the researcher see and replay it.
 
+Pointer drag draws a labeled polygon and selects generated points inside it. A drag shorter than 6px
+remains the existing single-point inspection. The polygon stores normalized canvas coordinates only
+as `projection_hint`; selected generated tags are authoritative. A synchronized accessible list
+provides checkboxes for adding or removing the same members without a pointer. Create Focus remains
+disabled until at least one valid generated member is selected.
+
 ### Coverage
 
 Coverage scouts empty cells adjacent to populated cells. Creating a frontier Focus records the
 cell's faithfulness and novelty ranges, adjacent member tags, and nearest real-art anchors.
 Coverage describes a frontier as plausible, not promising or superior.
+
+Each frontier cell is a native button mirrored by an accessible table row. Selecting it exposes its
+exact faithfulness and novelty ranges, adjacent member count, and a Create Focus action. Axis edge
+ranges use the declared metric domains (`[-1, 1]` and `[0, 2]`), not display defaults of zero and one.
+Quantile binning may repeat an edge when a leg contains few records or many equal scores. Coverage
+marks a cell actionable only when all four bounds are finite and both ranges are strictly
+increasing. A zero-width cell can remain visible as a density artifact, but it is never a frontier,
+button, or Create Focus source.
 
 ### Archive and Scan
 
