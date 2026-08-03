@@ -146,7 +146,6 @@ def test_nav_groups_destination_labels_match_spec_exactly():
     assert groups["Preference model"] == [
         ("/preference_status.html", "Check taste-model readiness"),
         ("/preference_rank.html", "See predicted favorites"),
-        ("/compare.html", "Choose between two images"),
     ]
 
 
