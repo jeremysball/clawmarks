@@ -1335,6 +1335,74 @@ The approved specification is
 aubergine `#5B3A63` as a restrained cost signal that complements sulfur while remaining distinct
 from selection and error colors. No implementation or generation operation occurred in this step.
 
+### 2026-07-19: 19-persona UX audit finds the headline validity result and a P0 bug list
+
+Ran 19 simulated-persona usability walkthroughs against the live curation app
+(`curation_server.py`), read-only, dispatched via `taskferry` across free and cheap opencode
+models. First batch (12 personas) covered mobile, money-anxious, keyboard-only, ESL, researcher,
+power-user, screen-reader, stakeholder, ADHD, investor, and two adversarial angles. Three of
+those first-batch personas (Priya, Walt, Viktor) ran on text-only models, which can read the DOM
+and metric values but can't actually see the app, so every visual judgment in their reports came
+from metadata, not pixels. A second batch redid those three on a vision-capable free model
+(`opencode/mimo-v2.5-free`) with explicit screenshot instructions, and added four new angles: a
+security audit, a colorblindness audit, a plain-language copy audit, and a Nielsen heuristic
+evaluation. Full write-ups live in `notes/persona_audits/personas/`, indexed with a cross-cutting
+findings table in `notes/persona_audits/personas/README.md`.
+
+**The result that matters for the paper.** Viktor's vision redo is the empirical case that
+`novelty` and `faithfulness`, the two scores the search treats as ground truth, don't track
+perceived art quality. Given real pixels, Viktor's own pick for the single most visually striking
+image in the archive (a chaotic multi-eyed composition with a reaching hand) scored novelty
+0.6002 and faithfulness 0.4206, mid-pack on both. The top-faithfulness image (0.7319) he called
+"competent but boring." A text-only model can't produce this counterexample at all; it can only
+report the winning score, not whether the picture is actually good. This is the concrete evidence
+for a distinction the paper needs to make explicit: these metrics measure real, useful things
+(distance from training distribution, resemblance to real art) but neither one is a quality score,
+and the app's own "Elite"/"Best" labeling currently implies otherwise.
+
+**Bugs found, most important first:**
+
+| Bug | Who found it | Fix |
+|---|---|---|
+| No auth on any endpoint; anyone with the URL can hit billable controls | Sam (security audit), Priya | Add a shared-secret or Tailscale ACL gate |
+| `/api/searchrun/report` leaks the live RunPod dollar balance; `status.html` leaks the real filesystem path and username | Sam, corroborated by Priyanka on the Predicted Preference page | Strip the balance field from the response; stop rendering absolute paths in user-facing HTML |
+| Several billable buttons ("Send draft to queue," "Retrain now," "generate counterfactual") carry no cost warning, unlike "Launch search" and "Generate" which do | Walt, Dana, Jordan, Priya, Priyanka | Apply the existing "Spends money" badge pattern to every billable control |
+| "Elite"/"Best" labels mean highest-novelty-per-cell, not aesthetic quality | Viktor (both rounds), Dr. Vasquez, Rae, Priya | Relabel to "most novel in cell" or similar |
+| Gallery thumbnails are keyboard-unreachable and have no alt text | Dana, Jordan | Make thumbnails focusable buttons; add alt text |
+| "Guide" button does nothing when clicked | Priyanka | Wire up the handler or remove the button |
+| Duplicate "Choose between two images" entry in the nav dropdown | Priyanka | Delete the duplicate `<option>` |
+| Orange/green used as the only signal for type/category (the most common red-green colorblindness collision) | Ines | Add a redundant icon or text label |
+
+No fix has been started yet; this needs a decision on when to work through the list.
+
+**Resolved during this write-up: the popover scare was a false alarm.** Marcus's copy audit
+reported all 14 info popovers stuck forever on "loading expeditions...", which would have meant
+the app's whole jargon-mitigation strategy (the "i" buttons) was silently broken and would have
+cast doubt on every other persona's claim to have read popover content. Checked directly against
+`shared_ui.py`: "loading expeditions..." (line 315) belongs to the separate "switch research
+context" dialog (the expedition/leg picker), not to the info popovers. The actual `.infobtn`
+popovers build their content synchronously from each button's `data-tip` attribute already
+present in the page, no fetch, no loading state to get stuck on. Marcus's read-only markup
+inspection conflated the two features. No fix needed here; the other personas' popover-content
+claims stand.
+
+**Process note.** `opencode/mimo-v2.5-free` repeatedly finished real browsing work but returned
+an empty final message (`step-finish reason: "unknown"`, exit 0, non-null session), distinct from
+a timeout crash. Resuming the same session with an explicit "stop browsing, write the final
+report now" instruction fixed it every time (hit on Viktor, Walt, and Priyanka's redos). Worth
+knowing before trusting an empty completion from this model as "nothing to report."
+
+### 2026-07-19: Second-wave audit (security, structure, reproducibility, blind judgment, mobile)
+
+A second wave of five persona audits ran the same day, filed as GitHub issues #58 through #89
+(7 P0, 14 P1, 11 P2): Nadia (penetration test), Oren (structural/error-state audit), Femi
+(reproducibility audit, findings folded directly into the consolidated issue list rather than a
+standalone report), Grace (blind art-judgment, corroborating Viktor's finding that novelty and
+faithfulness don't track perceived quality), and Diego (a mobile-viewport sweep compiled from
+captured screenshots after the worker crashed four times in a row). Grace's, Nadia's, and Oren's
+full reports, the consolidated issue list, and every supporting screenshot now live under
+`notes/persona_audits/`. No fix has started on any of the 32 filed issues.
+
 ### 2026-07-18: Task 5 regression gate and live accessibility verification
 
 Executed Task 5 of the image-first IA plan. Before the gate, closed two Task 4 review findings with

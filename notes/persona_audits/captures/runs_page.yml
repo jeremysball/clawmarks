@@ -1,0 +1,68 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - link "CLAWMARKS" [ref=e3] [cursor=pointer]:
+      - /url: /?expedition=trent_v3_epoch4&leg=freeform1
+    - generic [ref=e4]: Run or monitor a search
+    - button "trent_v3_epoch4/freeform1" [ref=e5] [cursor=pointer]
+    - button "Guide" [ref=e6] [cursor=pointer]
+    - link "session status" [ref=e7] [cursor=pointer]:
+      - /url: /status.html?expedition=trent_v3_epoch4&leg=freeform1
+    - combobox "jump to another page" [ref=e8]:
+      - option "jump to..."
+      - option "Browse all images"
+      - option "Best images by area"
+      - option "Choose between two images"
+      - option "Build one image trial"
+      - option "Run or monitor a search" [selected]
+      - option "Edit candidate ideas"
+      - option "Explore image neighborhoods"
+      - option "Find gaps in the image space"
+      - option "Find near-duplicate groups"
+      - option "See which prompts are running out"
+      - option "Trace image ancestry"
+      - option "Check taste-model readiness"
+      - option "See predicted favorites"
+      - option "Choose between two images"
+  - heading "Search runs" [level=1] [ref=e9]
+  - paragraph [ref=e10]: Launch an overnight search round from here instead of SSHing in. Every launch backs up the round's out_dir first and refuses to start if that backup can't be verified by file count, checks the RunPod balance floor once up front, and refuses a second launch while one is already running.
+  - generic [ref=e11]: Not running.
+  - generic [ref=e13]:
+    - generic [ref=e14]: Expedition
+    - combobox "Expedition" [ref=e15]:
+      - option "demo"
+      - option "trent_v3_epoch4" [selected]
+      - option "uncanny_frontier"
+    - generic [ref=e16]: Leg
+    - combobox "Leg" [ref=e17]:
+      - option "cockpit"
+      - option "freeform1" [selected]
+    - button "Back up and launch" [ref=e18] [cursor=pointer]
+    - generic [ref=e19]: Spends money
+    - button "Stop" [disabled] [ref=e20]
+  - generic [ref=e21]:
+    - heading "Per-run report" [level=2] [ref=e22]
+    - generic [ref=e23]:
+      - generic [ref=e24]: Generation
+      - generic [ref=e25]: "1"
+    - generic [ref=e26]:
+      - generic [ref=e27]: Plateau count
+      - generic [ref=e28]: "0"
+    - generic [ref=e29]:
+      - generic [ref=e30]: Total images
+      - generic [ref=e31]: "50"
+    - generic [ref=e32]:
+      - generic [ref=e33]: Spend
+      - generic [ref=e34]: started $9.91
+    - generic [ref=e35]: Novelty trajectory
+    - generic [ref=e46]:
+      - generic [ref=e47]: r2_explore
+      - generic [ref=e48]: 50 images, 0% picked
+    - paragraph [ref=e42]:
+      - link "Scan images" [ref=e43] [cursor=pointer]:
+        - /url: /scan.html?expedition=trent_v3_epoch4&leg=freeform1
+      - text: ·
+      - link "Check coverage" [ref=e44] [cursor=pointer]:
+        - /url: /coverage.html?expedition=trent_v3_epoch4&leg=freeform1
+      - text: ·
+      - link "Review novelty decay" [ref=e45] [cursor=pointer]:
+        - /url: /novelty_decay.html?expedition=trent_v3_epoch4&leg=freeform1

@@ -1,0 +1,31 @@
+- generic [active] [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - link "CLAWMARKS" [ref=f1e3] [cursor=pointer]:
+      - /url: /?expedition=trent_v3_epoch4&leg=freeform1
+    - generic [ref=f1e4]: See which prompts are running out
+    - button "trent_v3_epoch4/freeform1" [ref=f1e5] [cursor=pointer]
+    - button "Guide" [ref=f1e6] [cursor=pointer]
+    - link "session status" [ref=f1e7] [cursor=pointer]:
+      - /url: /status.html?expedition=trent_v3_epoch4&leg=freeform1
+    - combobox "jump to another page" [ref=f1e8]:
+      - option "jump to..."
+      - option "Browse all images"
+      - option "Best images by area"
+      - option "Choose between two images"
+      - option "Build one image trial"
+      - option "Run or monitor a search"
+      - option "Edit candidate ideas"
+      - option "Explore image neighborhoods"
+      - option "Find gaps in the image space"
+      - option "Find near-duplicate groups"
+      - option "See which prompts are running out" [selected]
+      - option "Trace image ancestry"
+      - option "Check taste-model readiness"
+      - option "See predicted favorites"
+      - option "Choose between two images"
+  - heading "Novelty decay watchlist" [level=1] [ref=f1e9]
+  - paragraph [ref=f1e10]:
+    - text: DINOv2
+    - button "More information" [ref=f1e11] [cursor=pointer]: i
+    - text: scores every image before this chart groups them. No prompt family in this dataset has appeared in 2+ generations yet, so there's no decay curve to plot (placeholder page). This chart tracks each prompt's mean novelty generation over generation, to flag prompts that have stopped yielding new territory; a single-generation seed run has nothing to compare across.
+  - paragraph [ref=f1e12]: Once a second generation runs against this sweep, reload this page and it will show one sparkline per prompt family that has appeared more than once, sorted worst-trending first.

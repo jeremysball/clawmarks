@@ -1,0 +1,172 @@
+- generic [active] [ref=f4e1]:
+  - banner [ref=f4e2]:
+    - link "CLAWMARKS" [ref=f4e3] [cursor=pointer]:
+      - /url: /?expedition=trent_v3_epoch4&leg=freeform1
+    - generic [ref=f4e4]: Browse all images
+    - button "trent_v3_epoch4/freeform1" [ref=f4e5] [cursor=pointer]
+    - button "Guide" [ref=f4e6] [cursor=pointer]
+    - link "session status" [ref=f4e7] [cursor=pointer]:
+      - /url: /status.html?expedition=trent_v3_epoch4&leg=freeform1
+    - combobox "jump to another page" [ref=f4e8]:
+      - option "jump to..."
+      - option "Browse all images" [selected]
+      - option "Best images by area"
+      - option "Choose between two images"
+      - option "Build one image trial"
+      - option "Run or monitor a search"
+      - option "Edit candidate ideas"
+      - option "Explore image neighborhoods"
+      - option "Find gaps in the image space"
+      - option "Find near-duplicate groups"
+      - option "See which prompts are running out"
+      - option "Trace image ancestry"
+      - option "Check taste-model readiness"
+      - option "See predicted favorites"
+      - option "Choose between two images"
+  - generic [ref=f4e9]:
+    - heading "CLAWMARKS uncanny scan" [level=1] [ref=f4e10]
+    - generic [ref=f4e11]: Browse and curate AI-generated artwork from this LoRA search.
+    - generic [ref=f4e12]:
+      - text: Sort
+      - button "More information about How new or different" [ref=f4e13] [cursor=pointer]: i
+      - combobox [ref=f4e14]:
+        - option "How new or different (high to low)" [selected]
+        - option "Similarity to real art (high to low)"
+        - option "Similarity to real art (low to high)"
+        - option "Generation (newest first)"
+        - option "Generation (oldest first)"
+        - option "Prompt (A to Z)"
+        - option "Prompt (Z to A)"
+    - generic [ref=f4e15]:
+      - text: Type
+      - combobox "Type" [ref=f4e16]:
+        - option "all" [selected]
+        - option "style"
+        - option "conflict"
+    - generic [ref=f4e17]:
+      - text: Category
+      - button "More information about MAP-Elites cell" [ref=f4e18] [cursor=pointer]: i
+      - combobox [ref=f4e19]:
+        - option "all" [selected]
+        - option "grid (fixed sweep)"
+        - option "negtrigger"
+        - option "truncated"
+        - option "allnight exploit"
+        - option "allnight explore"
+        - option "round2 exploit"
+        - option "round2 explore"
+    - generic [ref=f4e20]:
+      - text: Prompt
+      - combobox "Prompt" [ref=f4e21]:
+        - option "all" [selected]
+        - option "conflict_close-up_owl_face,_cross"
+        - option "conflict_dense_all-over_doodle_fi"
+        - option "conflict_loose_doodle_sheet_of_ma"
+        - option "conflict_pencil-sketched_robot_fi"
+        - option "conflict_pure_abstract_brushed-pa"
+        - option "conflict_purple-marker_bird_or_ro"
+        - option "conflict_row_of_tall_ghost-like_s"
+        - option "conflict_two_pale_hands_reaching_"
+        - option "style_close-up_cat_face_portra"
+        - option "style_close-up_fox_head,_three"
+        - option "style_close-up_wolf-cat_face,_"
+        - option "style_close-up_wolf_head,_howl"
+    - generic [ref=f4e22]:
+      - text: Similarity to real art >=
+      - spinbutton "Similarity to real art >=" [ref=f4e23]
+    - generic [ref=f4e24]:
+      - text: Similarity to real art <=
+      - spinbutton "Similarity to real art <= More information about Similarity to real art" [ref=f4e25]
+      - button "More information about Similarity to real art" [ref=f4e26] [cursor=pointer]: i
+    - generic [ref=f4e27]:
+      - text: Search
+      - textbox "Search" [ref=f4e28]:
+        - /placeholder: prompt name...
+    - generic [ref=f4e29]:
+      - checkbox "picked only More information" [ref=f4e30]
+      - text: picked only
+      - button "More information" [ref=f4e31] [cursor=pointer]: i
+    - generic [ref=f4e32]:
+      - checkbox "favorited only More information" [ref=f4e33]
+      - text: favorited only
+      - button "More information" [ref=f4e34] [cursor=pointer]: i
+    - generic [ref=f4e36]: 50 / 50 images | 0 picked | 0 favorited
+  - generic [ref=f4e35]:
+    - generic [ref=f4e37] [cursor=pointer]: conflict_pure_abstract_brushed-pa
+    - generic [ref=f4e40] [cursor=pointer]: style_close-up_cat_face_portra
+    - generic [ref=f4e43] [cursor=pointer]: style_close-up_wolf_head,_howl
+    - generic [ref=f4e46] [cursor=pointer]: conflict_two_pale_hands_reaching_
+    - generic [ref=f4e49] [cursor=pointer]: style_close-up_wolf-cat_face,_
+    - generic [ref=f4e52] [cursor=pointer]: conflict_two_pale_hands_reaching_
+    - generic [ref=f4e55] [cursor=pointer]: style_close-up_cat_face_portra
+    - generic [ref=f4e58] [cursor=pointer]: style_close-up_fox_head,_three
+    - generic [ref=f4e61] [cursor=pointer]: conflict_close-up_owl_face,_cross
+    - generic [ref=f4e64] [cursor=pointer]: conflict_close-up_owl_face,_cross
+    - generic [ref=f4e67] [cursor=pointer]: conflict_pencil-sketched_robot_fi
+    - generic [ref=f4e70] [cursor=pointer]: style_close-up_wolf_head,_howl
+    - generic [ref=f4e73] [cursor=pointer]: conflict_close-up_owl_face,_cross
+    - generic [ref=f4e76] [cursor=pointer]: style_close-up_cat_face_portra
+    - generic [ref=f4e79] [cursor=pointer]: style_close-up_wolf-cat_face,_
+    - generic [ref=f4e82] [cursor=pointer]: conflict_pure_abstract_brushed-pa
+    - generic [ref=f4e85] [cursor=pointer]: conflict_loose_doodle_sheet_of_ma
+    - generic [ref=f4e88] [cursor=pointer]: style_close-up_wolf_head,_howl
+    - generic [ref=f4e91] [cursor=pointer]: conflict_two_pale_hands_reaching_
+    - generic [ref=f4e94] [cursor=pointer]: conflict_purple-marker_bird_or_ro
+    - generic [ref=f4e97] [cursor=pointer]: conflict_two_pale_hands_reaching_
+    - generic [ref=f4e100] [cursor=pointer]: conflict_pencil-sketched_robot_fi
+    - generic [ref=f4e103] [cursor=pointer]: conflict_close-up_owl_face,_cross
+    - generic [ref=f4e106] [cursor=pointer]: conflict_pencil-sketched_robot_fi
+    - generic [ref=f4e109] [cursor=pointer]: conflict_row_of_tall_ghost-like_s
+    - generic [ref=f4e112] [cursor=pointer]: conflict_pure_abstract_brushed-pa
+    - generic [ref=f4e115] [cursor=pointer]: conflict_row_of_tall_ghost-like_s
+    - generic [ref=f4e118] [cursor=pointer]: conflict_pencil-sketched_robot_fi
+    - generic [ref=f4e121] [cursor=pointer]: style_close-up_wolf_head,_howl
+    - generic [ref=f4e124] [cursor=pointer]: conflict_two_pale_hands_reaching_
+    - generic [ref=f4e127] [cursor=pointer]: style_close-up_wolf_head,_howl
+    - generic [ref=f4e130] [cursor=pointer]: conflict_dense_all-over_doodle_fi
+    - generic [ref=f4e133] [cursor=pointer]: conflict_two_pale_hands_reaching_
+    - generic [ref=f4e136] [cursor=pointer]: conflict_loose_doodle_sheet_of_ma
+    - generic [ref=f4e139] [cursor=pointer]: conflict_close-up_owl_face,_cross
+    - generic [ref=f4e142] [cursor=pointer]: conflict_pure_abstract_brushed-pa
+    - generic [ref=f4e145] [cursor=pointer]: conflict_pencil-sketched_robot_fi
+    - generic [ref=f4e148] [cursor=pointer]: conflict_loose_doodle_sheet_of_ma
+    - generic [ref=f4e151] [cursor=pointer]: conflict_dense_all-over_doodle_fi
+    - generic [ref=f4e154] [cursor=pointer]: style_close-up_cat_face_portra
+    - generic [ref=f4e157] [cursor=pointer]: conflict_loose_doodle_sheet_of_ma
+    - generic [ref=f4e160] [cursor=pointer]: conflict_loose_doodle_sheet_of_ma
+    - generic [ref=f4e163] [cursor=pointer]: style_close-up_cat_face_portra
+    - generic [ref=f4e166] [cursor=pointer]: conflict_close-up_owl_face,_cross
+    - generic [ref=f4e169] [cursor=pointer]: conflict_pencil-sketched_robot_fi
+    - generic [ref=f4e172] [cursor=pointer]: conflict_pencil-sketched_robot_fi
+    - generic [ref=f4e175] [cursor=pointer]: conflict_loose_doodle_sheet_of_ma
+    - generic [ref=f4e178] [cursor=pointer]: conflict_two_pale_hands_reaching_
+    - generic [ref=f4e181] [cursor=pointer]: conflict_row_of_tall_ghost-like_s
+    - generic [ref=f4e184] [cursor=pointer]: conflict_dense_all-over_doodle_fi
+  - generic [ref=f4e187]:
+    - generic [ref=f4e188] [cursor=pointer]: ×
+    - generic [ref=f4e189] [cursor=pointer]: ‹
+    - generic [ref=f4e190] [cursor=pointer]: ›
+    - generic [ref=f4e193]: gen1_explore_32_seed947694 | gen 1 | r2_explore | type=conflict | prompt=conflict_pure_abstract_brushed-pa | strength=0.514 cfg=9.59 | faithfulness=0.2738 novelty=0.7243
+    - generic [ref=f4e194]:
+      - button "♡ favorite" [ref=f4e195] [cursor=pointer]
+      - button "More information about favoriting" [ref=f4e196] [cursor=pointer]: i
+      - button "↻ generate counterfactual" [ref=f4e197] [cursor=pointer]
+      - button "More information about counterfactual generation" [ref=f4e198] [cursor=pointer]: i
+    - generic [ref=f4e199]: similar images (by DINOv2 embedding)
+    - generic [ref=f4e200]:
+      - img "faithfulness=0.4206 novelty=0.6002 conflict_two_pale_hands_reaching_" [ref=f4e201] [cursor=pointer]
+      - img "faithfulness=0.5493 novelty=0.4497 conflict_pure_abstract_brushed-pa" [ref=f4e202] [cursor=pointer]
+      - img "faithfulness=0.5411 novelty=0.5274 conflict_pure_abstract_brushed-pa" [ref=f4e203] [cursor=pointer]
+      - img "faithfulness=0.5154 novelty=0.5002 conflict_two_pale_hands_reaching_" [ref=f4e204] [cursor=pointer]
+      - img "faithfulness=0.5179 novelty=0.4546 conflict_row_of_tall_ghost-like_s" [ref=f4e205] [cursor=pointer]
+      - img "faithfulness=0.5642 novelty=0.4152 conflict_dense_all-over_doodle_fi" [ref=f4e206] [cursor=pointer]
+      - img "faithfulness=0.4762 novelty=0.4798 conflict_purple-marker_bird_or_ro" [ref=f4e207] [cursor=pointer]
+      - img "faithfulness=0.532 novelty=0.3687 style_close-up_cat_face_portra" [ref=f4e208] [cursor=pointer]
+      - img "faithfulness=0.5198 novelty=0.474 conflict_pencil-sketched_robot_fi" [ref=f4e209] [cursor=pointer]
+      - img "faithfulness=0.5873 novelty=0.3786 style_close-up_cat_face_portra" [ref=f4e210] [cursor=pointer]
+      - img "faithfulness=0.6678 novelty=0.4257 style_close-up_wolf_head,_howl" [ref=f4e211] [cursor=pointer]
+      - img "faithfulness=0.5973 novelty=0.412 conflict_loose_doodle_sheet_of_ma" [ref=f4e212] [cursor=pointer]
+      - img "faithfulness=0.5476 novelty=0.3999 conflict_loose_doodle_sheet_of_ma" [ref=f4e213] [cursor=pointer]
+      - img "faithfulness=0.7319 novelty=0.2471 conflict_dense_all-over_doodle_fi" [ref=f4e214] [cursor=pointer]
+      - img "faithfulness=0.5414 novelty=0.3944 conflict_dense_all-over_doodle_fi" [ref=f4e215] [cursor=pointer]
+      - img "faithfulness=0.4706 novelty=0.5572 conflict_pencil-sketched_robot_fi" [ref=f4e216] [cursor=pointer]

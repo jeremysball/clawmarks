@@ -53,6 +53,9 @@ tests/fixtures/sample_sweep/notes/uncanny_sweep/user_ratings.json
 # curation_server.py opens this at import time; without a real file on disk, every fresh
 # checkout (CI, Docker build) fails to import the module at all.
 !src/clawmarks/static/favicon.png
+# Persona-audit evidence screenshots, not generation output; small enough to track directly.
+!notes/persona_audits/screenshots/*.png
+!notes/persona_audits/screenshots/*.jpeg
 
 # python
 __pycache__/
