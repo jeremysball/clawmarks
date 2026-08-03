@@ -9,7 +9,10 @@ RUN pip install --no-cache-dir uv==0.9.7
 # /api/seeds/generate). Headless auth comes from OPENAI_API_KEY at runtime (docker-compose.yml),
 # not the interactive `opencode auth login` OAuth flow used on the host, so no credential file
 # gets baked into or mounted into this image.
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* && \
+# iproute2 provides `ip`, which tailscale_ip() (curation_server.py) shells out to at startup to
+# find the tailscale0 interface. Without it, `ip` is missing, tailscale_ip() silently falls back
+# to "0.0.0.0", and the server ends up bound to every interface instead of the tailnet only.
+RUN apt-get update && apt-get install -y --no-install-recommends curl iproute2 && rm -rf /var/lib/apt/lists/* && \
     curl -fsSL https://opencode.ai/install | bash && \
     mv /root/.opencode/bin/opencode /usr/local/bin/opencode
 
@@ -25,7 +28,9 @@ RUN uv sync --frozen --no-dev
 
 EXPOSE 8420
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+# --timeout=8s: healthcheck() calls tailscale_ip() (subprocess timeout=5s) then does a 3s HTTP
+# request, so the worst case (a slow `ip` invocation) needs more than the previous 5s budget.
+HEALTHCHECK --interval=30s --timeout=8s --start-period=30s --retries=3 \
   CMD ["uv", "run", "python3", "-m", "clawmarks.cli", "healthcheck"]
 
 CMD ["uv", "run", "python3", "-m", "clawmarks.curation_server", "8420"]

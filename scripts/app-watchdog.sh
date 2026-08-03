@@ -39,24 +39,35 @@ echo "app-watchdog: watching for tailscale restarts and $APP_SERVICE_NAME unheal
 # exactly this case. `event=restart` alone misses that path entirely, which is how this watchdog
 # failed to fire the one time it mattered (see hearth's fix/tailscale-netns-watchdog and
 # fix/netns-watchdog-catch-policy-restarts).
-docker events --filter 'event=start' \
-  --filter "label=com.docker.compose.service=tailscale" \
-  --filter "label=com.docker.compose.project=$PROJECT" \
-  --format '{{.Actor.Attributes.name}}' |
-while read -r _; do
-  restart_app "tailscale restarted"
+# The `docker events | while read` pipeline restarts on its own exit (daemon hiccup, transient
+# filter rejection) instead of just dying, so a momentary `docker events` failure doesn't leave
+# this watcher permanently blind under `set -e` in dash.
+while true; do
+  docker events --filter 'event=start' \
+    --filter "label=com.docker.compose.service=tailscale" \
+    --filter "label=com.docker.compose.project=$PROJECT" \
+    --format '{{.Actor.Attributes.name}}' |
+  while read -r _; do
+    restart_app "tailscale restarted"
+  done
+  echo "app-watchdog: tailscale event stream ended, restarting watcher"
+  sleep 1
 done &
 
 # app's own HEALTHCHECK can go unhealthy without the process ever exiting — a stuck accept loop
 # still holds the port open, so plain `restart: unless-stopped` never fires. This is the gap that
 # let a bad deploy sit unreachable with nothing auto-recovering it (see hearth's
 # fix/app-healthcheck-and-watchdog-restart).
-docker events --filter 'event=health_status: unhealthy' \
-  --filter "label=com.docker.compose.service=$APP_SERVICE_NAME" \
-  --filter "label=com.docker.compose.project=$PROJECT" \
-  --format '{{.Actor.Attributes.name}}' |
-while read -r _; do
-  restart_app "$APP_SERVICE_NAME reported unhealthy"
+while true; do
+  docker events --filter 'event=health_status: unhealthy' \
+    --filter "label=com.docker.compose.service=$APP_SERVICE_NAME" \
+    --filter "label=com.docker.compose.project=$PROJECT" \
+    --format '{{.Actor.Attributes.name}}' |
+  while read -r _; do
+    restart_app "$APP_SERVICE_NAME reported unhealthy"
+  done
+  echo "app-watchdog: health event stream ended, restarting watcher"
+  sleep 1
 done &
 
 wait
