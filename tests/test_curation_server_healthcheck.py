@@ -21,6 +21,21 @@ def test_healthz_route_returns_ok(monkeypatch, tmp_path):
         thread.join(timeout=2)
 
 
+def test_server_header_does_not_leak_python_version(monkeypatch):
+    server = HTTPServer(("127.0.0.1", 0), cs.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        port = server.server_address[1]
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz") as resp:
+            server_header = resp.headers["Server"]
+            assert server_header == "clawmarks"
+            assert "Python" not in server_header
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+
 def test_healthcheck_succeeds_against_a_real_listener(monkeypatch):
     server = HTTPServer(("127.0.0.1", 0), cs.Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

@@ -50,8 +50,7 @@ NAV_GROUPS = [
                                ("/novelty_decay.html", "See which prompts are running out"),
                                ("/lineage.html", "Trace image ancestry")]),
     ("Preference model", [("/preference_status.html", "Check taste-model readiness"),
-                          ("/preference_rank.html", "See predicted favorites"),
-                          ("/compare.html", "Choose between two images")]),
+                          ("/preference_rank.html", "See predicted favorites")]),
 ]
 NAV_OPTIONS = [option for _group, options in NAV_GROUPS for option in options]
 
@@ -290,7 +289,6 @@ def nav_bar_html(current, active_expedition=None, active_leg=None, running=None,
         )
     guide_button = (
         '<button id="guideOpen" class="guide-button" type="button" '
-        'aria-haspopup="dialog" aria-controls="guidePanel" '
         'title="open the OpenCode Guide for this page">Guide</button>'
     )
     session_link = (

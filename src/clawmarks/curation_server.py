@@ -1043,6 +1043,11 @@ _ROUTES = [
 class Handler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"  # keep-alive, so 3392 grid thumbnails don't reopen a
                                      # connection per image
+    server_version = "clawmarks"
+    sys_version = ""
+
+    def version_string(self):
+        return self.server_version
 
     def __init__(self, *args, **kwargs):
         active_dir = _active_out_dir()
