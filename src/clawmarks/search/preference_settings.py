@@ -2,7 +2,7 @@
 Single persisted setting shared by archive.html's rendering and `clawmarks run allnight`'s
 exploit-pool source, so flipping predicted-preference on or off happens in one place instead
 of two independent controls (a query param and a CLI flag). See
-docs/superpowers/specs/2026-07-10-preference-toggle-design.md.
+.superpowers/.completed/specs/2026-07-10-preference-toggle-design.md.
 
 Takes an explicit out_dir (the active leg's directory) rather than a fixed module constant,
 since there is no longer one process-wide sweep directory.

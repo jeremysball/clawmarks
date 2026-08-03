@@ -1,0 +1,120 @@
+# Review package: a238381..HEAD
+
+## Commits
+b39eb07 feat(clawmarks): add stratified rating sampler
+
+## Files changed
+ src/clawmarks/search/rating_sampler.py | 44 ++++++++++++++++++++++++++++
+ tests/test_rating_sampler.py           | 53 ++++++++++++++++++++++++++++++++++
+ 2 files changed, 97 insertions(+)
+
+## Diff
+diff --git a/src/clawmarks/search/rating_sampler.py b/src/clawmarks/search/rating_sampler.py
+new file mode 100644
+index 0000000..fa9a93f
+--- /dev/null
++++ b/src/clawmarks/search/rating_sampler.py
+@@ -0,0 +1,44 @@
++"""
++Stratified sampler for the ratings UI (rate.html / GET /api/rate/next): picks an unreviewed
++image to show next, spread across the faithfulness x novelty grid build/elite_archive.py
++already uses, so an early rating session doesn't over-sample whichever region happens to
++dominate the pool. See docs/superpowers/specs/2026-07-09-preference-classifier-design.md,
++Component 2.
++"""
++import random
++
++from clawmarks.search.scoring import bin_edges, bin_of
++
++N_BINS = 4  # matches build/elite_archive.py's grid
++
++
++def bin_manifest(manifest):
++    faith_vals = sorted(m["centroid_sim"] for m in manifest)
++    novelty_vals = sorted(m["novelty"] for m in manifest)
++    faith_edges = bin_edges(faith_vals, N_BINS)
++    novelty_edges = bin_edges(novelty_vals, N_BINS)
++    grid = {}
++    for m in manifest:
++        fb = bin_of(m["centroid_sim"], faith_edges)
++        nb = bin_of(m["novelty"], novelty_edges)
++        grid.setdefault((fb, nb), []).append(m)
++    return grid
++
++
++def eligible_grid(manifest, reviewed_tags):
++    grid = bin_manifest(manifest)
++    return {key: [m for m in items if m["tag"] not in reviewed_tags]
++            for key, items in grid.items()}
++
++
++def pick_next(manifest, reviewed_tags, rng=random):
++    """Returns a random manifest item from a randomly chosen non-empty bin, or None if every
++    image is already reviewed. Choosing the bin uniformly at random (not weighted by how many
++    eligible images remain in it) is what makes this stratified rather than plain random: a bin
++    with 5 eligible images is exactly as likely to be sampled from as a bin with 500."""
++    grid = eligible_grid(manifest, reviewed_tags)
++    nonempty = [items for items in grid.values() if items]
++    if not nonempty:
++        return None
++    bin_items = rng.choice(nonempty)
++    return rng.choice(bin_items)
+diff --git a/tests/test_rating_sampler.py b/tests/test_rating_sampler.py
+new file mode 100644
+index 0000000..470f986
+--- /dev/null
++++ b/tests/test_rating_sampler.py
+@@ -0,0 +1,53 @@
++# tests/test_rating_sampler.py
++import random
++
++from clawmarks.search import rating_sampler
++
++
++def _manifest(n):
++    return [{"tag": f"t{i}", "centroid_sim": i / n, "novelty": 1 - i / n} for i in range(n)]
++
++
++def test_bin_manifest_splits_into_n_bins_by_bin_count():
++    manifest = _manifest(16)
++    grid = rating_sampler.bin_manifest(manifest)
++    assert len(grid) <= rating_sampler.N_BINS * rating_sampler.N_BINS
++    assert sum(len(v) for v in grid.values()) == 16
++
++
++def test_eligible_grid_excludes_reviewed_tags():
++    manifest = _manifest(8)
++    reviewed = {"t0", "t1", "t2"}
++    grid = rating_sampler.eligible_grid(manifest, reviewed)
++    all_tags = {m["tag"] for items in grid.values() for m in items}
++    assert reviewed.isdisjoint(all_tags)
++    assert len(all_tags) == 5
++
++
++def test_pick_next_returns_none_when_everything_reviewed():
++    manifest = _manifest(4)
++    reviewed = {m["tag"] for m in manifest}
++    assert rating_sampler.pick_next(manifest, reviewed) is None
++
++
++def test_pick_next_only_returns_eligible_items():
++    manifest = _manifest(20)
++    reviewed = {f"t{i}" for i in range(15)}
++    rng = random.Random(0)
++    for _ in range(30):
++        item = rating_sampler.pick_next(manifest, reviewed, rng=rng)
++        assert item is not None
++        assert item["tag"] not in reviewed
++
++
++def test_pick_next_can_return_from_a_sparsely_populated_bin():
++    # one bin has a single eligible item, another has many; over enough draws the sparse
++    # bin's item should still turn up, proving bins are chosen uniformly, not by size.
++    manifest = _manifest(100)
++    reviewed = {m["tag"] for m in manifest[1:50]}  # leaves t0 alone in its low bin
++    rng = random.Random(1)
++    seen = set()
++    for _ in range(200):
++        item = rating_sampler.pick_next(manifest, reviewed, rng=rng)
++        seen.add(item["tag"])
++    assert "t0" in seen

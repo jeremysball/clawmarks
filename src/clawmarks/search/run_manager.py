@@ -1,5 +1,5 @@
 """Launch, monitor, and stop an overnight search run (search/driver.py) from the curation
-server UI, with the safety rails from docs/superpowers/specs/2026-07-12-overnight-search-launch-design.md:
+server UI, with the safety rails from .superpowers/.completed/specs/2026-07-12-overnight-search-launch-design.md:
 backup+verify before every launch (fail closed), a balance-floor check, a one-run-at-a-time
 lock file, a detached subprocess, and SIGTERM-then-SIGKILL stop."""
 import json
