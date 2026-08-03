@@ -1,4 +1,5 @@
 import json
+import socket
 import threading
 from http.server import HTTPServer
 import urllib.request
@@ -27,6 +28,9 @@ def test_healthcheck_succeeds_against_a_real_listener(monkeypatch):
     try:
         port = server.server_address[1]
         monkeypatch.setenv("CLAWMARKS_HOST", "127.0.0.1")
+        # tailscale_ip() must not be consulted when CLAWMARKS_HOST is set: point it at an
+        # unreachable address so the test only passes if the env var actually wins.
+        monkeypatch.setattr(cs, "tailscale_ip", lambda: "192.0.2.1")
         monkeypatch.setattr(cs, "DEFAULT_PORT", port)
         assert cs.healthcheck() == 0
     finally:
@@ -35,6 +39,13 @@ def test_healthcheck_succeeds_against_a_real_listener(monkeypatch):
 
 
 def test_healthcheck_fails_with_nothing_listening(monkeypatch):
+    # Bind to a real port, then close it: guaranteed-free at the moment of capture, unlike a
+    # hardcoded low port that may or may not have something else listening on it.
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+    probe.close()
+
     monkeypatch.setenv("CLAWMARKS_HOST", "127.0.0.1")
-    monkeypatch.setattr(cs, "DEFAULT_PORT", 1)  # port 1 requires root; nothing will be listening
+    monkeypatch.setattr(cs, "DEFAULT_PORT", port)
     assert cs.healthcheck() == 1
