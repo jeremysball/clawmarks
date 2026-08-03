@@ -10,11 +10,14 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
-    restart: unless-stopped
+    restart: always
 
   app:
     image: ghcr.io/jeremysball/clawmarks-lora:latest
     pull_policy: always
+    # Share tailscale's network namespace. This join only happens at app's own
+    # startup, so if tailscale restarts on its own, app is orphaned in the old
+    # namespace until it too restarts — see the app-watchdog service below.
     network_mode: "service:tailscale"
     environment:
       - CLAWMARKS_STATE_DIR=/app/state/clawmarks
@@ -50,6 +53,17 @@ services:
       - WATCHTOWER_POLL_INTERVAL=60
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_SCOPE=clawmarks
+    restart: unless-stopped
+
+  app-watchdog:
+    image: docker:cli
+    environment:
+      - PROJECT_NAME=${COMPOSE_PROJECT_NAME:-clawmarks}
+      - APP_SERVICE_NAME=app
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./scripts/app-watchdog.sh:/app-watchdog.sh:ro
+    entrypoint: ["/bin/sh", "/app-watchdog.sh"]
     restart: unless-stopped
 
 volumes:

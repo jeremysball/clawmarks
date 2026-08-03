@@ -25,4 +25,7 @@ RUN uv sync --frozen --no-dev
 
 EXPOSE 8420
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD ["uv", "run", "python3", "-m", "clawmarks.cli", "healthcheck"]
+
 CMD ["uv", "run", "python3", "-m", "clawmarks.curation_server", "8420"]
