@@ -2,7 +2,7 @@
 Stratified sampler for the ratings UI (rate.html / GET /api/rate/next): picks an unreviewed
 image to show next, spread across the faithfulness x novelty grid build/elite_archive.py
 already uses, so an early rating session doesn't over-sample whichever region happens to
-dominate the pool. See docs/superpowers/specs/2026-07-09-preference-classifier-design.md,
+dominate the pool. See .superpowers/.completed/specs/2026-07-09-preference-classifier-design.md,
 Component 2.
 """
 import random

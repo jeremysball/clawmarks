@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLAWMARKS idea workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #e9e3d6;
+    --panel: #ddd6c5;
+    --panel-2: #d2cab6;
+    --rule: #c0b8a4;
+    --rule-bright: #a89e88;
+    --ink: #1f1c18;
+    --ink-dim: #5e574c;
+    --ink-faint: #8e8778;
+    --accent: #2a4d6e;
+    --accent-light: #3d6b94;
+    --notable: #8b6914;
+    --positive: #4a6e2e;
+    --negative: #8e3022;
+    --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, ui-serif, serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* ---- header ---- */
+  .masthead {
+    border-bottom: 2px solid var(--ink);
+    padding: 18px 28px 14px;
+  }
+  .masthead .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 3px;
+  }
+  .masthead h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .masthead .sub {
+    font-size: 13px;
+    color: var(--ink-dim);
+    margin-top: 2px;
+    max-width: 580px;
+  }
+  .masthead .controls {
+    float: right;
+    display: flex;
+    gap: 16px;
+    align-items: baseline;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .masthead .controls a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid var(--rule-bright);
+  }
+  .masthead .controls a:hover { border-bottom-color: var(--accent); }
+
+  /* ---- main layout ---- */
+  .workbench {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 0;
+    max-width: 1200px;
+    margin: 0;
+  }
+  .ledger { padding: 0 28px; border-right: 1px solid var(--rule); }
+  .insights-rail { padding: 20px 24px; background: var(--panel); }
+
+  /* ---- proposal entry (the signature element) ---- */
+  .entry {
+    padding: 20px 0 24px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .entry:last-child { border-bottom: none; }
+  .entry-head {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.03em;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .entry-head .stamp { color: var(--ink-dim); }
+  .state {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 1px 5px;
+    border: 1px solid currentColor;
+  }
+  .state.drafted { color: var(--ink-dim); }
+  .state.accepted { color: var(--positive); border-color: var(--positive); }
+  .state.shelved { color: var(--ink-faint); }
+  .horizon {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+  }
+  .horizon.speculative { color: var(--notable); }
+  .horizon.requires { color: var(--ink-dim); }
+  .entry-direction {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+  .entry-why {
+    font-style: italic;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ink-dim);
+    margin-bottom: 10px;
+    padding-left: 14px;
+    border-left: 2px solid var(--accent);
+  }
+  .entry-why b {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .entry-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-faint);
+    margin-bottom: 4px;
+  }
+  .evidence-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .evidence-row .thumb {
+    width: 36px;
+    height: 36px;
+    background: var(--panel-2);
+    border: 1px solid var(--rule-bright);
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .evidence-row .evidence-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    line-height: 1.4;
+  }
+  .evidence-row .evidence-text a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--rule-bright);
+  }
+  .test-design {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    padding: 6px 10px;
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+  .test-design .cost { color: var(--ink); font-weight: 500; }
+  .entry-actions {
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+  }
+  .entry-actions button {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    color: var(--ink-dim);
+    text-decoration: underline;
+    text-decoration-color: var(--rule-bright);
+    text-underline-offset: 2px;
+  }
+  .entry-actions button:hover { color: var(--accent); text-decoration-color: var(--accent); }
+  .entry-actions button.primary { color: var(--positive); font-weight: 500; }
+  .entry-actions .meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-faint);
+    margin-left: auto;
+  }
+  .entry-children {
+    margin-top: 10px;
+    padding-left: 20px;
+    border-left: 1px solid var(--rule);
+  }
+  .blocker {
+    font-size: 12px;
+    color: var(--ink-faint);
+    font-style: italic;
+    margin-bottom: 6px;
+  }
+
+  /* ---- insights rail ---- */
+  .insights-rail h3 {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-dim);
+    margin-bottom: 14px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .insight {
+    padding: 0 0 14px 10px;
+    border-left: 2px solid var(--rule);
+    margin-bottom: 14px;
+  }
+  .insight:last-child { margin-bottom: 0; }
+  .insight p {
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--ink-dim);
+  }
+  .insight .caveat {
+    display: block;
+    font-size: 11px;
+    font-style: italic;
+    color: var(--ink-faint);
+    margin-top: 3px;
+  }
+  .insight .tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--notable);
+    margin-bottom: 3px;
+    display: block;
+  }
+  .filters {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+  .filters .filter-row {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    padding: 3px 0;
+    cursor: pointer;
+  }
+  .filters .filter-row:hover { color: var(--accent); }
+  .filters .filter-row .count { color: var(--ink-faint); }
+
+  /* ---- run monitor strip ---- */
+  .run-strip {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--rule);
+    padding: 10px 28px;
+    background: var(--panel);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-dim);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .run-strip .dot {
+    width: 7px; height: 7px;
+    background: var(--positive);
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .run-strip .pause {
+    margin-left: auto;
+    color: var(--negative);
+    text-decoration: underline;
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  /* ---- mobile ---- */
+  @media (max-width: 700px) {
+    .workbench { grid-template-columns: 1fr; }
+    .insights-rail { border-top: 1px solid var(--rule); }
+    .ledger { padding: 0 16px; border-right: none; }
+    .masthead { padding: 14px 16px 10px; }
+    .masthead .controls { float: none; margin-top: 8px; }
+    .masthead h1 { font-size: 18px; }
+    .entry-direction { font-size: 15px; }
+    .run-strip { padding: 8px 16px; flex-wrap: wrap; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="controls">
+    <a href="#">scan</a>
+    <a href="#">coverage</a>
+    <a href="#">lineage</a>
+    <a href="#">rate</a>
+  </deep>
+  </div>
+  <div class="eyebrow">CLAWMARKS &middot; idea workbench</div>
+  <h1>Research directions</h1>
+  <p class="sub">Proposed directions from the evidence digest. Each entry links to the images, voids, and trends that inspired it. Accept to queue a run, shelve to set aside.</p>
+</header>
+
+<div class="workbench">
+<div class="ledger">
+
+  <!-- Entry 1: drafted, runnable -->
+  <div class="entry">
+    <div class="entry-head">
+      <span class="stamp">2026-07-10 14:32</span>
+      <span class="state drafted">drafted</span>
+      <span class="horizon">runnable</span>
+    </div>
+    <div class="entry-direction">Void 3,5 liminal low-CFG push</div>
+    <div class="entry-why"><b>Why interesting:</b> The low-faith high-novelty quadrant is the only unexplored region adjacent to two dense clusters. Round 2 never went below CFG 4.0. The style grammar might survive lower guidance than expected, opening territory the exploit mutator cannot reach from current seeds.</div>
+    <div class="entry-label">Inspired by</div>
+    <div class="evidence-row">
+      <span class="thumb"></span><span class="thumb"></span><span class="thumb"></span>
+      <span class="evidence-text">
+        <a href="#">void cell 3,5</a> &middot;
+        <a href="#">novelty: style_owl declining</a> &middot;
+        <a href="#">chain_4 dead end</a>
+      </span>
+    </div>
+    <div class="entry-label">What you would do</div>
+    <div class="test-design">cfg [2.0, 2.5, 3.0, 3.5] &times; 4 seeds &times; liminal prompt = 16 jobs &nbsp; <span class="cost">$0.40 &middot; 8 min</span></div>
+    <div class="entry-actions">
+      <button class="primary">accept</button>
+      <button>shelve</button>
+      <button>edit</button>
+      <span class="meta">digest v12 &middot; 2026-07-10T14:30Z</span>
+    </div>
+  </div>
+
+  <!-- Entry 2: drafted, speculative -->
+  <div class="entry">
+    <div class="entry-head">
+      <span class="stamp">2026-07-10 14:28</span>
+      <span class="state drafted">drafted</span>
+      <span class="horizon speculative">speculative</span>
+    </div>
+    <div class="entry-direction">Video frame generalization</div>
+    <div class="entry-why"><b>Why interesting:</b> If the style grammar survives motion, the frontier extends past static portraits entirely. No LoRA has been tested for temporal coherence in this style family. The probe report already showed the style absorbing unfamiliar subjects; motion is the next axis.</div>
+    <div class="entry-label">Inspired by</div>
+    <div class="evidence-row">
+      <span class="thumb"></span>
+      <span class="evidence-text">
+        <a href="#">probe report: liminal figure</a> &middot;
+        <a href="#">reach probe: cyborg wiring-skull</a>
+      </span>
+    </div>
+    <div class="entry-label">Blocker</div>
+    <p class="blocker">No video pipeline in the ComfyUI workflow. No execution path yet.</p>
+    <div class="entry-actions">
+      <button>shelve</button>
+      <button>edit</button>
+    </div>
+  </div>
+
+  <!-- Entry 3: accepted, runnable, with children -->
+  <div class="entry">
+    <div class="entry-head">
+      <span class="stamp">2026-07-10 14:25</span>
+      <span class="state accepted">accepted</span>
+      <span class="horizon">runnable</span>
+    </div>
+    <div class="entry-direction">Strength overdrive 1.6x bracket</div>
+    <div class="entry-why"><b>Why interesting:</b> Round 1 capped strength at 2.0x but never bracketed 1.4 to 1.8. Overdrive past 1.4x extrapolates past the learned style rather than reproducing it. Three of the highest-novelty outliers in the 3392-image population sit at strength 1.5 to 1.7, but they were explore jobs, not a systematic bracket.</div>
+    <div class="entry-label">Inspired by</div>
+    <div class="evidence-row">
+      <span class="thumb"></span><span class="thumb"></span>
+      <span class="evidence-text">
+        <a href="#">strength sweep probe</a> &middot;
+        <a href="#">3 high-novelty outliers (gen 26, 34, 45)</a>
+      </span>
+    </div>
+    <div class="entry-label">What you would do</div>
+    <div class="test-design">strength [1.4, 1.6, 1.8] &times; 5 subjects &times; 2 seeds = 30 jobs &nbsp; <span class="cost">$0.75 &middot; 15 min</span></div>
+    <div class="entry-actions">
+      <span class="meta">accepted 14:26 &middot; digest v12</span>
+    </div>
+    <div class="entry-children">
+      <div class="entry" style="border-bottom:none; padding:12px 0 0;">
+        <div class="entry-head">
+          <span class="stamp">2026-07-10 14:27</span>
+          <span class="state drafted">drafted</span>
+          <span class="horizon">runnable</span>
+        </div>
+        <div class="entry-direction" style="font-size:15px">Variant: paper-texture bracket at 1.6x only</div>
+        <div class="entry-why" style="font-size:13px"><b>Why interesting:</b> Isolates whether the texture shift or the strength drive is doing the work.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entry 4: shelved -->
+  <div class="entry">
+    <div class="entry-head">
+      <span class="stamp">2026-07-10 14:20</span>
+      <span class="state shelved">shelved</span>
+      <span class="horizon requires">requires tool work</span>
+    </div>
+    <div class="entry-direction" style="color:var(--ink-dim)">Base model swap (Illustrious to Pony)</div>
+    <div class="entry-why" style="border-left-color:var(--rule)"><b>Why interesting:</b> Tests whether the style is checkpoint-specific or transfers across SDXL bases. If it transfers, the style grammar lives in the LoRA, not the base. If it does not, the base checkpoint is doing real work the whitepaper needs to acknowledge.</div>
+    <div class="entry-label">Blocker</div>
+    <p class="blocker">Pony Diffusion not downloaded to the network volume. Needs a second model slot in the ComfyUI workflow.</p>
+  </div>
+
+</div>
+
+<!-- Insights rail -->
+<aside class="insights-rail">
+  <h3>Insights</h3>
+
+  <div class="insight">
+    <span class="tag">pattern</span>
+    <p>Explore images get picked 12x more often than exploit images proportionally (2.4% vs 0.2% pick rate).</p>
+    <span class="caveat">n=39 human picks, round 1 only. Round 2 unreviewed.</span>
+  </div>
+
+  <div class="insight">
+    <span class="tag">plateau</span>
+    <p>Novelty held flat at 0.840 for 23 generations straight despite both rungs of the self-improvement ladder firing.</p>
+    <span class="caveat">Could be a real ceiling for this style or an artifact of the exploit-heavy search bias.</span>
+  </div>
+
+  <div class="insight">
+    <span class="tag">preference</span>
+    <p>Yes-rated images skew toward higher faithfulness (0.487 vs 0.324 mean). The style reads as "right" when it stays close to the training set.</p>
+    <span class="caveat">Small sample. Preference model untrained below 50 labels.</span>
+  </div>
+
+  <div class="insight">
+    <span class="tag">mode collapse</span>
+    <p>Generations anchor to 6 of 31 real training images. The search covers a sliver of the style's range, not the whole thing.</p>
+    <span class="caveat">Based on nearest-real-image similarity. Could reflect prompt bias, not model bias.</span>
+  </div>
+
+  <div class="filters">
+    <h3>Filter</h3>
+    <div class="filter-row"><span>drafted</span><span class="count">3</span></div>
+    <div class="filter-row"><span>accepted</span><span class="count">2</span></div>
+    <div class="filter-row"><span>shelved</span><span class="count">2</span></div>
+    <div class="filter-row"><span>speculative</span><span class="count">1</span></div>
+  </div>
+</aside>
+
+<!-- Run monitor -->
+<div class="run-strip">
+  <span class="dot"></span>
+  <span>strength 1.6x bracket</span>
+  <span>&middot; gen 12/30</span>
+  <span>&middot; $0.31 spent</span>
+  <span>&middot; ETA 4 min</span>
+  <span>&middot; 0 failures</span>
+  <button class="pause">pause</button>
+</div>
+
+</div>
+
+</body>
+</html>

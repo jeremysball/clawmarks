@@ -1,0 +1,235 @@
+# Review package: 0a1cd76..HEAD
+
+## Commits
+e228bc3 feat(clawmarks): add DINOv2 embedding cache
+
+## Files changed
+ src/clawmarks/search/embed_cache.py | 122 ++++++++++++++++++++++++++++++++++++
+ tests/test_embed_cache.py           |  90 ++++++++++++++++++++++++++
+ 2 files changed, 212 insertions(+)
+
+## Diff
+diff --git a/src/clawmarks/search/embed_cache.py b/src/clawmarks/search/embed_cache.py
+new file mode 100644
+index 0000000..f05d4d4
+--- /dev/null
++++ b/src/clawmarks/search/embed_cache.py
+@@ -0,0 +1,122 @@
++"""
++DINOv2 embedding cache: computes and persists an embedding per image in scored_manifest.json so
++the preference model (search/preference_model.py) can train on frozen features without
++re-running the (slow) DINOv2 model every time. Runs locally, no RunPod cost. See
++docs/superpowers/specs/2026-07-09-preference-classifier-design.md, Component 1.
++
++Run with: python -m clawmarks.search.embed_cache
++"""
++import json
++import os
++
++import numpy as np
++import torch
++from PIL import Image
++
++from clawmarks.config import SWEEP_DIR
++
++MODEL_ID = "facebook/dinov2-base"
++EMBEDDINGS_FILE = SWEEP_DIR / "embeddings.npz"
++
++IMAGE_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
++IMAGE_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
++
++
++def preprocess(img):
++    img = img.convert("RGB")
++    w, h = img.size
++    shortest = 256
++    if w < h:
++        new_w, new_h = shortest, round(h * shortest / w)
++    else:
++        new_h, new_w = shortest, round(w * shortest / h)
++    img = img.resize((new_w, new_h), Image.BICUBIC)
++    left = (new_w - 224) // 2
++    top = (new_h - 224) // 2
++    img = img.crop((left, top, left + 224, top + 224))
++    arr = np.asarray(img).astype(np.float32) / 255.0
++    t = torch.from_numpy(arr).permute(2, 0, 1)
++    t = (t - IMAGE_MEAN) / IMAGE_STD
++    return t
++
++
++def embed_paths(paths, model, batch_size=16):
++    """Returns an (N, D) float32 array of L2-normalized embeddings, one row per path, in the
++    same order as `paths`."""
++    embs = []
++    with torch.no_grad():
++        for i in range(0, len(paths), batch_size):
++            batch_paths = paths[i:i + batch_size]
++            tensors = [preprocess(Image.open(p)) for p in batch_paths]
++            pixel_values = torch.stack(tensors, dim=0)
++            out = model(pixel_values=pixel_values)
++            feats = out.pooler_output
++            feats = feats / feats.norm(dim=-1, keepdim=True)
++            embs.append(feats.detach().numpy())
++    return np.concatenate(embs, axis=0).astype(np.float32)
++
++
++def load_cache(path):
++    """Returns (tags, embeddings). Empty list/array if the file doesn't exist yet."""
++    if not os.path.exists(path):
++        return [], np.zeros((0, 0), dtype=np.float32)
++    data = np.load(path)
++    return list(data["tags"]), data["embeddings"]
++
++
++def save_cache(path, tags, embeddings):
++    tmp = str(path) + ".tmp"
++    with open(tmp, "wb") as f:
++        np.savez(f, tags=np.array(tags), embeddings=np.asarray(embeddings, dtype=np.float32))
++    os.replace(tmp, path)
++
++
++def missing_tags(manifest_tags, cached_tags):
++    cached = set(cached_tags)
++    return [t for t in manifest_tags if t not in cached]
++
++
++def sync(manifest, cache_path, model, image_path_for):
++    """Loads the existing cache, embeds any manifest tag missing from it, appends, and saves.
++    `image_path_for(tag)` resolves a manifest tag to its image file path. Raises
++    FileNotFoundError (listing the offending tag) if a manifest tag's image file doesn't exist,
++    rather than silently skipping it. Returns (tags, embeddings) for the full, updated cache."""
++    tags, embeddings = load_cache(cache_path)
++    manifest_tags = [m["tag"] for m in manifest]
++    to_add = missing_tags(manifest_tags, tags)
++    if not to_add:
++        return tags, embeddings
++
++    missing_paths = []
++    for t in to_add:
++        p = image_path_for(t)
++        if not os.path.exists(p):
++            raise FileNotFoundError(f"tag {t!r} is in the manifest but its image file is missing: {p}")
++        missing_paths.append(p)
++
++    new_embeddings = embed_paths(missing_paths, model)
++    all_tags = list(tags) + to_add
++    all_embeddings = new_embeddings if embeddings.size == 0 else np.concatenate([embeddings, new_embeddings], axis=0)
++    save_cache(cache_path, all_tags, all_embeddings)
++    return all_tags, all_embeddings
++
++
++def main(argv=None):
++    from transformers import AutoModel
++
++    with open(SWEEP_DIR / "scored_manifest.json") as f:
++        manifest = json.load(f)
++    by_tag = {m["tag"]: m for m in manifest}
++
++    def image_path_for(tag):
++        return str(SWEEP_DIR / by_tag[tag]["file"])
++
++    print("loading DINOv2 model...", flush=True)
++    model = AutoModel.from_pretrained(MODEL_ID)
++    model.eval()
++    tags, _ = sync(manifest, EMBEDDINGS_FILE, model, image_path_for)
++    print(f"embedding cache now covers {len(tags)} images at {EMBEDDINGS_FILE}", flush=True)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/tests/test_embed_cache.py b/tests/test_embed_cache.py
+new file mode 100644
+index 0000000..22422b5
+--- /dev/null
++++ b/tests/test_embed_cache.py
+@@ -0,0 +1,90 @@
++# tests/test_embed_cache.py
++import numpy as np
++import torch
++from PIL import Image
++
++from clawmarks.search import embed_cache
++
++
++class FakeOutput:
++    def __init__(self, pooler_output):
++        self.pooler_output = pooler_output
++
++
++class FakeModel:
++    """Deterministic per-image 'embedding' derived from mean pixel value, so tests exercise
++    embed_cache's own logic (batching, ordering, caching) without loading the real (slow,
++    network-fetched) DINOv2 model."""
++    def __call__(self, pixel_values):
++        means = pixel_values.mean(dim=(1, 2, 3))
++        feats = torch.stack([means, -means], dim=1)
++        return FakeOutput(feats)
++
++
++def _write_image(path, color):
++    Image.new("RGB", (32, 32), color=color).save(path)
++
++
++def test_embed_paths_returns_one_normalized_row_per_path(tmp_path):
++    p1 = tmp_path / "a.png"
++    p2 = tmp_path / "b.png"
++    _write_image(p1, (10, 10, 10))
++    _write_image(p2, (200, 200, 200))
++    embs = embed_cache.embed_paths([str(p1), str(p2)], FakeModel())
++    assert embs.shape == (2, 2)
++    norms = np.linalg.norm(embs, axis=1)
++    assert np.allclose(norms, 1.0, atol=1e-5)
++
++
++def test_save_and_load_cache_round_trips(tmp_path):
++    path = tmp_path / "embeddings.npz"
++    tags = ["a", "b"]
++    embeddings = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
++    embed_cache.save_cache(path, tags, embeddings)
++    loaded_tags, loaded_embeddings = embed_cache.load_cache(path)
++    assert loaded_tags == tags
++    assert np.allclose(loaded_embeddings, embeddings)
++
++
++def test_load_cache_missing_file_returns_empty(tmp_path):
++    tags, embeddings = embed_cache.load_cache(tmp_path / "missing.npz")
++    assert tags == []
++    assert embeddings.shape == (0, 0)
++
++
++def test_missing_tags_returns_manifest_tags_not_in_cache():
++    assert embed_cache.missing_tags(["a", "b", "c"], ["a", "c"]) == ["b"]
++
++
++def test_sync_adds_only_missing_tags_and_persists(tmp_path):
++    manifest = [{"tag": "a"}, {"tag": "b"}]
++    _write_image(tmp_path / "a.png", (10, 10, 10))
++    _write_image(tmp_path / "b.png", (200, 200, 200))
++    cache_path = tmp_path / "embeddings.npz"
++
++    def image_path_for(tag):
++        return str(tmp_path / f"{tag}.png")
++
++    tags, embeddings = embed_cache.sync(manifest, cache_path, FakeModel(), image_path_for)
++    assert tags == ["a", "b"]
++    assert embeddings.shape == (2, 2)
++
++    manifest.append({"tag": "c"})
++    _write_image(tmp_path / "c.png", (100, 50, 25))
++    tags2, embeddings2 = embed_cache.sync(manifest, cache_path, FakeModel(), image_path_for)
++    assert tags2 == ["a", "b", "c"]
++    assert np.allclose(embeddings2[:2], embeddings)
++
++
++def test_sync_raises_on_missing_image_file(tmp_path):
++    manifest = [{"tag": "missing"}]
++    cache_path = tmp_path / "embeddings.npz"
++
++    def image_path_for(tag):
++        return str(tmp_path / "does_not_exist.png")
++
++    try:
++        embed_cache.sync(manifest, cache_path, FakeModel(), image_path_for)
++        assert False, "expected FileNotFoundError"
++    except FileNotFoundError:
++        pass

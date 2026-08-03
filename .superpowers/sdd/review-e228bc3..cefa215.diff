@@ -1,0 +1,172 @@
+# Review package: e228bc3..cefa215
+
+## Commits
+cefa215 fix(clawmarks): migrate scan/map pages to ratings API, fix stale manifest cache
+
+## Files changed
+ src/clawmarks/build/map_view.py              |  6 +++++-
+ src/clawmarks/build/scan_gallery.py          |  9 ++++-----
+ src/clawmarks/curation_server.py             |  9 ++++++---
+ tests/test_curation_server_manifest_cache.py | 29 ++++++++++++++++++++++++++++
+ 4 files changed, 44 insertions(+), 9 deletions(-)
+
+## Diff
+diff --git a/src/clawmarks/build/map_view.py b/src/clawmarks/build/map_view.py
+index 1a03ec4..a6da3b3 100644
+--- a/src/clawmarks/build/map_view.py
++++ b/src/clawmarks/build/map_view.py
+@@ -130,21 +130,25 @@ in embedding space, whether or not the faithfulness/novelty grid shows it as "ex
+ population piling onto a handful of bars means the search is faithful to a narrow slice of the
+ real style, not the whole training set; click a bar to highlight those images on the map above.</p>
+ <div id="anchorChart"></div>
+ 
+ <script>
+ const POINTS = {points_json};
+ const REAL = {real_json};
+ const ANCHOR_COUNTS = {real_anchor_json};
+ const MAX_GEN = {max_gen};
+ let picks = {{}};
+-fetch('/api/picks').then(r => r.json()).then(p => {{ picks = p; draw(); }}).catch(() => {{}});
++fetch('/api/ratings').then(r => r.json()).then(ratings => {{
++  picks = {{}};
++  Object.entries(ratings).forEach(([tag, r]) => {{ if (r.label === 'yes') picks[tag] = true; }});
++  draw();
++}}).catch(() => {{ draw(); }});
+ 
+ const xs = POINTS.map(p => p.x).concat(REAL.map(p => p.x));
+ const ys = POINTS.map(p => p.y).concat(REAL.map(p => p.y));
+ const xMin = Math.min(...xs), xMax = Math.max(...xs);
+ const yMin = Math.min(...ys), yMax = Math.max(...ys);
+ 
+ const cv = document.getElementById('cv');
+ const ctx = cv.getContext('2d');
+ const W = cv.width, H = cv.height, PAD = 20;
+ 
+diff --git a/src/clawmarks/build/scan_gallery.py b/src/clawmarks/build/scan_gallery.py
+index 0dfee39..4de2421 100644
+--- a/src/clawmarks/build/scan_gallery.py
++++ b/src/clawmarks/build/scan_gallery.py
+@@ -244,21 +244,24 @@ body {{
+ <script src="scrollnav.js"></script>
+ <script src="lightbox.js"></script>
+ <script src="infotip.js"></script>
+ <script>
+ const DATA = {data_json};
+ let view = DATA.slice();
+ let picks = {{}};
+ let favorites = {{}};
+ 
+ Promise.all([
+-  fetch('/api/picks').then(r => r.json()).then(p => {{ picks = p; }}).catch(() => {{}}),
++  fetch('/api/ratings').then(r => r.json()).then(ratings => {{
++    picks = {{}};
++    Object.entries(ratings).forEach(([tag, r]) => {{ if (r.label === 'yes') picks[tag] = true; }});
++  }}).catch(() => {{}}),
+   fetch('/api/favorites').then(r => r.json()).then(f => {{ favorites = f; }}).catch(() => {{}}),
+ ]).then(render);
+ 
+ (function populatePromptFilter() {{
+   const names = Array.from(new Set(DATA.map(d => d.prompt_name))).sort();
+   const sel = document.getElementById('promptFilter');
+   sel.innerHTML = '<option value="">all</option>' +
+     names.map(n => `<option value="${{n}}">${{n}}</option>`).join('');
+ }})();
+ 
+@@ -359,24 +362,20 @@ function debounce(fn, ms) {{
+   let t;
+   return (...args) => {{ clearTimeout(t); t = setTimeout(() => fn(...args), ms); }};
+ }}
+ const debouncedApplyFilters = debounce(applyFilters, 250);
+ 
+ ['sortKey', 'typeFilter', 'catFilter', 'promptFilter', 'pickedOnly', 'favoritedOnly'].forEach(id =>
+   document.getElementById(id).addEventListener('input', applyFilters));
+ ['faithMin', 'faithMax', 'search'].forEach(id =>
+   document.getElementById(id).addEventListener('input', debouncedApplyFilters));
+ 
+-document.addEventListener('lightbox:pick', e => {{
+-  if (e.detail.picked) picks[e.detail.tag] = true; else delete picks[e.detail.tag];
+-  render();
+-}});
+ document.addEventListener('lightbox:favorite', e => {{
+   if (e.detail.favorited) favorites[e.detail.tag] = true; else delete favorites[e.detail.tag];
+   render();
+ }});
+ 
+ applyFilters();
+ </script>
+ </body></html>"""
+ 
+     with open(f"{SWEEP_DIR}/scan.html", "w") as f:
+diff --git a/src/clawmarks/curation_server.py b/src/clawmarks/curation_server.py
+index 90d9deb..a257cb5 100644
+--- a/src/clawmarks/curation_server.py
++++ b/src/clawmarks/curation_server.py
+@@ -154,27 +154,30 @@ def next_rating_response(manifest, reviewed_tags, rng=None):
+ 
+ 
+ def record_rating(ratings, tag, label, now):
+     if label not in ("yes", "no"):
+         raise ValueError(f"label must be 'yes' or 'no', got {label!r}")
+     updated = dict(ratings)
+     updated[tag] = {"label": label, "rated_at": now}
+     return updated
+ 
+ 
+-_manifest_cache = {"manifest": None}
++_manifest_cache = {"manifest": None, "mtime": None}
+ 
+ 
+ def load_manifest():
+-    if _manifest_cache["manifest"] is None:
+-        with open(f"{SWEEP_DIR}/scored_manifest.json") as f:
++    path = f"{SWEEP_DIR}/scored_manifest.json"
++    mtime = os.path.getmtime(path)
++    if _manifest_cache["manifest"] is None or _manifest_cache["mtime"] != mtime:
++        with open(path) as f:
+             _manifest_cache["manifest"] = json.load(f)
++        _manifest_cache["mtime"] = mtime
+     return _manifest_cache["manifest"]
+ 
+ 
+ class Handler(SimpleHTTPRequestHandler):
+     protocol_version = "HTTP/1.1"  # keep-alive, so 3392 grid thumbnails don't reopen a
+                                      # connection per image
+ 
+     def __init__(self, *args, **kwargs):
+         super().__init__(*args, directory=SWEEP_DIR, **kwargs)
+ 
+diff --git a/tests/test_curation_server_manifest_cache.py b/tests/test_curation_server_manifest_cache.py
+new file mode 100644
+index 0000000..fbef847
+--- /dev/null
++++ b/tests/test_curation_server_manifest_cache.py
+@@ -0,0 +1,29 @@
++# tests/test_curation_server_manifest_cache.py
++import json
++import os
++import time
++
++from clawmarks import curation_server as cs
++
++
++def test_load_manifest_re_reads_when_file_changes(tmp_path, monkeypatch):
++    monkeypatch.setattr(cs, "SWEEP_DIR", tmp_path)
++    monkeypatch.setattr(cs, "_manifest_cache", {"manifest": None, "mtime": None})
++
++    path = tmp_path / "scored_manifest.json"
++    path.write_text(json.dumps([{"tag": "a"}]))
++    first = cs.load_manifest()
++    assert first == [{"tag": "a"}]
++
++    # Same content + same mtime should hit the cache (no re-read).
++    second = cs.load_manifest()
++    assert second is first
++
++    # Bump mtime and rewrite. Without invalidation, the cache would still return
++    # the old in-memory manifest; with mtime invalidation it sees the new content.
++    new_mtime = os.path.getmtime(path) + 5
++    path.write_text(json.dumps([{"tag": "a"}, {"tag": "b"}]))
++    os.utime(path, (new_mtime, new_mtime))
++    third = cs.load_manifest()
++    assert third == [{"tag": "a"}, {"tag": "b"}]
++    assert third is not first

@@ -1,0 +1,309 @@
+# Review package: b623363..HEAD
+
+## Commits
+0620369 feat(clawmarks): replace pick endpoints with ratings endpoints in curation_server
+
+## Files changed
+ src/clawmarks/curation_server.py | 106 ++++++++++++++++++++++++---------------
+ tests/test_curation_server.py    |  41 +++++++++++++++
+ 2 files changed, 106 insertions(+), 41 deletions(-)
+
+## Diff
+diff --git a/src/clawmarks/curation_server.py b/src/clawmarks/curation_server.py
+index 24d4dd8..90d9deb 100644
+--- a/src/clawmarks/curation_server.py
++++ b/src/clawmarks/curation_server.py
+@@ -1,48 +1,51 @@
+ """
+-Static file server + tiny pick/unpick API for the uncanny-frontier scan gallery. Replaces the
++Static file server + tiny ratings API for the uncanny-frontier scan gallery. Replaces the
+ plain `python3 -m http.server` that was serving notes/uncanny_sweep/ read-only: a plain static
+-server can't accept writes, and the whole point of this is letting a human mark "this is the
+-one that should win this bin" from the browser, which needs somewhere to persist that choice.
+-
+-Picks are stored in notes/uncanny_sweep/user_picks.json, keyed by image tag, with the full
+-image metadata the browser already has (so this server doesn't need to load scored_manifest.json
+-itself to fill in details) plus a picked_at timestamp. A future search run reads this file and
+-prefers user-picked images over the automated novelty ranking when choosing which images to
+-mutate near ("exploit"), only falling back to raw novelty for anything the user hasn't reviewed.
+-
+-Favorites (notes/uncanny_sweep/user_favorites.json) are the same shape but never read by the
+-search: a plain bookmark for images worth keeping (e.g. for the writeup) without steering where
+-the search goes next, for when "I like this" and "build more like this" are different judgments.
++server can't accept writes, and the whole point of this is letting a human record
++yes/no judgments on each image from the browser, which needs somewhere to persist that choice.
++
++Ratings are stored in notes/uncanny_sweep/user_ratings.json, keyed by image tag, with a
++"label" of "yes" or "no" and a "rated_at" timestamp. A future preference-classifier training
++run reads this file as its positive/negative labels (see
++docs/superpowers/specs/2026-07-09-preference-classifier-design.md). The selection of which
++unrated image to show next is stratified across the faithfulness x novelty grid so an early
++rating session doesn't over-sample whichever region happens to dominate the pool.
++
++Favorites (notes/uncanny_sweep/user_favorites.json) are a separate store: a plain bookmark
++for images worth keeping (e.g. for the writeup) without steering where the search goes next,
++for when "I like this" and "build more like this" are different judgments. Favorites also
++count as "reviewed" for the rating UI's next-image picker so a favorited image never gets
++shown for rating.
+ 
+ Counterfactuals (notes/uncanny_sweep/user_counterfactuals.json, images in
+ notes/uncanny_sweep/counterfactuals/) are on-demand single generations: pick an existing image,
+ change whichever of prompt/strength/cfg/seed you want, submit, and this server calls the same
+ serverless ComfyUI endpoint the search itself uses (uix4vdb2cec7sb), waits synchronously for the
+ one job to finish (a few seconds if a worker is already warm, up to several minutes if the
+ endpoint scaled to zero and needs to cold-start one), and saves the result. These are NOT scored against
+ the DINOv2 centroid/novelty metrics and are NOT fed back into the search; they're a quick "what
+ if" comparison tool, not part of the MAP-Elites archive. A RunPod balance check runs before every
+ submission and refuses below a safety floor rather than risk the silent-stall failure mode this
+ project hit once already with a negative balance.
+ 
+ Candidate seeds (notes/uncanny_sweep/candidate_seeds.json) are the pool of subject/texture
+ descriptions "explore" jobs draw from. The search driver (search/driver.py) escalates to
+ GPT-5.5 for fresh ones on plateau, via a subprocess call to `opencode run`; this server exposes
+ the same mechanism on demand so the pool can be reviewed and topped up between runs, not just
+ mid-run. Generation is synchronous (up to 5 minutes) and calls out to opencode/GPT-5.5, so it
+ costs real API time but no RunPod spend.
+ 
+ API:
+-  GET  /api/picks             -> {tag: {...metadata, picked_at}}
+-  POST /api/pick               body: full item object (must include "tag") -> upserts, returns ok
+-  POST /api/unpick              body: {"tag": "..."}                        -> removes, returns ok
++  GET  /api/ratings           -> {tag: {label, rated_at}}
++  GET  /api/rate/next         -> item_summary dict for the next unreviewed image, or {"done": true}
++  POST /api/rate               body: {"tag": "...", "label": "yes"|"no"} -> upserts, returns ok
+   GET  /api/favorites          -> {tag: {...metadata, favorited_at}}
+   POST /api/favorite           body: full item object (must include "tag") -> upserts, returns ok
+   POST /api/unfavorite          body: {"tag": "..."}                        -> removes, returns ok
+   GET  /api/counterfactuals    -> {tag: {...record}}
+   POST /api/counterfactual      body: {origin_tag, prompt, strength, cfg, seed, steps, sampler,
+                                         negative, overridden: [field names]}
+                                  -> generates synchronously, returns {ok, tag, file, ...record}
+                                     or {error} on failure/timeout/low balance
+   GET  /api/seeds              -> {text: {source, created_at}}
+   POST /api/seeds/generate      body: {n: int (default 20)}
+@@ -52,23 +55,25 @@ Everything else falls through to normal static file serving.
+ 
+ Run with: clawmarks serve [port]
+ """
+ import base64, json, os, random, subprocess, sys, threading, time
+ import urllib.request
+ from datetime import datetime, timezone
+ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+ 
+ from clawmarks.config import ROOT, SEEDS_FILE, SWEEP_DIR
+ from clawmarks.search.seed_pool import merge as seed_pool_merge
++from clawmarks.search import rating_sampler
++from clawmarks.search.manifest_index import item_summary
+ 
+-PICKS_FILE = f"{SWEEP_DIR}/user_picks.json"
+ FAVORITES_FILE = f"{SWEEP_DIR}/user_favorites.json"
++RATINGS_FILE = f"{SWEEP_DIR}/user_ratings.json"
+ COUNTERFACTUALS_DIR = f"{SWEEP_DIR}/counterfactuals"
+ COUNTERFACTUALS_FILE = f"{SWEEP_DIR}/user_counterfactuals.json"
+ DEFAULT_PORT = 8420
+ 
+ COMFY_ENDPOINT_ID = "uix4vdb2cec7sb"  # same serverless endpoint the search uses
+ COMFY_BASE = f"https://api.runpod.ai/v2/{COMFY_ENDPOINT_ID}"
+ GRAPHQL_URL = "https://api.runpod.io/graphql"
+ BALANCE_FLOOR_USD = 0.05  # refuse to submit below this rather than risk a silent stall
+ GENERATION_TIMEOUT_S = 330  # a cold endpoint (scaled to zero) took ~215s to spin up a worker in testing
+ SEED_GEN_TIMEOUT_S = 300  # matches search/driver.py's request_gpt55_subjects timeout
+@@ -131,26 +136,46 @@ def load_store(path):
+     return {}
+ 
+ 
+ def save_store(path, store):
+     tmp = path + ".tmp"
+     with open(tmp, "w") as f:
+         json.dump(store, f, indent=1)
+     os.replace(tmp, path)
+ 
+ 
+-def load_picks():
+-    return load_store(PICKS_FILE)
++def next_rating_response(manifest, reviewed_tags, rng=None):
++    """Returns an item_summary dict for the next image to rate, or {"done": True} if every
++    image in `manifest` is already in `reviewed_tags`."""
++    item = rating_sampler.pick_next(manifest, reviewed_tags, rng=rng) if rng is not None \
++        else rating_sampler.pick_next(manifest, reviewed_tags)
++    if item is None:
++        return {"done": True}
++    return item_summary(item, SWEEP_DIR)
++
++
++def record_rating(ratings, tag, label, now):
++    if label not in ("yes", "no"):
++        raise ValueError(f"label must be 'yes' or 'no', got {label!r}")
++    updated = dict(ratings)
++    updated[tag] = {"label": label, "rated_at": now}
++    return updated
+ 
+ 
+-def save_picks(picks):
+-    save_store(PICKS_FILE, picks)
++_manifest_cache = {"manifest": None}
++
++
++def load_manifest():
++    if _manifest_cache["manifest"] is None:
++        with open(f"{SWEEP_DIR}/scored_manifest.json") as f:
++            _manifest_cache["manifest"] = json.load(f)
++    return _manifest_cache["manifest"]
+ 
+ 
+ class Handler(SimpleHTTPRequestHandler):
+     protocol_version = "HTTP/1.1"  # keep-alive, so 3392 grid thumbnails don't reopen a
+                                      # connection per image
+ 
+     def __init__(self, *args, **kwargs):
+         super().__init__(*args, directory=SWEEP_DIR, **kwargs)
+ 
+     def end_headers(self):
+@@ -162,23 +187,31 @@ class Handler(SimpleHTTPRequestHandler):
+ 
+     def _json_response(self, status, obj):
+         body = json.dumps(obj).encode()
+         self.send_response(status)
+         self.send_header("Content-Type", "application/json")
+         self.send_header("Content-Length", str(len(body)))
+         self.end_headers()
+         self.wfile.write(body)
+ 
+     def do_GET(self):
+-        if self.path == "/api/picks":
++        if self.path == "/api/ratings":
+             with _lock:
+-                self._json_response(200, load_picks())
++                self._json_response(200, load_store(RATINGS_FILE))
++            return
++        if self.path == "/api/rate/next":
++            with _lock:
++                ratings = load_store(RATINGS_FILE)
++                favorites = load_store(FAVORITES_FILE)
++                reviewed = set(ratings) | set(favorites)
++                response = next_rating_response(load_manifest(), reviewed)
++            self._json_response(200, response)
+             return
+         if self.path == "/api/favorites":
+             with _lock:
+                 self._json_response(200, load_store(FAVORITES_FILE))
+             return
+         if self.path == "/api/counterfactuals":
+             with _lock:
+                 self._json_response(200, load_store(COUNTERFACTUALS_FILE))
+             return
+         if self.path == "/api/seeds":
+@@ -194,40 +227,31 @@ class Handler(SimpleHTTPRequestHandler):
+ 
+     def do_POST(self):
+         length = int(self.headers.get("Content-Length", 0))
+         raw = self.rfile.read(length) if length else b"{}"
+         try:
+             payload = json.loads(raw)
+         except json.JSONDecodeError:
+             self._json_response(400, {"error": "invalid JSON body"})
+             return
+ 
+-        if self.path == "/api/pick":
++        if self.path == "/api/rate":
+             tag = payload.get("tag")
+-            if not tag:
+-                self._json_response(400, {"error": "missing 'tag'"})
++            label = payload.get("label")
++            if not tag or label not in ("yes", "no"):
++                self._json_response(400, {"error": "missing 'tag' or invalid 'label' (must be 'yes' or 'no')"})
+                 return
+             with _lock:
+-                picks = load_picks()
+-                payload["picked_at"] = datetime.now(timezone.utc).isoformat()
+-                picks[tag] = payload
+-                save_picks(picks)
+-            self._json_response(200, {"ok": True, "count": len(picks)})
+-            return
+-
+-        if self.path == "/api/unpick":
+-            tag = payload.get("tag")
+-            with _lock:
+-                picks = load_picks()
+-                picks.pop(tag, None)
+-                save_picks(picks)
+-            self._json_response(200, {"ok": True, "count": len(picks)})
++                ratings = load_store(RATINGS_FILE)
++                ratings = record_rating(ratings, tag, label, datetime.now(timezone.utc).isoformat())
++                save_store(RATINGS_FILE, ratings)
++            self._json_response(200, {"ok": True, "count": len(ratings)})
+             return
+ 
+         if self.path == "/api/favorite":
+             tag = payload.get("tag")
+             if not tag:
+                 self._json_response(400, {"error": "missing 'tag'"})
+                 return
+             with _lock:
+                 favorites = load_store(FAVORITES_FILE)
+                 payload["favorited_at"] = datetime.now(timezone.utc).isoformat()
+@@ -403,16 +427,16 @@ class Handler(SimpleHTTPRequestHandler):
+             print(f"{self.address_string()} - {fmt % args}", flush=True)
+ 
+ 
+ def main(argv=None):
+     port = DEFAULT_PORT
+     if argv is not None and len(argv) > 0:
+         port = int(argv[0])
+     elif len(sys.argv) > 1:
+         port = int(sys.argv[1])
+     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+-    print(f"serving {SWEEP_DIR} + pick API on 0.0.0.0:{port}", flush=True)
++    print(f"serving {SWEEP_DIR} + ratings API on 0.0.0.0:{port}", flush=True)
+     server.serve_forever()
+ 
+ 
+ if __name__ == "__main__":
+     main()
+diff --git a/tests/test_curation_server.py b/tests/test_curation_server.py
+new file mode 100644
+index 0000000..52947ae
+--- /dev/null
++++ b/tests/test_curation_server.py
+@@ -0,0 +1,41 @@
++# tests/test_curation_server.py
++from clawmarks import curation_server as cs
++
++
++def test_next_rating_response_returns_item_summary_shape():
++    manifest = [
++        {"tag": "a", "prompt_name": "p", "prompt_type": "style", "centroid_sim": 0.5,
++         "novelty": 0.3, "strength": 1.0, "cfg": 7.0, "file": "a.png"},
++    ]
++    result = cs.next_rating_response(manifest, reviewed_tags=set())
++    assert result["tag"] == "a"
++    assert result["faith"] == 0.5
++    assert "done" not in result
++
++
++def test_next_rating_response_reports_done_when_all_reviewed():
++    manifest = [{"tag": "a", "centroid_sim": 0.5, "novelty": 0.3, "prompt_name": "p",
++                 "prompt_type": "style", "strength": 1.0, "cfg": 7.0, "file": "a.png"}]
++    result = cs.next_rating_response(manifest, reviewed_tags={"a"})
++    assert result == {"done": True}
++
++
++def test_record_rating_upserts_with_timestamp():
++    ratings = {}
++    updated = cs.record_rating(ratings, "a", "yes", now="2026-07-10T00:00:00Z")
++    assert updated["a"] == {"label": "yes", "rated_at": "2026-07-10T00:00:00Z"}
++
++
++def test_record_rating_overwrites_not_duplicates():
++    ratings = {"a": {"label": "no", "rated_at": "t0"}}
++    updated = cs.record_rating(ratings, "a", "yes", now="t1")
++    assert updated == {"a": {"label": "yes", "rated_at": "t1"}}
++    assert len(updated) == 1
++
++
++def test_record_rating_rejects_invalid_label():
++    try:
++        cs.record_rating({}, "a", "maybe", now="t0")
++        assert False, "expected ValueError"
++    except ValueError:
++        pass

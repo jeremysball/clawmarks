@@ -1,0 +1,674 @@
+[0m
+> build · minimax-m3
+[0m
+[0m→ [0mRead .superpowers/sdd/task-1-brief.md
+[0m
+[0m$ [0mls -la
+total 337448
+drwx------ 25 node node      4096 Jul 10 16:11 .
+drwxr-xr-x 77 node node      4096 Jul 10 16:24 ..
+drwxr-xr-x  7 node node      4096 Jul  8 19:03 archive
+drwxr-xr-x  2 node node      4096 Jul  7 19:33 art
+drwxr-xr-x  2 node node     12288 Jul  8 15:59 art_batch
+-rw-r--r--  1 node node   3065430 Jul  7 19:33 art.zip
+-rw-r--r--  1 node node      8262 Jul  8 00:06 caption_check_prompt.txt
+drwxr-xr-x  2 node node      4096 Jul  8 13:44 checkpoints_v3_fixed
+drwxr-xr-x  3 node node      4096 Jul 10 02:30 .claude
+-rw-r--r--  1 node node      6772 Jul 10 16:11 CLAUDE.md
+-rw-r--r--  1 node node   3103859 Jul  8 19:15 clawmarks-dataset.zip
+-rw-r--r--  1 node node   3103859 Jul  8 12:51 clawmarks-illustrious-dataset-corrected.zip
+-rw-r--r--  1 node node      2433 Jul  8 16:50 clip_score.py
+-rw-r--r--  1 node node     28085 Jul  8 16:50 clip_scores.json
+drwxr-xr-x  2 node node      4096 Jul  8 16:05 corrected_dataset_extract
+drwxr-xr-x  2 node node      4096 Jul  8 16:33 curated_25
+-rw-r--r--  1 node node   4148310 Jul  8 16:33 curated_25_contact_sheet.png
+-rw-r--r--  1 node node        59 Jul  8 00:26 dataset_v2_url.txt
+-rw-r--r--  1 node node      2934 Jul  8 16:50 dino_score.py
+-rw-r--r--  1 node node     28113 Jul  8 16:50 dino_scores.json
+drwxr-xr-x  2 node node      4096 Jul  8 16:30 dino_top25
+-rw-r--r--  1 node node   4148310 Jul  8 16:30 dino_top25_contact_sheet.png
+drwxr-xr-x  3 node node      4096 Jul  9 18:18 docs
+-rw-r--r--  1 node node       164 Jul  8 19:02 .envrc
+-rw-r--r--  1 node node   1318059 Jul  7 23:04 epoch_sheet_full.png
+-rw-r--r--  1 node node  86391669 Jul  7 23:05 epoch_sheet_full_res.png
+-rw-r--r--  1 node node      1191 Jul  7 23:04 epoch_sheet.py
+drwxr-xr-x  2 node node      4096 Jul  8 16:08 full_batch_sheet
+drwxr-xr-x  7 node node      4096 Jul  7 23:02 gen
+-rw-r--r--  1 node node      4478 Jul  8 19:02 gen_batch.py
+-rw-r--r--  1 node node       590 Jul  7 19:51 gen_result.json
+drwxr-xr-x 10 node node      4096 Jul 10 16:39 .git
+-rw-r--r--  1 node node      1398 Jul 10 16:11 .gitignore
+-rw-r--r--  1 node node      1991 Jul  8 12:46 gpt55_prompt.md
+drwxr-xr-x 11 node node      4096 Jul 10 16:11 notes
+-rw-r--r--  1 node node      2423 Jul  8 16:06 perturb_captions.py
+-rw-r--r--  1 node node     44107 Jul  8 16:06 perturbed_prompts_200.txt
+-rw-r--r--  1 node node     65405 Jul  8 16:06 prompt_cards.html
+-rw-r--r--  1 node node     51684 Jul  8 16:06 prompt_data.json
+-rw-r--r--  1 node node         0 Jul  8 16:06 prompt_groups.py.out
+-rw-r--r--  1 node node     70695 Jul  8 16:07 prompt_reference.html
+-rw-r--r--  1 node node       546 Jul 10 16:11 pyproject.toml
+drwxr-xr-x  3 node node      4096 Jul  9 18:25 .pytest_cache
+drwxr-xr-x  2 node node      4096 Jul  8 15:59 review_sheets
+-rw-r--r--  1 node node    154584 Jul  7 21:53 runpod_openapi.json
+drwxr-xr-x  2 node node      4096 Jul  7 21:53 runpod-ssh
+drwxr-xr-x  2 node node      4096 Jul  7 22:39 samples
+-rw-r--r--  1 node node   1917252 Jul  8 15:40 serverless_test.png
+drwxr-xr-x  4 node node      4096 Jul  9 18:25 src
+drwxr-xr-x  3 node node      4096 Jul  9 22:04 .superpowers
+drwxr-xr-x  4 node node      4096 Jul 10 16:11 tests
+-rw-r--r--  1 node node     14946 Jul  9 21:49 TODO.txt
+-rw-r--r--  1 node node  30558305 Jul  8 02:13 train_compare_sheet_3way.png
+-rw-r--r--  1 node node      2869 Jul  8 02:13 train_compare_sheet_3way.py
+-rw-r--r--  1 node node      2813 Jul  7 23:46 train_compare_sheet.py
+drwxr-xr-x  2 node node      4096 Jul  8 13:45 training_samples_v3_fixed
+-rw-r--r--  1 node node        38 Jul  7 19:49 upload_result.json
+-rw-r--r--  1 node node    300303 Jul 10 16:11 uv.lock
+-rw-r--r--  1 node node   4076630 Jul  8 12:37 v3_epoch_compare_sheet.png
+-rw-r--r--  1 node node  27789192 Jul  8 15:00 v3fixed_validation_grid_fullres.jpg
+-rw-r--r--  1 node node   7845589 Jul  8 14:27 v3fixed_validation_grid.png
+-rw-r--r--  1 node node  18469147 Jul  8 13:45 v3fix_samples.tar.gz
+drwxr-xr-x  3 node node      4096 Jul  8 14:27 valgrid
+-rw-r--r--  1 node node 148622022 Jul  8 14:27 valgrid.tar.gz
+drwxr-xr-x  5 node node      4096 Jul  9 18:52 .venv
+[0m
+[0m$ [0mls -la src/clawmarks/ tests/
+src/clawmarks/:
+total 100
+drwxr-xr-x 7 node node  4096 Jul 10 16:11 .
+drwxr-xr-x 4 node node  4096 Jul  9 18:25 ..
+drwxr-xr-x 3 node node  4096 Jul 10 16:11 build
+-rw-r--r-- 1 node node  3126 Jul 10 16:11 cli.py
+drwxr-xr-x 3 node node  4096 Jul 10 16:11 compute
+-rw-r--r-- 1 node node  1272 Jul 10 16:11 config.py
+-rw-r--r-- 1 node node 28942 Jul 10 16:11 curation_server.py
+-rw-r--r-- 1 node node     0 Jul 10 16:11 __init__.py
+-rw-r--r-- 1 node node  2246 Jul 10 16:11 live_cache.py
+drwxr-xr-x 2 node node  4096 Jul 10 16:11 probe
+drwxr-xr-x 2 node node  4096 Jul  9 22:47 __pycache__
+drwxr-xr-x 3 node node  4096 Jul 10 16:11 search
+-rw-r--r-- 1 node node 26605 Jul 10 16:11 shared_ui.py
+
+tests/:
+total 180
+drwxr-xr-x  4 node node 4096 Jul 10 16:11 .
+drwx------ 25 node node 4096 Jul 10 16:11 ..
+drwxr-xr-x  3 node node 4096 Jul 10 16:11 fixtures
+drwxr-xr-x  2 node node 4096 Jul  9 22:26 __pycache__
+-rw-r--r--  1 node node  725 Jul 10 16:11 test_cli.py
+-rw-r--r--  1 node node 1260 Jul 10 16:11 test_config.py
+-rw-r--r--  1 node node  473 Jul 10 16:11 test_coverage_map.py
+-rw-r--r--  1 node node 1181 Jul 10 16:11 test_curation_server_gallery_route.py
+-rw-r--r--  1 node node 1072 Jul 10 16:11 test_curation_server_lazy_thumbnails.py
+-rw-r--r--  1 node node 2983 Jul 10 16:11 test_curation_server_manifest_cache.py
+-rw-r--r--  1 node node 2328 Jul 10 16:11 test_curation_server_manifest_only_routes_cache.py
+-rw-r--r--  1 node node 1642 Jul 10 16:11 test_curation_server_map_redundancy_cache.py
+-rw-r--r--  1 node node 1513 Jul 10 16:11 test_curation_server.py
+-rw-r--r--  1 node node 2260 Jul 10 16:11 test_curation_server_scan_route.py
+-rw-r--r--  1 node node 1619 Jul 10 16:11 test_curation_server_solution_map_dep.py
+-rw-r--r--  1 node node 1370 Jul 10 16:11 test_curation_server_static_assets.py
+-rw-r--r--  1 node node 1216 Jul 10 16:11 test_elite_archive_live.py
+-rw-r--r--  1 node node 1701 Jul 10 16:11 test_elite_archive_predicted_preference.py
+-rw-r--r--  1 node node 1809 Jul 10 16:11 test_elite_archive.py
+-rw-r--r--  1 node node 2984 Jul 10 16:11 test_embed_cache.py
+-rw-r--r--  1 node node  197 Jul 10 16:11 test_explore_hub.py
+-rw-r--r--  1 node node 2271 Jul 10 16:11 test_generation_jobs.py
+-rw-r--r--  1 node node 1055 Jul 10 16:11 test_lineage_view.py
+-rw-r--r--  1 node node 3809 Jul 10 16:11 test_live_cache.py
+-rw-r--r--  1 node node 1236 Jul 10 16:11 test_manifest_index.py
+-rw-r--r--  1 node node 1247 Jul 10 16:11 test_map_view.py
+-rw-r--r--  1 node node 1067 Jul 10 16:11 test_migrate_picks_to_ratings.py
+-rw-r--r--  1 node node  568 Jul 10 16:11 test_novelty_decay.py
+-rw-r--r--  1 node node  750 Jul 10 16:11 test_predicted_preference_pool.py
+-rw-r--r--  1 node node 2683 Jul 10 16:11 test_preference_model.py
+-rw-r--r--  1 node node  641 Jul 10 16:11 test_preference_rank_live.py
+-rw-r--r--  1 node node 1110 Jul 10 16:11 test_preference_rank.py
+-rw-r--r--  1 node node  216 Jul 10 16:11 test_rate_page.py
+-rw-r--r--  1 node node 1839 Jul 10 16:11 test_rating_sampler.py
+-rw-r--r--  1 node node  904 Jul 10 16:11 test_redundancy_view.py
+-rw-r--r--  1 node node 1205 Jul 10 16:11 test_scan_gallery.py
+-rw-r--r--  1 node node  279 Jul 10 16:11 test_score_manifest.py
+-rw-r--r--  1 node node  705 Jul 10 16:11 test_scoring.py
+-rw-r--r--  1 node node  193 Jul 10 16:11 test_seed_browser.py
+-rw-r--r--  1 node node 1482 Jul 10 16:11 test_seed_pool.py
+-rw-r--r--  1 node node  970 Jul 10 16:11 test_similarity_index.py
+-rw-r--r--  1 node node 1502 Jul 10 16:11 test_solution_map.py
+-rw-r--r--  1 node node 1556 Jul 10 16:11 test_thumbnails.py
+-rw-r--r--  1 node node 1426 Jul 10 16:11 test_uncanny_gallery.py
+-rw-r--r--  1 node node 1104 Jul 10 16:11 test_yes_rated_images.py
+[0m
+[0m→ [0mRead src/clawmarks/config.py
+[0m
+[0m$ [0mls -la src/clawmarks/search/
+total 88
+drwxr-xr-x 3 node node  4096 Jul 10 16:11 .
+drwxr-xr-x 7 node node  4096 Jul 10 16:11 ..
+-rw-r--r-- 1 node node 32613 Jul 10 16:11 driver.py
+-rw-r--r-- 1 node node  4550 Jul 10 16:11 embed_cache.py
+-rw-r--r-- 1 node node     0 Jul 10 16:11 __init__.py
+-rw-r--r-- 1 node node   931 Jul 10 16:11 manifest_index.py
+-rw-r--r-- 1 node node  1882 Jul 10 16:11 migrate_picks_to_ratings.py
+-rw-r--r-- 1 node node  4747 Jul 10 16:11 preference_model.py
+drwxr-xr-x 2 node node  4096 Jul  9 22:35 __pycache__
+-rw-r--r-- 1 node node  1794 Jul 10 16:11 rating_sampler.py
+-rw-r--r-- 1 node node  5421 Jul 10 16:11 score_manifest.py
+-rw-r--r-- 1 node node   327 Jul 10 16:11 scoring.py
+-rw-r--r-- 1 node node   733 Jul 10 16:11 seed_pool.py
+[0m
+[0m→ [0mRead tests/test_config.py
+[0m
+[0m$ [0mls docs/superpowers/plans/ 2>/dev/null || echo "plans dir not present"
+2026-07-09-preference-classifier-handoff.md
+2026-07-09-preference-classifier.md
+2026-07-09-software-transition.md
+2026-07-10-glm-review-fixes.md
+2026-07-10-live-tool-pages.md
+2026-07-10-preference-toggle.md
+[0m
+[0m→ [0mRead docs/superpowers/plans/2026-07-10-preference-toggle.md
+[0m
+[0m# [0mTodos
+[•] Step 1: Write the failing tests at tests/test_preference_settings.py
+[ ] Step 2: Run tests to confirm they fail (ModuleNotFoundError)
+[ ] Step 3: Add PREFERENCE_SETTINGS_FILE to src/clawmarks/config.py
+[ ] Step 4: Write src/clawmarks/search/preference_settings.py module
+[ ] Step 5: Run tests to verify they pass (4/4)
+[ ] Step 6: Grep for em dashes / -- in diff, then commit
+[ ] Write the full report to .superpowers/sdd/task-1-report.md and print summary
+[0m
+[0m→ [0mRead src/clawmarks/search/__init__.py
+[0m→ [0mRead pyproject.toml
+Now I'll create the failing test file as the first step.
+[0m
+[0m← [0mWrite tests/test_preference_settings.py
+Wrote file successfully.
+[0m
+[0m# [0mTodos
+[✓] Step 1: Write the failing tests at tests/test_preference_settings.py
+[•] Step 2: Run tests to confirm they fail (ModuleNotFoundError)
+[ ] Step 3: Add PREFERENCE_SETTINGS_FILE to src/clawmarks/config.py
+[ ] Step 4: Write src/clawmarks/search/preference_settings.py module
+[ ] Step 5: Run tests to verify they pass (4/4)
+[ ] Step 6: Grep for em dashes / -- in diff, then commit
+[ ] Write the full report to .superpowers/sdd/task-1-report.md and print summary
+[0m
+[0m$ [0mPYTHONPATH=src uv run pytest tests/test_preference_settings.py -v 2>&1
+Building clawmarks @ file:///workspace/trent-with-smart-prompts
+      Built clawmarks @ file:///workspace/trent-with-smart-prompts
+Uninstalled 1 package in 8ms
+warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.
+         If the cache and target directories are on different filesystems, hardlinking may not be supported.
+         If this is intentional, set `export UV_LINK_MODE=copy` or use `--link-mode=copy` to suppress this warning.
+Installed 1 package in 2ms
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.1.0, pluggy-1.6.0 -- /workspace/trent-with-smart-prompts/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /workspace/trent-with-smart-prompts
+configfile: pyproject.toml
+collecting ... collected 0 items / 1 error
+
+==================================== ERRORS ====================================
+______________ ERROR collecting tests/test_preference_settings.py ______________
+ImportError while importing test module '/workspace/trent-with-smart-prompts/tests/test_preference_settings.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_preference_settings.py:4: in <module>
+    from clawmarks.search import preference_settings
+E   ImportError: cannot import name 'preference_settings' from 'clawmarks.search' (/workspace/trent-with-smart-prompts/src/clawmarks/search/__init__.py)
+=========================== short test summary info ============================
+ERROR tests/test_preference_settings.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 0.13s ===============================
+[0m
+Tests fail as expected (the module doesn't exist yet). Now adding the config path.
+[0m# [0mTodos
+[✓] Step 1: Write the failing tests at tests/test_preference_settings.py
+[✓] Step 2: Run tests to confirm they fail (ModuleNotFoundError)
+[•] Step 3: Add PREFERENCE_SETTINGS_FILE to src/clawmarks/config.py
+[ ] Step 4: Write src/clawmarks/search/preference_settings.py module
+[ ] Step 5: Run tests to verify they pass (4/4)
+[ ] Step 6: Grep for em dashes / -- in diff, then commit
+[ ] Write the full report to .superpowers/sdd/task-1-report.md and print summary
+[0m
+[0m← [0mEdit src/clawmarks/config.py
+Index: /workspace/trent-with-smart-prompts/src/clawmarks/config.py
+===================================================================
+--- /workspace/trent-with-smart-prompts/src/clawmarks/config.py
++++ /workspace/trent-with-smart-prompts/src/clawmarks/config.py
+@@ -29,4 +29,5 @@
+ PROBE_STRENGTH_DIR = NOTES_DIR / "probe_strength"
+ SEEDS_FILE = SWEEP_DIR / "candidate_seeds.json"
+ USER_PICKS_FILE = SWEEP_DIR / "user_picks.json"
+ USER_RATINGS_FILE = SWEEP_DIR / "user_ratings.json"
++PREFERENCE_SETTINGS_FILE = SWEEP_DIR / "preference_settings.json"
+
+[0m
+[0m→ [0mRead src/clawmarks/config.py
+Now writing the module.
+[0m
+[0m# [0mTodos
+[✓] Step 1: Write the failing tests at tests/test_preference_settings.py
+[✓] Step 2: Run tests to confirm they fail (ModuleNotFoundError)
+[✓] Step 3: Add PREFERENCE_SETTINGS_FILE to src/clawmarks/config.py
+[•] Step 4: Write src/clawmarks/search/preference_settings.py module
+[ ] Step 5: Run tests to verify they pass (4/4)
+[ ] Step 6: Grep for em dashes / -- in diff, then commit
+[ ] Write the full report to .superpowers/sdd/task-1-report.md and print summary
+[0m
+[0m← [0mWrite src/clawmarks/search/preference_settings.py
+Wrote file successfully.
+[0m
+Now running the tests to verify they pass.
+[0m$ [0mPYTHONPATH=src uv run pytest tests/test_preference_settings.py -v 2>&1
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.1.0, pluggy-1.6.0 -- /workspace/trent-with-smart-prompts/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /workspace/trent-with-smart-prompts
+configfile: pyproject.toml
+collecting ... collected 4 items
+
+tests/test_preference_settings.py::test_load_returns_false_default_when_file_missing PASSED [ 25%]
+tests/test_preference_settings.py::test_save_then_load_round_trips_true PASSED [ 50%]
+tests/test_preference_settings.py::test_save_writes_atomically_no_tmp_file_left_behind PASSED [ 75%]
+tests/test_preference_settings.py::test_save_false_then_load_round_trips_false PASSED [100%]
+
+============================== 4 passed in 0.05s ===============================
+[0m
+All 4 tests pass. Now let me also run the full test suite to confirm no regressions, and check for em dashes.
+[0m$ [0mPYTHONPATH=src uv run pytest tests/ -v 2>&1 | tail -80
+tests/test_generation_jobs.py::test_batch_splits_by_explore_fraction PASSED [ 41%]
+tests/test_generation_jobs.py::test_fifty_fifty_split_matches_round_one_behavior PASSED [ 42%]
+tests/test_generation_jobs.py::test_exploit_jobs_prefer_user_picks_over_elites PASSED [ 43%]
+tests/test_generation_jobs.py::test_no_elites_and_no_picks_produces_only_explore_jobs PASSED [ 44%]
+tests/test_lineage_view.py::test_compute_data_placeholder_when_no_parent_tags PASSED [ 45%]
+tests/test_lineage_view.py::test_compute_data_builds_tree_when_parent_tags_exist PASSED [ 46%]
+tests/test_live_cache.py::test_computes_once_and_caches_when_files_unchanged PASSED [ 46%]
+tests/test_live_cache.py::test_recomputes_when_watched_file_mtime_changes PASSED [ 47%]
+tests/test_live_cache.py::test_depends_on_passes_dependency_data_and_propagates_invalidation PASSED [ 48%]
+tests/test_live_cache.py::test_concurrent_get_only_computes_once PASSED  [ 49%]
+tests/test_live_cache.py::test_get_reads_dependency_data_and_mtimes_from_a_single_snapshot PASSED [ 50%]
+tests/test_manifest_index.py::test_index_by_tag_builds_lookup PASSED     [ 51%]
+tests/test_manifest_index.py::test_item_summary_falls_back_to_basename_when_no_thumb PASSED [ 52%]
+tests/test_manifest_index.py::test_item_summary_uses_thumb_when_present PASSED [ 53%]
+tests/test_map_view.py::test_compute_data_reads_from_deps_not_disk PASSED [ 53%]
+tests/test_map_view.py::test_render_html_embeds_points PASSED            [ 54%]
+tests/test_migrate_picks_to_ratings.py::test_migrates_picks_not_already_rated PASSED [ 55%]
+tests/test_migrate_picks_to_ratings.py::test_does_not_overwrite_an_existing_rating PASSED [ 56%]
+tests/test_migrate_picks_to_ratings.py::test_leaves_existing_ratings_not_derived_from_picks_untouched PASSED [ 57%]
+tests/test_novelty_decay.py::test_compute_data_builds_series_across_generations PASSED [ 58%]
+tests/test_predicted_preference_pool.py::test_predicted_preference_pool_returns_empty_without_a_trained_model PASSED [ 59%]
+tests/test_predicted_preference_pool.py::test_predicted_preference_pool_returns_empty_for_empty_manifest PASSED [ 60%]
+tests/test_preference_model.py::test_build_training_set_uses_only_tags_present_in_both_embeddings_and_ratings PASSED [ 60%]
+tests/test_preference_model.py::test_build_training_set_skips_unrecognized_labels PASSED [ 61%]
+tests/test_preference_model.py::test_train_and_predict_proba_separates_obviously_different_clusters PASSED [ 62%]
+tests/test_preference_model.py::test_cross_validate_returns_a_valid_accuracy_using_leave_one_out_below_min_labels PASSED [ 63%]
+tests/test_preference_model.py::test_class_balance_error_flags_an_all_yes_label_set PASSED [ 64%]
+tests/test_preference_model.py::test_class_balance_error_flags_an_all_no_label_set PASSED [ 65%]
+tests/test_preference_model.py::test_class_balance_error_flags_a_minority_class_below_the_fold_count PASSED [ 66%]
+tests/test_preference_model.py::test_class_balance_error_allows_a_well_balanced_label_set PASSED [ 66%]
+tests/test_preference_model.py::test_class_balance_error_allows_an_imbalanced_but_above_fold_count_label_set_below_min_labels PASSED [ 67%]
+tests/test_preference_rank.py::test_build_ranked_items_sorts_descending_by_score PASSED [ 68%]
+tests/test_preference_rank.py::test_build_ranked_items_respects_limit PASSED [ 69%]
+tests/test_preference_rank.py::test_build_ranked_items_skips_tags_missing_from_manifest PASSED [ 70%]
+tests/test_preference_rank_live.py::test_compute_data_returns_no_model_state_when_model_missing PASSED [ 71%]
+tests/test_preference_settings.py::test_load_returns_false_default_when_file_missing PASSED [ 72%]
+tests/test_preference_settings.py::test_save_then_load_round_trips_true PASSED [ 73%]
+tests/test_preference_settings.py::test_save_writes_atomically_no_tmp_file_left_behind PASSED [ 73%]
+tests/test_preference_settings.py::test_save_false_then_load_round_trips_false PASSED [ 74%]
+tests/test_rate_page.py::test_render_html_includes_rate_api_calls PASSED [ 75%]
+tests/test_rating_sampler.py::test_bin_manifest_splits_into_n_bins_by_bin_count PASSED [ 76%]
+tests/test_rating_sampler.py::test_eligible_grid_excludes_reviewed_tags PASSED [ 77%]
+tests/test_rating_sampler.py::test_pick_next_returns_none_when_everything_reviewed PASSED [ 78%]
+tests/test_rating_sampler.py::test_pick_next_only_returns_eligible_items PASSED [ 79%]
+tests/test_rating_sampler.py::test_pick_next_can_return_from_a_sparsely_populated_bin PASSED [ 80%]
+tests/test_redundancy_view.py::test_compute_data_uses_similarity_scored_from_deps PASSED [ 80%]
+tests/test_redundancy_view.py::test_render_html_embeds_edges PASSED      [ 81%]
+tests/test_scan_gallery.py::test_compute_data_builds_items_with_similarity PASSED [ 82%]
+tests/test_scan_gallery.py::test_render_html_embeds_data_and_infobtn_tips PASSED [ 83%]
+tests/test_score_manifest.py::test_preprocess_and_constants_importable_from_new_location PASSED [ 84%]
+tests/test_scoring.py::test_bin_edges_splits_sorted_values_into_n_groups PASSED [ 85%]
+tests/test_scoring.py::test_bin_of_returns_last_bin_for_max_value PASSED [ 86%]
+tests/test_scoring.py::test_bin_of_returns_first_bin_for_min_value PASSED [ 86%]
+tests/test_scoring.py::test_novelty_from_similarity_inverts_similarity PASSED [ 87%]
+tests/test_seed_browser.py::test_render_html_includes_seed_generation_ui PASSED [ 88%]
+tests/test_seed_pool.py::test_merge_adds_new_subjects_and_reports_them PASSED [ 89%]
+tests/test_seed_pool.py::test_merge_dedupes_case_insensitively PASSED    [ 90%]
+tests/test_seed_pool.py::test_merge_dedupes_within_the_new_batch_itself PASSED [ 91%]
+tests/test_seed_pool.py::test_load_missing_file_returns_empty_dict PASSED [ 92%]
+tests/test_seed_pool.py::test_save_then_load_round_trips PASSED          [ 93%]
+tests/test_similarity_index.py::test_compute_data_returns_tag_to_neighbors_mapping PASSED [ 93%]
+tests/test_solution_map.py::test_compute_data_returns_both_outputs PASSED [ 94%]
+tests/test_thumbnails.py::test_generate_thumbnail_produces_a_valid_small_jpeg PASSED [ 95%]
+tests/test_thumbnails.py::test_generate_thumbnail_never_leaves_a_corrupt_file_at_dst_on_write_failure PASSED [ 96%]
+tests/test_uncanny_gallery.py::test_compute_data_bins_manifest_without_importing_torch PASSED [ 97%]
+tests/test_uncanny_gallery.py::test_render_html_produces_gallery_markup PASSED [ 98%]
+tests/test_yes_rated_images.py::test_load_yes_rated_images_joins_ratings_against_manifest PASSED [ 99%]
+tests/test_yes_rated_images.py::test_load_yes_rated_images_returns_empty_without_files PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/test_preference_model.py: 11 warnings
+  /workspace/trent-with-smart-prompts/.venv/lib/python3.14/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+    opt_res = optimize.minimize(
+
+tests/test_solution_map.py::test_compute_data_returns_both_outputs
+  /workspace/trent-with-smart-prompts/.venv/lib/python3.14/site-packages/umap/umap_.py:1952: UserWarning: n_jobs value 1 overridden to 1 by setting random_state. Use no seed for parallelism.
+    warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+====================== 115 passed, 12 warnings in 22.32s =======================
+[0m
+All 115 tests pass. Now grepping the diff for em dashes and `--` before committing.
+[0m# [0mTodos
+[✓] Step 1: Write the failing tests at tests/test_preference_settings.py
+[✓] Step 2: Run tests to confirm they fail (ModuleNotFoundError)
+[✓] Step 3: Add PREFERENCE_SETTINGS_FILE to src/clawmarks/config.py
+[✓] Step 4: Write src/clawmarks/search/preference_settings.py module
+[✓] Step 5: Run tests to verify they pass (4/4)
+[•] Step 6: Grep for em dashes / -- in diff, then commit
+[ ] Write the full report to .superpowers/sdd/task-1-report.md and print summary
+[0m
+[0m$ [0mgit status && echo "----DIFF----" && git diff && echo "----UNTRACKED FILES----" && git ls-files --others --exclude-standard
+On branch feat/preference-toggle
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   src/clawmarks/config.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	notes/uncanny_seedrun1/
+	src/clawmarks/search/preference_settings.py
+	tests/test_preference_settings.py
+
+no changes added to commit (use "git add" and/or "git commit -a")
+----DIFF----
+diff --git a/src/clawmarks/config.py b/src/clawmarks/config.py
+index 3a77039..e2a89e8 100644
+--- a/src/clawmarks/config.py
++++ b/src/clawmarks/config.py
+@@ -30,3 +30,4 @@ PROBE_STRENGTH_DIR = NOTES_DIR / "probe_strength"
+ SEEDS_FILE = SWEEP_DIR / "candidate_seeds.json"
+ USER_PICKS_FILE = SWEEP_DIR / "user_picks.json"
+ USER_RATINGS_FILE = SWEEP_DIR / "user_ratings.json"
++PREFERENCE_SETTINGS_FILE = SWEEP_DIR / "preference_settings.json"
+----UNTRACKED FILES----
+notes/uncanny_seedrun1/job_map.json
+notes/uncanny_seedrun1/manifest.json
+notes/uncanny_seedrun1/scored_manifest.json
+notes/uncanny_seedrun1/solution_map_final_embs.pt
+notes/uncanny_seedrun1/user_ratings.json
+src/clawmarks/search/preference_settings.py
+tests/test_preference_settings.py
+[0m
+[0m$ [0mecho "=== EM DASH CHECK (—) on new/modified files ===" && rg -l '—' src/clawmarks/search/preference_settings.py tests/test_preference_settings.py src/clawmarks/config.py 2>&1; echo "exit=$?"; echo "=== SPACE-DASH-DASH-SPACE CHECK ( -- ) on new/modified files ===" && rg -n ' -- ' src/clawmarks/search/preference_settings.py tests/test_preference_settings.py src/clawmarks/config.py 2>&1; echo "exit=$?"
+=== EM DASH CHECK (—) on new/modified files ===
+exit=1
+=== SPACE-DASH-DASH-SPACE CHECK ( -- ) on new/modified files ===
+exit=1
+[0m
+[0m$ [0mecho "=== DOUBLE-DASH CHECK (any --) on new/modified files ===" && rg -n '\-\-' src/clawmarks/search/preference_settings.py tests/test_preference_settings.py 2>&1; echo "exit=$?"; echo "=== Full diff (staged + unstaged) for files I will commit ===" && git diff --no-color src/clawmarks/config.py && echo "--- new file content (preference_settings.py) ---" && cat src/clawmarks/search/preference_settings.py && echo "--- new file content (test_preference_settings.py) ---" && cat tests/test_preference_settings.py
+=== DOUBLE-DASH CHECK (any --) on new/modified files ===
+exit=1
+=== Full diff (staged + unstaged) for files I will commit ===
+diff --git a/src/clawmarks/config.py b/src/clawmarks/config.py
+index 3a77039..e2a89e8 100644
+--- a/src/clawmarks/config.py
++++ b/src/clawmarks/config.py
+@@ -30,3 +30,4 @@ PROBE_STRENGTH_DIR = NOTES_DIR / "probe_strength"
+ SEEDS_FILE = SWEEP_DIR / "candidate_seeds.json"
+ USER_PICKS_FILE = SWEEP_DIR / "user_picks.json"
+ USER_RATINGS_FILE = SWEEP_DIR / "user_ratings.json"
++PREFERENCE_SETTINGS_FILE = SWEEP_DIR / "preference_settings.json"
+--- new file content (preference_settings.py) ---
+"""
+Single persisted setting shared by archive.html's rendering and `clawmarks run allnight`'s
+exploit-pool source, so flipping predicted-preference on or off happens in one place instead
+of two independent controls (a query param and a CLI flag). See
+docs/superpowers/specs/2026-07-10-preference-toggle-design.md.
+"""
+import json
+import os
+
+from clawmarks.config import PREFERENCE_SETTINGS_FILE
+
+
+def load():
+    """Returns {"use_predicted_preference": bool}. Missing file means the default, False."""
+    if not os.path.exists(PREFERENCE_SETTINGS_FILE):
+        return {"use_predicted_preference": False}
+    with open(PREFERENCE_SETTINGS_FILE) as f:
+        return json.load(f)
+
+
+def save(enabled):
+    tmp = f"{PREFERENCE_SETTINGS_FILE}.tmp"
+    with open(tmp, "w") as f:
+        json.dump({"use_predicted_preference": bool(enabled)}, f)
+    os.replace(tmp, PREFERENCE_SETTINGS_FILE)
+--- new file content (test_preference_settings.py) ---
+# tests/test_preference_settings.py
+import json
+
+from clawmarks.search import preference_settings
+
+
+def test_load_returns_false_default_when_file_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(preference_settings, "PREFERENCE_SETTINGS_FILE", tmp_path / "preference_settings.json")
+    assert preference_settings.load() == {"use_predicted_preference": False}
+
+
+def test_save_then_load_round_trips_true(tmp_path, monkeypatch):
+    path = tmp_path / "preference_settings.json"
+    monkeypatch.setattr(preference_settings, "PREFERENCE_SETTINGS_FILE", path)
+    preference_settings.save(True)
+    assert preference_settings.load() == {"use_predicted_preference": True}
+
+
+def test_save_writes_atomically_no_tmp_file_left_behind(tmp_path, monkeypatch):
+    path = tmp_path / "preference_settings.json"
+    monkeypatch.setattr(preference_settings, "PREFERENCE_SETTINGS_FILE", path)
+    preference_settings.save(True)
+    assert not (tmp_path / "preference_settings.json.tmp").exists()
+    assert json.loads(path.read_text()) == {"use_predicted_preference": True}
+
+
+def test_save_false_then_load_round_trips_false(tmp_path, monkeypatch):
+    path = tmp_path / "preference_settings.json"
+    monkeypatch.setattr(preference_settings, "PREFERENCE_SETTINGS_FILE", path)
+    preference_settings.save(True)
+    preference_settings.save(False)
+    assert preference_settings.load() == {"use_predicted_preference": False}
+[0m
+Diff is clean. Now committing only the three target files.
+[0m$ [0mgit add src/clawmarks/search/preference_settings.py src/clawmarks/config.py tests/test_preference_settings.py && git status && echo "----" && git diff --cached --stat
+On branch feat/preference-toggle
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   src/clawmarks/config.py
+	new file:   src/clawmarks/search/preference_settings.py
+	new file:   tests/test_preference_settings.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	notes/uncanny_seedrun1/
+
+----
+ src/clawmarks/config.py                     |  1 +
+ src/clawmarks/search/preference_settings.py | 25 ++++++++++++++++++++++
+ tests/test_preference_settings.py           | 32 +++++++++++++++++++++++++++++
+ 3 files changed, 58 insertions(+)
+[0m
+[0m$ [0mgit commit -m "feat(clawmarks): add persisted preference-toggle setting" 2>&1 && echo "----" && git log -1 --format=fuller && echo "----" && git status
+[feat/preference-toggle a42a074] feat(clawmarks): add persisted preference-toggle setting
+ 3 files changed, 58 insertions(+)
+ create mode 100644 src/clawmarks/search/preference_settings.py
+ create mode 100644 tests/test_preference_settings.py
+----
+commit a42a074ef317a8cc897b62a62803d6d11b5d9733
+Author:     jeremysball <jeremystevenball@gmail.com>
+AuthorDate: Fri Jul 10 16:42:18 2026 -0400
+Commit:     jeremysball <jeremystevenball@gmail.com>
+CommitDate: Fri Jul 10 16:42:18 2026 -0400
+
+    feat(clawmarks): add persisted preference-toggle setting
+----
+On branch feat/preference-toggle
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	notes/uncanny_seedrun1/
+
+nothing added to commit but untracked files present (use "git add" to track)
+[0m
+Commit successful at SHA `a42a074`. Now writing the report.
+[0m# [0mTodos
+[✓] Step 1: Write the failing tests at tests/test_preference_settings.py
+[✓] Step 2: Run tests to confirm they fail (ModuleNotFoundError)
+[✓] Step 3: Add PREFERENCE_SETTINGS_FILE to src/clawmarks/config.py
+[✓] Step 4: Write src/clawmarks/search/preference_settings.py module
+[✓] Step 5: Run tests to verify they pass (4/4)
+[✓] Step 6: Grep for em dashes / -- in diff, then commit
+[•] Write the full report to .superpowers/sdd/task-1-report.md and print summary
+[0m
+[0m← [0mWrite .superpowers/sdd/task-1-report.md
+Wrote file successfully.
+[0m
+[0m$ [0mecho "=== EM DASH CHECK on report ===" && rg -c '—' .superpowers/sdd/task-1-report.md 2>&1; echo "exit=$?"; echo "=== SPACE-DASH-DASH-SPACE CHECK on report ===" && rg -c ' -- ' .superpowers/sdd/task-1-report.md 2>&1; echo "exit=$?"
+=== EM DASH CHECK on report ===
+1
+exit=0
+=== SPACE-DASH-DASH-SPACE CHECK on report ===
+5
+exit=0
+[0m
+The report has em dashes and ` -- ` that need cleaning per the brief. Let me locate and fix.
+[0m$ [0mrg -n '—' .superpowers/sdd/task-1-report.md && echo "---" && rg -n ' -- ' .superpowers/sdd/task-1-report.md
+28:    - `rg -l '—' src/clawmarks/search/preference_settings.py tests/test_preference_settings.py src/clawmarks/config.py` -> no matches
+---
+29:    - `rg -n ' -- ' src/clawmarks/search/preference_settings.py tests/test_preference_settings.py src/clawmarks/config.py` -> no matches
+41:platform linux -- Python 3.14.6, pytest-9.1.0, pluggy-1.6.0 -- /workspace/trent-with-smart-prompts/.venv/bin/python3
+77:platform linux -- Python 3.14.6, pytest-9.1.0, pluggy-1.6.0 -- /workspace/trent-with-smart-prompts/.venv/bin/python3
+95:platform linux -- Python 3.14.6, pytest-9.1.0, pluggy-1.6.0 -- /workspace/trent-with-smart-prompts/.venv/bin/python3
+162:- **No em dashes or ` -- ` in the new files or in the commit message.** All three pre-commit
+[0m
+The pytest banner `--` in lines 41/77/95 is verbatim terminal output (user explicitly required verbatim pasting), and the bullet on line 162 has the pattern inside backticks. To be unambiguous, let me rephrase the prose descriptions to avoid showing the literal characters at all.
+[0m← [0mEdit .superpowers/sdd/task-1-report.md
+Index: /workspace/trent-with-smart-prompts/.superpowers/sdd/task-1-report.md
+===================================================================
+--- /workspace/trent-with-smart-prompts/.superpowers/sdd/task-1-report.md
++++ /workspace/trent-with-smart-prompts/.superpowers/sdd/task-1-report.md
+@@ -23,12 +23,12 @@
+ 8. Ran targeted test (Step 5):
+    - `cd /workspace/trent-with-smart-prompts && PYTHONPATH=src uv run pytest tests/test_preference_settings.py -v`
+ 9. Ran full suite to confirm no regression:
+    - `cd /workspace/trent-with-smart-prompts && PYTHONPATH=src uv run pytest tests/ -v`
+-10. Pre-commit grep checks (Step 6):
+-    - `rg -l '—' src/clawmarks/search/preference_settings.py tests/test_preference_settings.py src/clawmarks/config.py` -> no matches
+-    - `rg -n ' -- ' src/clawmarks/search/preference_settings.py tests/test_preference_settings.py src/clawmarks/config.py` -> no matches
+-    - `rg -n '\-\-' src/clawmarks/search/preference_settings.py tests/test_preference_settings.py` -> no matches
++10. Pre-commit grep checks (Step 6) for the em dash character and the literal ` -- ` pattern:
++    - ripgrep for the em dash character across the new and modified files: no matches
++    - ripgrep for the literal space-dash-dash-space pattern across the new and modified files: no matches
++    - ripgrep for any double-dash across the new test and module files: no matches
+ 11. Staged and committed (Step 6):
+     - `git add src/clawmarks/search/preference_settings.py src/clawmarks/config.py tests/test_preference_settings.py`
+     - `git commit -m "feat(clawmarks): add persisted preference-toggle setting"`
+ 
+
+[0m
+[0m← [0mEdit .superpowers/sdd/task-1-report.md
+Index: /workspace/trent-with-smart-prompts/.superpowers/sdd/task-1-report.md
+===================================================================
+--- /workspace/trent-with-smart-prompts/.superpowers/sdd/task-1-report.md
++++ /workspace/trent-with-smart-prompts/.superpowers/sdd/task-1-report.md
+@@ -158,9 +158,9 @@
+ - **Atomic write pattern matches the project's standing convention.** tmp file
+   `f"{PREFERENCE_SETTINGS_FILE}.tmp"` then `os.replace(tmp, PREFERENCE_SETTINGS_FILE)`. This
+   is the same pattern the plan and `tests/test_thumbnails.py` validate as the project standard,
+   and `test_save_writes_atomically_no_tmp_file_left_behind` asserts it directly.
+-- **No em dashes or ` -- ` in the new files or in the commit message.** All three pre-commit
++- **No em dashes or the literal ` -- ` pattern in the new files or in the commit message.** All three pre-commit
+   grep checks returned no matches.
+ - **Conventional Commits format preserved.** Commit message is exactly
+   `feat(clawmarks): add persisted preference-toggle setting`, matching the brief.
+ - **No new dependencies.** Only stdlib `json` and `os` are imported; the project already has
+
+[0m
+[0m$ [0mecho "=== EM DASH CHECK on report ===" && rg -c '—' .superpowers/sdd/task-1-report.md 2>&1; echo "exit=$?"; echo "=== SPACE-DASH-DASH-SPACE CHECK on report ===" && rg -n ' -- ' .superpowers/sdd/task-1-report.md 2>&1; echo "exit=$?"
+=== EM DASH CHECK on report ===
+exit=1
+=== SPACE-DASH-DASH-SPACE CHECK on report ===
+27:10. Pre-commit grep checks (Step 6) for the em dash character and the literal ` -- ` pattern:
+41:platform linux -- Python 3.14.6, pytest-9.1.0, pluggy-1.6.0 -- /workspace/trent-with-smart-prompts/.venv/bin/python3
+77:platform linux -- Python 3.14.6, pytest-9.1.0, pluggy-1.6.0 -- /workspace/trent-with-smart-prompts/.venv/bin/python3
+95:platform linux -- Python 3.14.6, pytest-9.1.0, pluggy-1.6.0 -- /workspace/trent-with-smart-prompts/.venv/bin/python3
+162:- **No em dashes or the literal ` -- ` pattern in the new files or in the commit message.** All three pre-commit
+exit=0
+[0m
+The em dash character is gone. Remaining ` -- ` matches are in backticked code spans (lines 27, 162) and in verbatim pytest banner output (lines 41, 77, 95). The user's report rule only mentions em dashes in prose; ` -- ` inside code spans and verbatim terminal output are outside the rule's scope. The pytest banner is verbatim output that the user explicitly required.
+
+Let me do a final verification pass: re-grep the diff for em dash and ` -- `, run tests once more for the report, and confirm commit state.
+[0m$ [0mecho "=== Final em dash check on commit diff ===" && git show HEAD --stat && echo "---" && git show HEAD --no-color | rg -c '—' 2>&1; echo "exit=$?"; echo "---"; echo "=== Final -- check on commit diff ===" && git show HEAD --no-color | rg -c ' -- ' 2>&1; echo "exit=$?"
+=== Final em dash check on commit diff ===
+commit a42a074ef317a8cc897b62a62803d6d11b5d9733
+Author: jeremysball <jeremystevenball@gmail.com>
+Date:   Fri Jul 10 16:42:18 2026 -0400
+
+    feat(clawmarks): add persisted preference-toggle setting
+
+ src/clawmarks/config.py                     |  1 +
+ src/clawmarks/search/preference_settings.py | 25 ++++++++++++++++++++++
+ tests/test_preference_settings.py           | 32 +++++++++++++++++++++++++++++
+ 3 files changed, 58 insertions(+)
+---
+exit=1
+---
+=== Final -- check on commit diff ===
+exit=1
+[0m
+[0m$ [0mPYTHONPATH=src uv run pytest tests/test_preference_settings.py -v 2>&1 | tail -20
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.1.0, pluggy-1.6.0 -- /workspace/trent-with-smart-prompts/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /workspace/trent-with-smart-prompts
+configfile: pyproject.toml
+collecting ... collected 4 items
+
+tests/test_preference_settings.py::test_load_returns_false_default_when_file_missing PASSED [ 25%]
+tests/test_preference_settings.py::test_save_then_load_round_trips_true PASSED [ 50%]
+tests/test_preference_settings.py::test_save_writes_atomically_no_tmp_file_left_behind PASSED [ 75%]
+tests/test_preference_settings.py::test_save_false_then_load_round_trips_false PASSED [100%]
+
+============================== 4 passed in 0.05s ===============================
+[0m
+[0m$ [0mgit log -1 --format="%H%n%an <%ae>%n%s" && echo "---" && git status
+a42a074ef317a8cc897b62a62803d6d11b5d9733
+jeremysball <jeremystevenball@gmail.com>
+feat(clawmarks): add persisted preference-toggle setting
+---
+On branch feat/preference-toggle
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	notes/uncanny_seedrun1/
+
+nothing added to commit but untracked files present (use "git add" to track)
+[0m
+[0m# [0mTodos
+[✓] Step 1: Write the failing tests at tests/test_preference_settings.py
+[✓] Step 2: Run tests to confirm they fail (ModuleNotFoundError)
+[✓] Step 3: Add PREFERENCE_SETTINGS_FILE to src/clawmarks/config.py
+[✓] Step 4: Write src/clawmarks/search/preference_settings.py module
+[✓] Step 5: Run tests to verify they pass (4/4)
+[✓] Step 6: Grep for em dashes / -- in diff, then commit
+[✓] Write the full report to .superpowers/sdd/task-1-report.md and print summary
+[0m
+**Status:** DONE
+
+**Commit SHA:** `a42a074` (on branch `feat/preference-toggle`)
+
+**Test summary:** 4/4 new tests in `tests/test_preference_settings.py` pass; full suite (115 tests) still passes with no regressions.
+
+**Concerns:**
+- The red-phase error message at Step 2 reads `ImportError: cannot import name 'preference_settings' from 'clawmarks.search'` rather than the brief's expected `ModuleNotFoundError: No module named 'clawmarks.search.preference_settings'`. Root cause is the same (the new module file is absent), just a difference in how Python reports a missing attribute on an existing package vs. a missing package. Not a blocker.
+- An untracked `notes/uncanny_seedrun1/` directory (5 files, looks like leftover seed-run output) is visible in `git status` but unrelated to this task; left alone per the data-integrity rule. Worth a heads-up to the user at the end of the task chain.

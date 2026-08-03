@@ -6,8 +6,6 @@ runpod-ssh/
 # ephemeral working notes, per CLAUDE.md convention: not tracked
 TODO.txt
 
-# plan docs: working scratch, not tracked going forward
-docs/superpowers/plans/
 
 # archive: superseded/unrelated material kept on disk, not in history
 archive/
@@ -66,8 +64,11 @@ venv/
 
 # local session state
 .claude/
-.superpowers/
 .lavish/
 
 # scratch git worktrees for isolated agent/opencode dispatch
 .worktrees/
+
+# .superpowers/ is tracked in full (plans, specs, SDD scratch state, brainstorm output); override
+# the broader *.log/*.png/*.jpg/etc. rules above for this directory only.
+!.superpowers/**

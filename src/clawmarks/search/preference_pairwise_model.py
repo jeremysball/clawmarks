@@ -2,7 +2,7 @@
 Trains a pairwise preference model on frozen DINOv2 embeddings (search/embed_cache.py) and the
 user's head-to-head comparisons (user_comparisons.json), so images can be ranked by predicted
 preference. Replaces search/preference_model.py's role: yes/no ratings are gone, comparisons are
-head-to-head instead. See docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md.
+head-to-head instead. See .superpowers/.completed/specs/2026-07-11-head-to-head-preference-design.md.
 
 Fits a Bradley-Terry-style pairwise model with plain logistic regression: for each comparison,
 the training row is embedding[winner] - embedding[loser] labeled 1, mirrored as its negation

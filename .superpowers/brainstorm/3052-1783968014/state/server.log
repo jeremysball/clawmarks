@@ -1,0 +1,3 @@
+{"type":"server-started","port":59238,"host":"0.0.0.0","url_host":"100.73.69.126","url":"http://100.73.69.126:59238/?key=0934072eb46c467d38ba86bfa8d63b767d1233394dfe73c7131dd099bfab28d3","screen_dir":"/workspace/trent-with-smart-prompts/.superpowers/brainstorm/3052-1783968014/content","state_dir":"/workspace/trent-with-smart-prompts/.superpowers/brainstorm/3052-1783968014/state","idle_timeout_ms":14400000}
+{"type":"screen-added","file":"/workspace/trent-with-smart-prompts/.superpowers/brainstorm/3052-1783968014/content/mockup-v5-critique-fixes-autopilot.html"}
+{"type":"server-stopped","reason":"owner process exited"}

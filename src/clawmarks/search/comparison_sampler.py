@@ -9,7 +9,7 @@ dominate the pool. At or above the floor, switches to model-uncertainty-guided s
 random candidate set of images is scored by the current model, and the two whose scores are
 closest together are returned, since that pair is the model's best approximation of "least sure
 which one wins" without enumerating every possible pair across a pool of thousands of images.
-See docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md.
+See .superpowers/.completed/specs/2026-07-11-head-to-head-preference-design.md.
 """
 import random
 

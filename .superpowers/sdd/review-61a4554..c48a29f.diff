@@ -1,0 +1,55 @@
+# Review package: 61a4554..c48a29f
+
+## Commits
+c48a29f feat(clawmarks): add preference status page to the shared nav bar
+
+## Files changed
+ src/clawmarks/shared_ui.py |  1 +
+ tests/test_shared_ui.py    | 12 ++++++++++++
+ 2 files changed, 13 insertions(+)
+
+## Diff
+diff --git a/src/clawmarks/shared_ui.py b/src/clawmarks/shared_ui.py
+index dd14267..60bf37b 100644
+--- a/src/clawmarks/shared_ui.py
++++ b/src/clawmarks/shared_ui.py
+@@ -14,20 +14,21 @@ module fetches scan_data.json itself.
+ import os
+ 
+ NAV_OPTIONS = [
+     ("explore.html", "all tools (hub)"),
+     ("rate.html", "rate images (yes/no)"),
+     ("scan.html", "scan gallery"),
+     ("map.html", "solution map (UMAP)"),
+     ("coverage.html", "coverage / void map"),
+     ("archive.html", "elite archive"),
+     ("preference_rank.html", "predicted preference"),
++    ("preference_status.html", "preference status"),
+     ("redundancy.html", "redundancy clusters"),
+     ("novelty_decay.html", "novelty decay watchlist"),
+     ("lineage.html", "lineage tree"),
+     ("seeds.html", "candidate seeds"),
+     ("gallery.html", "binned atlas (original)"),
+ ]
+ 
+ 
+ def nav_bar_html(current):
+     opts = "".join(
+diff --git a/tests/test_shared_ui.py b/tests/test_shared_ui.py
+new file mode 100644
+index 0000000..aa0155d
+--- /dev/null
++++ b/tests/test_shared_ui.py
+@@ -0,0 +1,12 @@
++# tests/test_shared_ui.py
++from clawmarks.shared_ui import NAV_OPTIONS, nav_bar_html
++
++
++def test_nav_options_includes_preference_status_page():
++    hrefs = [href for href, _label in NAV_OPTIONS]
++    assert "preference_status.html" in hrefs
++
++
++def test_nav_bar_html_marks_preference_status_selected_when_current():
++    html = nav_bar_html("preference_status.html")
++    assert 'value="preference_status.html" selected' in html

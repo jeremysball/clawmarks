@@ -1,0 +1,1691 @@
+# Review package: ecefb65518f58a32144108b99c831b6cf7a450a3..HEAD
+
+## Commits
+e228bc3 feat(clawmarks): add DINOv2 embedding cache
+0a1cd76 feat(clawmarks): search driver exploit pool reads yes-ratings instead of picks
+2ffe2c1 feat(clawmarks): elite archive reads yes-ratings instead of picks
+405fcad feat(clawmarks): remove pick-as-winner from the lightbox, add rate.html
+0620369 feat(clawmarks): replace pick endpoints with ratings endpoints in curation_server
+b623363 feat(clawmarks): add one-time picks-to-ratings migration script
+b39eb07 feat(clawmarks): add stratified rating sampler
+a238381 feat(clawmarks): add shared manifest_index helpers and USER_RATINGS_FILE config
+
+## Files changed
+ src/clawmarks/build/elite_archive.py             |  48 ++++-----
+ src/clawmarks/build/rate_page.py                 | 120 ++++++++++++++++++++++
+ src/clawmarks/cli.py                             |   5 +-
+ src/clawmarks/config.py                          |   1 +
+ src/clawmarks/curation_server.py                 | 106 ++++++++++++--------
+ src/clawmarks/search/driver.py                   |  34 ++++---
+ src/clawmarks/search/embed_cache.py              | 122 +++++++++++++++++++++++
+ src/clawmarks/search/manifest_index.py           |  21 ++++
+ src/clawmarks/search/migrate_picks_to_ratings.py |  51 ++++++++++
+ src/clawmarks/search/rating_sampler.py           |  44 ++++++++
+ src/clawmarks/shared_ui.py                       |  29 +-----
+ tests/test_cli.py                                |   7 ++
+ tests/test_config.py                             |   4 +
+ tests/test_curation_server.py                    |  41 ++++++++
+ tests/test_elite_archive.py                      |  38 +++++++
+ tests/test_embed_cache.py                        |  90 +++++++++++++++++
+ tests/test_manifest_index.py                     |  30 ++++++
+ tests/test_migrate_picks_to_ratings.py           |  27 +++++
+ tests/test_rate_page.py                          |  12 +++
+ tests/test_rating_sampler.py                     |  53 ++++++++++
+ tests/test_yes_rated_images.py                   |  26 +++++
+ 21 files changed, 794 insertions(+), 115 deletions(-)
+
+## Diff
+diff --git a/src/clawmarks/build/elite_archive.py b/src/clawmarks/build/elite_archive.py
+index 585ea1e..3f281df 100644
+--- a/src/clawmarks/build/elite_archive.py
++++ b/src/clawmarks/build/elite_archive.py
+@@ -1,27 +1,28 @@
+ """
+ Idea 5 from Fable's exploration-tooling brainstorm (2026-07-09): the actual MAP-Elites archive,
+ one image per occupied cell instead of gallery.html's up-to-12-per-cell atlas. This is the
+ whitepaper-ready artifact, and clicking through the archive to override an elite by hand (via
+ the existing pick API) is a faster human-curation loop than scrolling all 3392 images in
+ scan.html.
+ 
+-Elite selection per cell: a human pick (notes/uncanny_sweep/user_picks.json) wins if one exists
+-in that cell, since a person's judgment substitutes for the coherence/quality scorer this
++Elite selection per cell: a yes-rated image (notes/uncanny_sweep/user_ratings.json) wins if one
++exists in that cell, since a person's judgment substitutes for the coherence/quality scorer this
+ project doesn't have (lab_notebook.md Section 3b). Otherwise falls back to highest novelty in
+ the cell, matching the ranking the search itself uses to build its automated "elites" list.
+ 
+ Run after scored_manifest.json exists: python3 -m clawmarks.build.elite_archive
+ """
+ import json, os, sys
+ 
+ from clawmarks.config import SWEEP_DIR
++from clawmarks.search.manifest_index import item_summary
+ from clawmarks.shared_ui import (
+     nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, write_lightbox_asset, write_scrollnav_asset,
+     write_infotip_asset, INFOTIP_CSS, info_btn,
+ )
+ 
+ N_BINS = 4  # matches gallery.html's display grid
+ 
+ 
+ def main(argv=None):
+     write_lightbox_asset(SWEEP_DIR)
+@@ -31,25 +32,26 @@ def main(argv=None):
+     elite_tip = info_btn(
+         "MAP-Elites is a search strategy that keeps a grid of bins (here, faithfulness x novelty) "
+         "and remembers only the single best image found so far for each bin, rather than every image "
+         "ever generated. Each cell below is that bin's current champion: a human pick if one exists, "
+         "otherwise the highest-novelty image the automated search found there."
+     )
+ 
+     with open(f"{SWEEP_DIR}/scored_manifest.json") as f:
+         manifest = json.load(f)
+ 
+-    picks = {}
+-    picks_path = f"{SWEEP_DIR}/user_picks.json"
+-    if os.path.exists(picks_path):
+-        with open(picks_path) as f:
+-            picks = json.load(f)
++    ratings = {}
++    ratings_path = f"{SWEEP_DIR}/user_ratings.json"
++    if os.path.exists(ratings_path):
++        with open(ratings_path) as f:
++            ratings = json.load(f)
++    picks = {tag: r for tag, r in ratings.items() if r.get("label") == "yes"}
+ 
+     faith_vals = sorted(m["centroid_sim"] for m in manifest)
+     novelty_vals = sorted(m["novelty"] for m in manifest)
+ 
+     def bin_edges(vals, n):
+         return [vals[int(i * len(vals) / n)] for i in range(1, n)]
+ 
+     faith_edges = bin_edges(faith_vals, N_BINS)
+     novelty_edges = bin_edges(novelty_vals, N_BINS)
+ 
+@@ -58,43 +60,33 @@ def main(argv=None):
+             if val <= e:
+                 return i
+         return len(edges)
+ 
+     grid = {}
+     for m in manifest:
+         fb = bin_of(m["centroid_sim"], faith_edges)
+         nb = bin_of(m["novelty"], novelty_edges)
+         grid.setdefault((fb, nb), []).append(m)
+ 
+-    def item_summary(m):
+-        return {
+-            "tag": m["tag"], "prompt_name": m["prompt_name"], "prompt_type": m["prompt_type"],
+-            "faith": round(m["centroid_sim"], 4), "novelty": round(m["novelty"], 4),
+-            "strength": m["strength"], "cfg": m["cfg"],
+-            "thumb": (f"thumbs/{m['tag']}.jpg" if os.path.exists(f"{SWEEP_DIR}/thumbs/{m['tag']}.jpg")
+-                      else os.path.basename(m["file"])),
+-            "file": os.path.basename(m["file"]),
+-        }
+-
+     cells = []
+     n_human = 0
+     for fb in range(N_BINS):
+         for nb in range(N_BINS):
+             items = grid.get((fb, nb), [])
+             if not items:
+                 continue
+             picked_here = [m for m in items if m["tag"] in picks]
+             if picked_here:
+                 n_human += 1
+             cells.append({
+                 "fb": fb, "nb": nb, "n": len(items),
+-                "items": [item_summary(m) for m in sorted(items, key=lambda m: -m["novelty"])],
++                "items": [item_summary(m, SWEEP_DIR) for m in sorted(items, key=lambda m: -m["novelty"])],
+             })
+ 
+     cells.sort(key=lambda c: (c["fb"], c["nb"]))
+     data_json = json.dumps(cells)
+ 
+     html = f"""<!doctype html><html><head><meta charset="utf-8">
+ <title>CLAWMARKS elite archive</title>
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <style>
+ :root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
+@@ -138,21 +130,21 @@ a.navlink {{ color:#7c9eff; font-size:12.5px; text-decoration:none; }}
+ @media (max-width: 640px) {{
+   #modal {{ padding:14px; }}
+   #modalGrid {{ grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }}
+ }}
+ {INFOTIP_CSS}
+ </style></head><body>
+ 
+ {nav_bar_html('archive.html')}
+ <h1>Elite archive{elite_tip}</h1>
+ <p class="sub">One image per occupied cell of the faithfulness x novelty grid: the actual
+-MAP-Elites archive, not the full population. Gold-bordered cells are human-picked winners;
++MAP-Elites archive, not the full population. Gold-bordered cells are yes-rated winners;
+ others fall back to the highest-novelty image the automated search found in that cell. The
+ DINOv2 scorer only ranks faithfulness and novelty, not aesthetic quality, so it can't tell which
+ image in a cell is the better picture: click "view all" to browse every candidate in a cell and
+ pick a different one by hand.</p>
+ 
+ <div id="grid"></div>
+ 
+ <div id="modal">
+   <span class="close" onclick="closeModal()">&times;</span>
+   <h2 id="modalTitle"></h2>
+@@ -163,29 +155,29 @@ pick a different one by hand.</p>
+ 
+ <script>
+ const CELLS = {data_json};
+ let picks = {{}};
+ 
+ // display novelty descending within faith rows, faith ascending row order, to roughly mirror gallery.html
+ CELLS.sort((a, b) => a.fb - b.fb || b.nb - a.nb);
+ 
+ function eliteFor(c) {{
+   const pickedHere = c.items.filter(it => picks[it.tag]);
+-  if (pickedHere.length) return {{ item: pickedHere[0], source: 'human pick' }};
++  if (pickedHere.length) return {{ item: pickedHere[0], source: 'yes-rated' }};
+   return {{ item: c.items[0], source: 'highest novelty' }};  // items pre-sorted by -novelty
+ }}
+ 
+ function render() {{
+   const grid = document.getElementById('grid');
+   grid.innerHTML = CELLS.map((c, i) => {{
+     const {{ item: elite, source }} = eliteFor(c);
+-    const human = source === 'human pick';
++    const human = source === 'yes-rated';
+     return `
+     <div class="cell ${{human ? 'human' : ''}}">
+       <img src="${{elite.thumb}}" loading="lazy" data-tag="${{elite.tag}}" onclick="Lightbox.open('${{elite.tag}}')">
+       <div class="meta">
+         <b>${{elite.prompt_name}}</b> <span class="badge ${{human ? 'human' : 'auto'}}">${{source}}</span><br>
+         faith=${{elite.faith}} novelty=${{elite.novelty}}<br>
+         n=${{c.n}} in cell | s=${{elite.strength}} cfg=${{elite.cfg}}
+       </div>
+       <button class="viewall" onclick="openModal(${{i}})">view all ${{c.n}} in this cell</button>
+     </div>`;
+@@ -202,31 +194,25 @@ function openModal(i) {{
+     </div>`).join('');
+   document.getElementById('modal').classList.add('open');
+ }}
+ function closeModal() {{
+   document.getElementById('modal').classList.remove('open');
+ }}
+ document.addEventListener('keydown', e => {{
+   if (e.key === 'Escape') closeModal();
+ }});
+ 
+-document.addEventListener('lightbox:pick', e => {{
+-  if (e.detail.picked) picks[e.detail.tag] = true; else delete picks[e.detail.tag];
++fetch('/api/ratings').then(r => r.json()).then(ratings => {{
++  picks = {{}};
++  Object.entries(ratings).forEach(([tag, r]) => {{ if (r.label === 'yes') picks[tag] = true; }});
+   render();
+-  if (document.getElementById('modal').classList.contains('open')) {{
+-    document.querySelectorAll('#modalGrid .item').forEach(el => {{
+-      el.classList.toggle('human', !!picks[el.title]);
+-    }});
+-  }}
+-}});
+-
+-fetch('/api/picks').then(r => r.json()).then(p => {{ picks = p; render(); }}).catch(() => {{ render(); }});
++}}).catch(() => {{ render(); }});
+ </script>
+ <script src="scrollnav.js"></script>
+ <script src="lightbox.js"></script>
+ <script src="infotip.js"></script>
+ </body></html>"""
+ 
+     with open(f"{SWEEP_DIR}/archive.html", "w") as f:
+         f.write(html)
+ 
+     print(f"wrote {SWEEP_DIR}/archive.html ({len(cells)} occupied cells, {n_human} human-picked elites)", flush=True)
+diff --git a/src/clawmarks/build/rate_page.py b/src/clawmarks/build/rate_page.py
+new file mode 100644
+index 0000000..0f4c256
+--- /dev/null
++++ b/src/clawmarks/build/rate_page.py
+@@ -0,0 +1,120 @@
++"""
++Generates rate.html: a full-screen, keyboard-driven yes/no rating page. Unlike every other
++build/*.py generator, this page bakes in no per-image data at build time — it fetches
++GET /api/rate/next itself and POSTs to /api/rate, both served by curation_server.py, so the page
++never goes stale between rebuilds. Rebuilding only matters if this file itself changes.
++
++Run with: python3 -m clawmarks.build.rate_page (or `clawmarks build rate`)
++"""
++from clawmarks.config import SWEEP_DIR
++from clawmarks.shared_ui import (
++    nav_bar_html, TOPNAV_CSS, MOBILE_BASE_CSS, write_scrollnav_asset, write_infotip_asset,
++    INFOTIP_CSS, info_btn,
++)
++
++
++def main(argv=None):
++    write_scrollnav_asset(SWEEP_DIR)
++    write_infotip_asset(SWEEP_DIR)
++
++    rate_tip = info_btn(
++        "Rating trains the preference classifier: yes/no on as many images as you can stand "
++        "to look at. Yes-rated images immediately take over the search's exploit pool (the same "
++        "role picking used to play); once enough ratings exist, a model trained on them takes "
++        "over ranking automatically."
++    )
++
++    html = f"""<!doctype html><html><head><meta charset="utf-8">
++<title>CLAWMARKS rate</title>
++<meta name="viewport" content="width=device-width, initial-scale=1">
++<style>
++:root {{ color-scheme: dark; --bg:#0b0b0d; --panel:#16161a; --border:#2a2a30; --text:#eaeaee;
++  --text-dim:#9a9aa4; --yes:#5ec98a; --no:#e0605e; }}
++body {{ background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; margin:0; padding:24px;
++  display:flex; flex-direction:column; align-items:center; }}
++{TOPNAV_CSS}
++{MOBILE_BASE_CSS}
++h1 {{ font-size:18px; margin:0 0 4px; align-self:flex-start; }}
++p.sub {{ color:var(--text-dim); max-width:640px; font-size:13px; line-height:1.6; align-self:flex-start; }}
++#stage {{ margin-top:20px; width:100%; max-width:640px; display:flex; flex-direction:column; align-items:center; }}
++#img {{ max-width:100%; max-height:60vh; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,0.6); }}
++#meta {{ color:var(--text-dim); font-size:12.5px; margin-top:10px; text-align:center; }}
++#buttons {{ display:flex; gap:16px; margin-top:18px; }}
++#buttons button {{ font-size:16px; padding:14px 34px; border-radius:10px; cursor:pointer; border:1px solid var(--border); background:var(--panel); color:var(--text); }}
++#buttons .no {{ border-color:var(--no); color:var(--no); }}
++#buttons .yes {{ border-color:var(--yes); color:var(--yes); }}
++#count {{ color:var(--text-dim); font-size:12px; margin-top:14px; }}
++#done {{ color:var(--text-dim); font-size:14px; margin-top:40px; text-align:center; }}
++{INFOTIP_CSS}
++</style></head><body>
++
++{nav_bar_html('rate.html')}
++<h1>Rate{rate_tip}</h1>
++<p class="sub">Yes or no, as fast as you can go. Keyboard: &larr; or n = no, &rarr; or y = yes.</p>
++
++<div id="stage">
++  <img id="img" style="display:none;">
++  <div id="meta"></div>
++  <div id="buttons" style="display:none;">
++    <button class="no" onclick="rate('no')">&larr; no</button>
++    <button class="yes" onclick="rate('yes')">yes &rarr;</button>
++  </div>
++  <div id="done" style="display:none;">Nothing left to rate right now &mdash; every image in the pool has been rated or favorited.</div>
++</div>
++<div id="count"></div>
++
++<script>
++let current = null;
++let ratedThisSession = 0;
++
++function loadNext() {{
++  document.getElementById('buttons').style.display = 'none';
++  fetch('/api/rate/next').then(r => r.json()).then(d => {{
++    if (d.done) {{
++      current = null;
++      document.getElementById('img').style.display = 'none';
++      document.getElementById('done').style.display = 'block';
++      return;
++    }}
++    current = d;
++    const img = document.getElementById('img');
++    img.src = d.thumb;
++    img.style.display = 'block';
++    document.getElementById('meta').textContent =
++      `${{d.prompt_name}} | faith=${{d.faith}} novelty=${{d.novelty}}`;
++    document.getElementById('buttons').style.display = 'flex';
++  }});
++}}
++
++function rate(label) {{
++  if (!current) return;
++  const tag = current.tag;
++  fetch('/api/rate', {{method:'POST', headers:{{'Content-Type':'application/json'}},
++    body: JSON.stringify({{tag, label}})}})
++    .then(r => r.json())
++    .then(() => {{
++      ratedThisSession++;
++      document.getElementById('count').textContent = `${{ratedThisSession}} rated this session`;
++      loadNext();
++    }});
++}}
++
++document.addEventListener('keydown', e => {{
++  if (e.key === 'ArrowLeft' || e.key === 'n' || e.key === 'N') rate('no');
++  if (e.key === 'ArrowRight' || e.key === 'y' || e.key === 'Y') rate('yes');
++}});
++
++loadNext();
++</script>
++<script src="scrollnav.js"></script>
++<script src="infotip.js"></script>
++</body></html>"""
++
++    with open(f"{SWEEP_DIR}/rate.html", "w") as f:
++        f.write(html)
++
++    print(f"wrote {SWEEP_DIR}/rate.html", flush=True)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/src/clawmarks/cli.py b/src/clawmarks/cli.py
+index 8133458..746e723 100644
+--- a/src/clawmarks/cli.py
++++ b/src/clawmarks/cli.py
+@@ -1,54 +1,55 @@
+ import argparse
+ 
+ 
+ def _build_targets():
+     # Imported lazily so the parser-only path (build_parser, used by tests) does not require
+     # the build modules' heavy imports (torch, transformers, PIL) to be installed.
+     from clawmarks.build import (
+         scan_gallery, elite_archive, coverage_map, map_view, redundancy_view,
+         novelty_decay, lineage_view, solution_map, similarity_index, thumbnails,
+-        explore_hub, seed_browser, probe_report, uncanny_gallery,
++        explore_hub, seed_browser, probe_report, uncanny_gallery, rate_page,
+     )
+     return {
+         "scan": scan_gallery.main,
+         "archive": elite_archive.main,
+         "coverage": coverage_map.main,
+         "map": map_view.main,
+         "redundancy": redundancy_view.main,
+         "novelty-decay": novelty_decay.main,
+         "lineage": lineage_view.main,
+         "solution-map": solution_map.main,
+         "similarity": similarity_index.main,
+         "thumbnails": thumbnails.main,
+         "explore-hub": explore_hub.main,
+         "seeds": seed_browser.main,
+         "probe-report": probe_report.main,
+         "uncanny-gallery": uncanny_gallery.main,
++        "rate": rate_page.main,
+     }
+ 
+ 
+ def build_parser():
+     parser = argparse.ArgumentParser(prog="clawmarks")
+     sub = parser.add_subparsers(dest="command", required=True)
+ 
+     sub.add_parser("serve")
+ 
+     # Choices must be known at parse time, so enumerate the keys without importing the build
+     # modules themselves (which would pull in torch/transformers). The actual callables are
+     # resolved lazily in main() via _build_targets().
+     build_p = sub.add_parser("build")
+     build_p.add_argument(
+         "target",
+         choices=["all", "scan", "archive", "coverage", "map", "redundancy", "novelty-decay",
+                  "lineage", "solution-map", "similarity", "thumbnails", "explore-hub", "seeds",
+-                 "probe-report", "uncanny-gallery"],
++                 "probe-report", "uncanny-gallery", "rate"],
+     )
+ 
+     run_p = sub.add_parser("run")
+     run_sub = run_p.add_subparsers(dest="run_target", required=True)
+     allnight_p = run_sub.add_parser("allnight")
+     allnight_p.add_argument("--round", type=int, choices=[1, 2], required=True)
+     allnight_p.set_defaults(command="run")
+ 
+     probe_p = sub.add_parser("probe")
+     probe_sub = probe_p.add_subparsers(dest="probe_target", required=True)
+diff --git a/src/clawmarks/config.py b/src/clawmarks/config.py
+index 5cd3e85..b9aa1ab 100644
+--- a/src/clawmarks/config.py
++++ b/src/clawmarks/config.py
+@@ -18,10 +18,11 @@ def repo_root() -> Path:
+ 
+ 
+ ROOT = repo_root()
+ NOTES_DIR = ROOT / "notes"
+ SWEEP_DIR = NOTES_DIR / "uncanny_sweep"
+ SWEEP2_DIR = NOTES_DIR / "uncanny_sweep2"
+ PROBE_DIR = NOTES_DIR / "probe_uncanny"
+ PROBE_STRENGTH_DIR = NOTES_DIR / "probe_strength"
+ SEEDS_FILE = SWEEP_DIR / "candidate_seeds.json"
+ USER_PICKS_FILE = SWEEP_DIR / "user_picks.json"
++USER_RATINGS_FILE = SWEEP_DIR / "user_ratings.json"
+diff --git a/src/clawmarks/curation_server.py b/src/clawmarks/curation_server.py
+index 24d4dd8..90d9deb 100644
+--- a/src/clawmarks/curation_server.py
++++ b/src/clawmarks/curation_server.py
+@@ -1,48 +1,51 @@
+ """
+-Static file server + tiny pick/unpick API for the uncanny-frontier scan gallery. Replaces the
++Static file server + tiny ratings API for the uncanny-frontier scan gallery. Replaces the
+ plain `python3 -m http.server` that was serving notes/uncanny_sweep/ read-only: a plain static
+-server can't accept writes, and the whole point of this is letting a human mark "this is the
+-one that should win this bin" from the browser, which needs somewhere to persist that choice.
+-
+-Picks are stored in notes/uncanny_sweep/user_picks.json, keyed by image tag, with the full
+-image metadata the browser already has (so this server doesn't need to load scored_manifest.json
+-itself to fill in details) plus a picked_at timestamp. A future search run reads this file and
+-prefers user-picked images over the automated novelty ranking when choosing which images to
+-mutate near ("exploit"), only falling back to raw novelty for anything the user hasn't reviewed.
+-
+-Favorites (notes/uncanny_sweep/user_favorites.json) are the same shape but never read by the
+-search: a plain bookmark for images worth keeping (e.g. for the writeup) without steering where
+-the search goes next, for when "I like this" and "build more like this" are different judgments.
++server can't accept writes, and the whole point of this is letting a human record
++yes/no judgments on each image from the browser, which needs somewhere to persist that choice.
++
++Ratings are stored in notes/uncanny_sweep/user_ratings.json, keyed by image tag, with a
++"label" of "yes" or "no" and a "rated_at" timestamp. A future preference-classifier training
++run reads this file as its positive/negative labels (see
++docs/superpowers/specs/2026-07-09-preference-classifier-design.md). The selection of which
++unrated image to show next is stratified across the faithfulness x novelty grid so an early
++rating session doesn't over-sample whichever region happens to dominate the pool.
++
++Favorites (notes/uncanny_sweep/user_favorites.json) are a separate store: a plain bookmark
++for images worth keeping (e.g. for the writeup) without steering where the search goes next,
++for when "I like this" and "build more like this" are different judgments. Favorites also
++count as "reviewed" for the rating UI's next-image picker so a favorited image never gets
++shown for rating.
+ 
+ Counterfactuals (notes/uncanny_sweep/user_counterfactuals.json, images in
+ notes/uncanny_sweep/counterfactuals/) are on-demand single generations: pick an existing image,
+ change whichever of prompt/strength/cfg/seed you want, submit, and this server calls the same
+ serverless ComfyUI endpoint the search itself uses (uix4vdb2cec7sb), waits synchronously for the
+ one job to finish (a few seconds if a worker is already warm, up to several minutes if the
+ endpoint scaled to zero and needs to cold-start one), and saves the result. These are NOT scored against
+ the DINOv2 centroid/novelty metrics and are NOT fed back into the search; they're a quick "what
+ if" comparison tool, not part of the MAP-Elites archive. A RunPod balance check runs before every
+ submission and refuses below a safety floor rather than risk the silent-stall failure mode this
+ project hit once already with a negative balance.
+ 
+ Candidate seeds (notes/uncanny_sweep/candidate_seeds.json) are the pool of subject/texture
+ descriptions "explore" jobs draw from. The search driver (search/driver.py) escalates to
+ GPT-5.5 for fresh ones on plateau, via a subprocess call to `opencode run`; this server exposes
+ the same mechanism on demand so the pool can be reviewed and topped up between runs, not just
+ mid-run. Generation is synchronous (up to 5 minutes) and calls out to opencode/GPT-5.5, so it
+ costs real API time but no RunPod spend.
+ 
+ API:
+-  GET  /api/picks             -> {tag: {...metadata, picked_at}}
+-  POST /api/pick               body: full item object (must include "tag") -> upserts, returns ok
+-  POST /api/unpick              body: {"tag": "..."}                        -> removes, returns ok
++  GET  /api/ratings           -> {tag: {label, rated_at}}
++  GET  /api/rate/next         -> item_summary dict for the next unreviewed image, or {"done": true}
++  POST /api/rate               body: {"tag": "...", "label": "yes"|"no"} -> upserts, returns ok
+   GET  /api/favorites          -> {tag: {...metadata, favorited_at}}
+   POST /api/favorite           body: full item object (must include "tag") -> upserts, returns ok
+   POST /api/unfavorite          body: {"tag": "..."}                        -> removes, returns ok
+   GET  /api/counterfactuals    -> {tag: {...record}}
+   POST /api/counterfactual      body: {origin_tag, prompt, strength, cfg, seed, steps, sampler,
+                                         negative, overridden: [field names]}
+                                  -> generates synchronously, returns {ok, tag, file, ...record}
+                                     or {error} on failure/timeout/low balance
+   GET  /api/seeds              -> {text: {source, created_at}}
+   POST /api/seeds/generate      body: {n: int (default 20)}
+@@ -52,23 +55,25 @@ Everything else falls through to normal static file serving.
+ 
+ Run with: clawmarks serve [port]
+ """
+ import base64, json, os, random, subprocess, sys, threading, time
+ import urllib.request
+ from datetime import datetime, timezone
+ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+ 
+ from clawmarks.config import ROOT, SEEDS_FILE, SWEEP_DIR
+ from clawmarks.search.seed_pool import merge as seed_pool_merge
++from clawmarks.search import rating_sampler
++from clawmarks.search.manifest_index import item_summary
+ 
+-PICKS_FILE = f"{SWEEP_DIR}/user_picks.json"
+ FAVORITES_FILE = f"{SWEEP_DIR}/user_favorites.json"
++RATINGS_FILE = f"{SWEEP_DIR}/user_ratings.json"
+ COUNTERFACTUALS_DIR = f"{SWEEP_DIR}/counterfactuals"
+ COUNTERFACTUALS_FILE = f"{SWEEP_DIR}/user_counterfactuals.json"
+ DEFAULT_PORT = 8420
+ 
+ COMFY_ENDPOINT_ID = "uix4vdb2cec7sb"  # same serverless endpoint the search uses
+ COMFY_BASE = f"https://api.runpod.ai/v2/{COMFY_ENDPOINT_ID}"
+ GRAPHQL_URL = "https://api.runpod.io/graphql"
+ BALANCE_FLOOR_USD = 0.05  # refuse to submit below this rather than risk a silent stall
+ GENERATION_TIMEOUT_S = 330  # a cold endpoint (scaled to zero) took ~215s to spin up a worker in testing
+ SEED_GEN_TIMEOUT_S = 300  # matches search/driver.py's request_gpt55_subjects timeout
+@@ -131,26 +136,46 @@ def load_store(path):
+     return {}
+ 
+ 
+ def save_store(path, store):
+     tmp = path + ".tmp"
+     with open(tmp, "w") as f:
+         json.dump(store, f, indent=1)
+     os.replace(tmp, path)
+ 
+ 
+-def load_picks():
+-    return load_store(PICKS_FILE)
++def next_rating_response(manifest, reviewed_tags, rng=None):
++    """Returns an item_summary dict for the next image to rate, or {"done": True} if every
++    image in `manifest` is already in `reviewed_tags`."""
++    item = rating_sampler.pick_next(manifest, reviewed_tags, rng=rng) if rng is not None \
++        else rating_sampler.pick_next(manifest, reviewed_tags)
++    if item is None:
++        return {"done": True}
++    return item_summary(item, SWEEP_DIR)
++
++
++def record_rating(ratings, tag, label, now):
++    if label not in ("yes", "no"):
++        raise ValueError(f"label must be 'yes' or 'no', got {label!r}")
++    updated = dict(ratings)
++    updated[tag] = {"label": label, "rated_at": now}
++    return updated
+ 
+ 
+-def save_picks(picks):
+-    save_store(PICKS_FILE, picks)
++_manifest_cache = {"manifest": None}
++
++
++def load_manifest():
++    if _manifest_cache["manifest"] is None:
++        with open(f"{SWEEP_DIR}/scored_manifest.json") as f:
++            _manifest_cache["manifest"] = json.load(f)
++    return _manifest_cache["manifest"]
+ 
+ 
+ class Handler(SimpleHTTPRequestHandler):
+     protocol_version = "HTTP/1.1"  # keep-alive, so 3392 grid thumbnails don't reopen a
+                                      # connection per image
+ 
+     def __init__(self, *args, **kwargs):
+         super().__init__(*args, directory=SWEEP_DIR, **kwargs)
+ 
+     def end_headers(self):
+@@ -162,23 +187,31 @@ class Handler(SimpleHTTPRequestHandler):
+ 
+     def _json_response(self, status, obj):
+         body = json.dumps(obj).encode()
+         self.send_response(status)
+         self.send_header("Content-Type", "application/json")
+         self.send_header("Content-Length", str(len(body)))
+         self.end_headers()
+         self.wfile.write(body)
+ 
+     def do_GET(self):
+-        if self.path == "/api/picks":
++        if self.path == "/api/ratings":
+             with _lock:
+-                self._json_response(200, load_picks())
++                self._json_response(200, load_store(RATINGS_FILE))
++            return
++        if self.path == "/api/rate/next":
++            with _lock:
++                ratings = load_store(RATINGS_FILE)
++                favorites = load_store(FAVORITES_FILE)
++                reviewed = set(ratings) | set(favorites)
++                response = next_rating_response(load_manifest(), reviewed)
++            self._json_response(200, response)
+             return
+         if self.path == "/api/favorites":
+             with _lock:
+                 self._json_response(200, load_store(FAVORITES_FILE))
+             return
+         if self.path == "/api/counterfactuals":
+             with _lock:
+                 self._json_response(200, load_store(COUNTERFACTUALS_FILE))
+             return
+         if self.path == "/api/seeds":
+@@ -194,40 +227,31 @@ class Handler(SimpleHTTPRequestHandler):
+ 
+     def do_POST(self):
+         length = int(self.headers.get("Content-Length", 0))
+         raw = self.rfile.read(length) if length else b"{}"
+         try:
+             payload = json.loads(raw)
+         except json.JSONDecodeError:
+             self._json_response(400, {"error": "invalid JSON body"})
+             return
+ 
+-        if self.path == "/api/pick":
++        if self.path == "/api/rate":
+             tag = payload.get("tag")
+-            if not tag:
+-                self._json_response(400, {"error": "missing 'tag'"})
++            label = payload.get("label")
++            if not tag or label not in ("yes", "no"):
++                self._json_response(400, {"error": "missing 'tag' or invalid 'label' (must be 'yes' or 'no')"})
+                 return
+             with _lock:
+-                picks = load_picks()
+-                payload["picked_at"] = datetime.now(timezone.utc).isoformat()
+-                picks[tag] = payload
+-                save_picks(picks)
+-            self._json_response(200, {"ok": True, "count": len(picks)})
+-            return
+-
+-        if self.path == "/api/unpick":
+-            tag = payload.get("tag")
+-            with _lock:
+-                picks = load_picks()
+-                picks.pop(tag, None)
+-                save_picks(picks)
+-            self._json_response(200, {"ok": True, "count": len(picks)})
++                ratings = load_store(RATINGS_FILE)
++                ratings = record_rating(ratings, tag, label, datetime.now(timezone.utc).isoformat())
++                save_store(RATINGS_FILE, ratings)
++            self._json_response(200, {"ok": True, "count": len(ratings)})
+             return
+ 
+         if self.path == "/api/favorite":
+             tag = payload.get("tag")
+             if not tag:
+                 self._json_response(400, {"error": "missing 'tag'"})
+                 return
+             with _lock:
+                 favorites = load_store(FAVORITES_FILE)
+                 payload["favorited_at"] = datetime.now(timezone.utc).isoformat()
+@@ -403,16 +427,16 @@ class Handler(SimpleHTTPRequestHandler):
+             print(f"{self.address_string()} - {fmt % args}", flush=True)
+ 
+ 
+ def main(argv=None):
+     port = DEFAULT_PORT
+     if argv is not None and len(argv) > 0:
+         port = int(argv[0])
+     elif len(sys.argv) > 1:
+         port = int(sys.argv[1])
+     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+-    print(f"serving {SWEEP_DIR} + pick API on 0.0.0.0:{port}", flush=True)
++    print(f"serving {SWEEP_DIR} + ratings API on 0.0.0.0:{port}", flush=True)
+     server.serve_forever()
+ 
+ 
+ if __name__ == "__main__":
+     main()
+diff --git a/src/clawmarks/search/driver.py b/src/clawmarks/search/driver.py
+index d2de2f3..18b1b3b 100644
+--- a/src/clawmarks/search/driver.py
++++ b/src/clawmarks/search/driver.py
+@@ -24,20 +24,21 @@ import json
+ import os
+ import random
+ import subprocess
+ import time
+ import urllib.request
+ from dataclasses import dataclass, field
+ 
+ from clawmarks.config import SEEDS_FILE, SWEEP2_DIR, SWEEP_DIR
+ from clawmarks.search.scoring import bin_edges, bin_of, novelty_from_similarity
+ from clawmarks.search.seed_pool import merge as seed_pool_merge, load as seed_pool_load, save as seed_pool_save
++from clawmarks.search.manifest_index import index_by_tag
+ 
+ TRIGGER = "trentbuckle style, "
+ NEG_DEFAULT = "low quality, blurry, watermark"
+ TYPE_COLOR = {"style": "#5ec98a", "conflict": "#e0a25e"}
+ N_BINS = 4
+ PLATEAU_WINDOW = 3
+ PLATEAU_EPSILON = 0.01
+ 
+ 
+ @dataclass
+@@ -257,33 +258,38 @@ def request_gpt55_subjects(cfg, existing_subjects, n=30):
+             with open(out_path) as f:
+                 subjects = json.load(f)
+             if isinstance(subjects, list) and subjects:
+                 print(f"[gpt5.5] got {len(subjects)} subjects", flush=True)
+                 return [str(s) for s in subjects]
+         except Exception as e:
+             print(f"[gpt5.5] couldn't parse {out_path}: {e}", flush=True)
+     return []
+ 
+ 
+-def _load_user_picks():
+-    """Human-in-the-loop MAP-Elites: this project has no automated coherence/quality scorer,
+-    so per lab_notebook.md Section 3b there's no way for an image to automatically 'win' a
+-    bin. A person reviewing notes/uncanny_sweep/scan.html (served by
+-    notes/curation_server.py, which is what actually persists picks) can mark specific images
+-    as winners instead. When present, those picks anchor the exploit step's mutations in
+-    place of the raw novelty ranking, which is only ever a proxy for 'interesting,' not a
+-    verdict on it."""
+-    if SWEEP_DIR.joinpath("user_picks.json").exists():
+-        with open(SWEEP_DIR / "user_picks.json") as f:
+-            picks = json.load(f)
+-        return list(picks.values())
+-    return []
++def _load_yes_rated_images():
++    """Ratings supersede picks: a human's yes/no judgment on an image, not raw novelty, decides
++    what the exploit step mutates near. user_ratings.json stores only {label, rated_at} per tag
++    (the image metadata already lives in scored_manifest.json), so yes-rated tags are joined
++    against that manifest to recover prompt/strength/cfg for mutation."""
++    ratings_path = SWEEP_DIR / "user_ratings.json"
++    manifest_path = SWEEP_DIR / "scored_manifest.json"
++    if not ratings_path.exists() or not manifest_path.exists():
++        return []
++    with open(ratings_path) as f:
++        ratings = json.load(f)
++    yes_tags = {tag for tag, r in ratings.items() if r.get("label") == "yes"}
++    if not yes_tags:
++        return []
++    with open(manifest_path) as f:
++        manifest = json.load(f)
++    by_tag = index_by_tag(manifest)
++    return [by_tag[t] for t in yes_tags if t in by_tag]
+ 
+ 
+ def _load_prev_round_state(cfg):
+     """Round 1's body still reads its own state file (allnight_state.json) and the
+     first-run fixed-sweep manifest. Round 2 reads round 1's manifest as the exclusion set.
+     Returns (manifest, prev_embs_or_None) tuple."""
+     if cfg.exclude_prev_round:
+         prev_manifest_path = SWEEP_DIR / "scored_manifest.json"
+         if prev_manifest_path.exists():
+             with open(prev_manifest_path) as f:
+@@ -545,21 +551,21 @@ def main(argv=None):
+                   f"${cfg.budget_usd_cap - cfg.budget_safety_margin:.2f} safety threshold "
+                   f"(cap ${cfg.budget_usd_cap}, margin ${cfg.budget_safety_margin})", flush=True)
+             break
+ 
+         state["generation"] += 1
+         gen = state["generation"]
+         liminal_band_all = [m for m in manifest if real_ref[1] <= m["centroid_sim"] <= real_ref[2]]
+         elites = sorted(liminal_band_all, key=lambda m: -m["novelty"])[:15]
+         if not elites and cfg.round == 1:
+             elites = manifest[-30:] if manifest else []
+-        user_picks = _load_user_picks() if cfg.seed_from_start else []
++        user_picks = _load_yes_rated_images() if cfg.seed_from_start else []
+ 
+         print(f"\n=== generation {gen} | elapsed {elapsed_h:.2f}h | spend ${abs(spent):.3f} | "
+               f"stage {state['stage']} | plateau_count {state['plateau_count']} ===", flush=True)
+ 
+         jobs = build_generation_jobs(gen, subjects, textures, elites, user_picks,
+                                       cfg.gen_batch_size, cfg.explore_fraction,
+                                       style_subject_count=style_subject_count)
+         new_manifest = submit_and_collect(cfg, jobs, out_dir, f"gen{gen}")
+         new_scored = score_batch(model, real_embs, real_centroid, new_manifest, prev_embs=prev_embs)
+         manifest.extend(new_scored)
+diff --git a/src/clawmarks/search/embed_cache.py b/src/clawmarks/search/embed_cache.py
+new file mode 100644
+index 0000000..f05d4d4
+--- /dev/null
++++ b/src/clawmarks/search/embed_cache.py
+@@ -0,0 +1,122 @@
++"""
++DINOv2 embedding cache: computes and persists an embedding per image in scored_manifest.json so
++the preference model (search/preference_model.py) can train on frozen features without
++re-running the (slow) DINOv2 model every time. Runs locally, no RunPod cost. See
++docs/superpowers/specs/2026-07-09-preference-classifier-design.md, Component 1.
++
++Run with: python -m clawmarks.search.embed_cache
++"""
++import json
++import os
++
++import numpy as np
++import torch
++from PIL import Image
++
++from clawmarks.config import SWEEP_DIR
++
++MODEL_ID = "facebook/dinov2-base"
++EMBEDDINGS_FILE = SWEEP_DIR / "embeddings.npz"
++
++IMAGE_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
++IMAGE_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
++
++
++def preprocess(img):
++    img = img.convert("RGB")
++    w, h = img.size
++    shortest = 256
++    if w < h:
++        new_w, new_h = shortest, round(h * shortest / w)
++    else:
++        new_h, new_w = shortest, round(w * shortest / h)
++    img = img.resize((new_w, new_h), Image.BICUBIC)
++    left = (new_w - 224) // 2
++    top = (new_h - 224) // 2
++    img = img.crop((left, top, left + 224, top + 224))
++    arr = np.asarray(img).astype(np.float32) / 255.0
++    t = torch.from_numpy(arr).permute(2, 0, 1)
++    t = (t - IMAGE_MEAN) / IMAGE_STD
++    return t
++
++
++def embed_paths(paths, model, batch_size=16):
++    """Returns an (N, D) float32 array of L2-normalized embeddings, one row per path, in the
++    same order as `paths`."""
++    embs = []
++    with torch.no_grad():
++        for i in range(0, len(paths), batch_size):
++            batch_paths = paths[i:i + batch_size]
++            tensors = [preprocess(Image.open(p)) for p in batch_paths]
++            pixel_values = torch.stack(tensors, dim=0)
++            out = model(pixel_values=pixel_values)
++            feats = out.pooler_output
++            feats = feats / feats.norm(dim=-1, keepdim=True)
++            embs.append(feats.detach().numpy())
++    return np.concatenate(embs, axis=0).astype(np.float32)
++
++
++def load_cache(path):
++    """Returns (tags, embeddings). Empty list/array if the file doesn't exist yet."""
++    if not os.path.exists(path):
++        return [], np.zeros((0, 0), dtype=np.float32)
++    data = np.load(path)
++    return list(data["tags"]), data["embeddings"]
++
++
++def save_cache(path, tags, embeddings):
++    tmp = str(path) + ".tmp"
++    with open(tmp, "wb") as f:
++        np.savez(f, tags=np.array(tags), embeddings=np.asarray(embeddings, dtype=np.float32))
++    os.replace(tmp, path)
++
++
++def missing_tags(manifest_tags, cached_tags):
++    cached = set(cached_tags)
++    return [t for t in manifest_tags if t not in cached]
++
++
++def sync(manifest, cache_path, model, image_path_for):
++    """Loads the existing cache, embeds any manifest tag missing from it, appends, and saves.
++    `image_path_for(tag)` resolves a manifest tag to its image file path. Raises
++    FileNotFoundError (listing the offending tag) if a manifest tag's image file doesn't exist,
++    rather than silently skipping it. Returns (tags, embeddings) for the full, updated cache."""
++    tags, embeddings = load_cache(cache_path)
++    manifest_tags = [m["tag"] for m in manifest]
++    to_add = missing_tags(manifest_tags, tags)
++    if not to_add:
++        return tags, embeddings
++
++    missing_paths = []
++    for t in to_add:
++        p = image_path_for(t)
++        if not os.path.exists(p):
++            raise FileNotFoundError(f"tag {t!r} is in the manifest but its image file is missing: {p}")
++        missing_paths.append(p)
++
++    new_embeddings = embed_paths(missing_paths, model)
++    all_tags = list(tags) + to_add
++    all_embeddings = new_embeddings if embeddings.size == 0 else np.concatenate([embeddings, new_embeddings], axis=0)
++    save_cache(cache_path, all_tags, all_embeddings)
++    return all_tags, all_embeddings
++
++
++def main(argv=None):
++    from transformers import AutoModel
++
++    with open(SWEEP_DIR / "scored_manifest.json") as f:
++        manifest = json.load(f)
++    by_tag = {m["tag"]: m for m in manifest}
++
++    def image_path_for(tag):
++        return str(SWEEP_DIR / by_tag[tag]["file"])
++
++    print("loading DINOv2 model...", flush=True)
++    model = AutoModel.from_pretrained(MODEL_ID)
++    model.eval()
++    tags, _ = sync(manifest, EMBEDDINGS_FILE, model, image_path_for)
++    print(f"embedding cache now covers {len(tags)} images at {EMBEDDINGS_FILE}", flush=True)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/src/clawmarks/search/manifest_index.py b/src/clawmarks/search/manifest_index.py
+new file mode 100644
+index 0000000..6d87c57
+--- /dev/null
++++ b/src/clawmarks/search/manifest_index.py
+@@ -0,0 +1,21 @@
++"""Shared helpers for looking up scored_manifest.json entries by tag, and for building the
++small per-image summary dict several tool pages need. Extracted out of build/elite_archive.py
++so curation_server.py's ratings endpoints and build/preference_rank.py can reuse the exact same
++summary shape instead of re-deriving it."""
++import os
++
++
++def index_by_tag(manifest):
++    return {m["tag"]: m for m in manifest}
++
++
++def item_summary(m, sweep_dir):
++    thumb_path = os.path.join(str(sweep_dir), "thumbs", f"{m['tag']}.jpg")
++    return {
++        "tag": m["tag"], "prompt_name": m["prompt_name"], "prompt_type": m["prompt_type"],
++        "faith": round(m["centroid_sim"], 4), "novelty": round(m["novelty"], 4),
++        "strength": m["strength"], "cfg": m["cfg"],
++        "thumb": (f"thumbs/{m['tag']}.jpg" if os.path.exists(thumb_path)
++                  else os.path.basename(m["file"])),
++        "file": os.path.basename(m["file"]),
++    }
+diff --git a/src/clawmarks/search/migrate_picks_to_ratings.py b/src/clawmarks/search/migrate_picks_to_ratings.py
+new file mode 100644
+index 0000000..e9438d6
+--- /dev/null
++++ b/src/clawmarks/search/migrate_picks_to_ratings.py
+@@ -0,0 +1,51 @@
++"""One-time migration: user_picks.json entries become user_ratings.json entries with
++label: "yes", so "pick as winner" can be retired without losing the existing picks. Safe to
++rerun: any tag that already has a rating is left alone. Not wired into `clawmarks` as a
++permanent CLI subcommand since it's a one-shot migration, not a recurring operation. See
++docs/superpowers/specs/2026-07-09-preference-classifier-design.md, Component 2a.
++
++Run with: python -m clawmarks.search.migrate_picks_to_ratings
++"""
++import json
++import os
++
++from clawmarks.config import USER_PICKS_FILE, USER_RATINGS_FILE
++
++
++def merge_picks_into_ratings(picks, ratings):
++    """Returns (updated_ratings, migrated_tags). Does not overwrite a tag that already has a
++    rating, whatever its label, since a rating recorded through rate.html reflects a more
++    deliberate, later judgment than an old pick."""
++    updated = dict(ratings)
++    migrated = []
++    for tag, pick in picks.items():
++        if tag in updated:
++            continue
++        updated[tag] = {"label": "yes", "rated_at": pick.get("picked_at")}
++        migrated.append(tag)
++    return updated, migrated
++
++
++def main(argv=None):
++    picks = {}
++    if USER_PICKS_FILE.exists():
++        with open(USER_PICKS_FILE) as f:
++            picks = json.load(f)
++    ratings = {}
++    if USER_RATINGS_FILE.exists():
++        with open(USER_RATINGS_FILE) as f:
++            ratings = json.load(f)
++
++    updated, migrated = merge_picks_into_ratings(picks, ratings)
++    tmp = str(USER_RATINGS_FILE) + ".tmp"
++    with open(tmp, "w") as f:
++        json.dump(updated, f, indent=1)
++    os.replace(tmp, USER_RATINGS_FILE)
++
++    print(f"migrated {len(migrated)} picks into {USER_RATINGS_FILE} as yes-ratings "
++          f"({len(picks) - len(migrated)} already had a rating and were left alone)", flush=True)
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/src/clawmarks/search/rating_sampler.py b/src/clawmarks/search/rating_sampler.py
+new file mode 100644
+index 0000000..fa9a93f
+--- /dev/null
++++ b/src/clawmarks/search/rating_sampler.py
+@@ -0,0 +1,44 @@
++"""
++Stratified sampler for the ratings UI (rate.html / GET /api/rate/next): picks an unreviewed
++image to show next, spread across the faithfulness x novelty grid build/elite_archive.py
++already uses, so an early rating session doesn't over-sample whichever region happens to
++dominate the pool. See docs/superpowers/specs/2026-07-09-preference-classifier-design.md,
++Component 2.
++"""
++import random
++
++from clawmarks.search.scoring import bin_edges, bin_of
++
++N_BINS = 4  # matches build/elite_archive.py's grid
++
++
++def bin_manifest(manifest):
++    faith_vals = sorted(m["centroid_sim"] for m in manifest)
++    novelty_vals = sorted(m["novelty"] for m in manifest)
++    faith_edges = bin_edges(faith_vals, N_BINS)
++    novelty_edges = bin_edges(novelty_vals, N_BINS)
++    grid = {}
++    for m in manifest:
++        fb = bin_of(m["centroid_sim"], faith_edges)
++        nb = bin_of(m["novelty"], novelty_edges)
++        grid.setdefault((fb, nb), []).append(m)
++    return grid
++
++
++def eligible_grid(manifest, reviewed_tags):
++    grid = bin_manifest(manifest)
++    return {key: [m for m in items if m["tag"] not in reviewed_tags]
++            for key, items in grid.items()}
++
++
++def pick_next(manifest, reviewed_tags, rng=random):
++    """Returns a random manifest item from a randomly chosen non-empty bin, or None if every
++    image is already reviewed. Choosing the bin uniformly at random (not weighted by how many
++    eligible images remain in it) is what makes this stratified rather than plain random: a bin
++    with 5 eligible images is exactly as likely to be sampled from as a bin with 500."""
++    grid = eligible_grid(manifest, reviewed_tags)
++    nonempty = [items for items in grid.values() if items]
++    if not nonempty:
++        return None
++    bin_items = rng.choice(nonempty)
++    return rng.choice(bin_items)
+diff --git a/src/clawmarks/shared_ui.py b/src/clawmarks/shared_ui.py
+index 176ee6c..ad1f6d6 100644
+--- a/src/clawmarks/shared_ui.py
++++ b/src/clawmarks/shared_ui.py
+@@ -8,20 +8,21 @@ across 8 scripts. Import and use:
+ `write_lightbox_asset(sweep_dir)` copies the static lightbox.js module into the sweep
+ directory (idempotent, safe to call from every builder). Every generated page includes it
+ with `<script src="lightbox.js"></script>` and opens images via `Lightbox.open(tag)` instead
+ of `window.open('scan.html?open=...')`: no new tab, no page load, works from any page
+ because the module fetches notes/uncanny_sweep/scan_data.json itself.
+ """
+ import os
+ 
+ NAV_OPTIONS = [
+     ("explore.html", "all tools (hub)"),
++    ("rate.html", "rate images (yes/no)"),
+     ("scan.html", "scan gallery"),
+     ("map.html", "solution map (UMAP)"),
+     ("coverage.html", "coverage / void map"),
+     ("archive.html", "elite archive"),
+     ("redundancy.html", "redundancy clusters"),
+     ("novelty_decay.html", "novelty decay watchlist"),
+     ("lineage.html", "lineage tree"),
+     ("seeds.html", "candidate seeds"),
+     ("gallery.html", "binned atlas (original)"),
+ ]
+@@ -151,21 +152,20 @@ SCROLLNAV_JS = """
+     if (!ticking) { requestAnimationFrame(onScroll); ticking = true; }
+   }, {passive:true});
+ })();
+ """
+ 
+ _LIGHTBOX_JS = r"""(function(){
+   let DATA = null, byTag = null;
+   let order = [];
+   let idx = -1;
+   let history = [];
+-  let picks = {};
+   let favorites = {};
+   let counterfactuals = {};
+   let el = null;
+ 
+   function ensureDom(){
+     if (el) return;
+     const style = document.createElement('style');
+     style.textContent = `
+ #lb-overlay { position:fixed; inset:0; background:rgba(8,8,10,0.94); backdrop-filter:blur(6px);
+   display:none; align-items:center; justify-content:center; z-index:1000; flex-direction:column; gap:10px; padding:20px; }
+@@ -182,21 +182,20 @@ _LIGHTBOX_JS = r"""(function(){
+ @keyframes lb-spin { to { transform:rotate(360deg); } }
+ #lb-overlay .lb-info { color:#9a9aa4; font-size:12.5px; max-width:92vw; text-align:center; line-height:1.6; }
+ #lb-overlay .lb-nav { position:absolute; top:0; bottom:0; width:16%; cursor:pointer; z-index:1; }
+ #lb-overlay .lb-prev { left:0; } #lb-overlay .lb-next { right:0; }
+ #lb-overlay .lb-close { position:absolute; top:16px; right:22px; font-size:28px; cursor:pointer; color:#9a9aa4;
+   width:40px; height:40px; display:flex; align-items:center; justify-content:center; z-index:2; }
+ #lb-overlay .lb-close:hover { color:#eaeaee; }
+ #lb-overlay .lb-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center; }
+ #lb-overlay button { background:#1d1d22; color:#eaeaee; border:1px solid #2a2a30; border-radius:7px;
+   padding:8px 16px; font-size:13px; cursor:pointer; }
+-#lb-overlay button.picked { background:rgba(245,197,66,0.16); border-color:#f5c542; color:#f5c542; }
+ #lb-overlay button.favorited { background:rgba(224,96,150,0.16); border-color:#e0609a; color:#e0609a; }
+ #lb-overlay .lb-actions .infobtn { background:rgba(255,255,255,0.12); border-color:rgba(255,255,255,0.3); color:#dcdce2; }
+ #lb-overlay .lb-simlabel { font-size:11px; color:#6a6a74; letter-spacing:0.02em; text-transform:uppercase; }
+ #lb-overlay .lb-simstrip { display:flex; gap:7px; overflow-x:auto; max-width:92vw; padding:4px 2px 8px; }
+ #lb-overlay .lb-simstrip img { width:64px; height:64px; object-fit:cover; border-radius:6px; cursor:pointer;
+   flex-shrink:0; opacity:0.7; outline:2px solid transparent; }
+ #lb-overlay .lb-simstrip img:hover { opacity:1; outline-color:#7c9eff; }
+ #lb-overlay .lb-cf-panel { display:none; background:rgba(255,255,255,0.05); border:1px solid #2a2a30;
+   border-radius:8px; padding:12px 14px; max-width:92vw; width:520px; text-align:left; }
+ #lb-overlay .lb-cf-panel.open { display:block; }
+@@ -237,22 +236,20 @@ _LIGHTBOX_JS = r"""(function(){
+   <span class="lb-close">&times;</span>
+   <div class="lb-nav lb-prev"></div>
+   <div class="lb-nav lb-next"></div>
+   <div class="lb-imgwrap">
+     <img class="lb-main">
+     <div class="lb-spinner"></div>
+   </div>
+   <div class="lb-info"></div>
+   <div class="lb-actions">
+     <button class="lb-back" style="display:none;">&#8592; back</button>
+-    <button class="lb-pick">&#9733; pick as winner</button>
+-    <span class="infobtn" data-id="lb-tip-pick" data-tip="Picking marks this image as a human-approved success. The next search generation uses picked images as starting points for new variations, ahead of the algorithm's own ranking: it's how your judgment steers where the search goes next.">?</span>
+     <button class="lb-favorite">&#9825; favorite</button>
+     <span class="infobtn" data-id="lb-tip-favorite" data-tip="Favoriting just bookmarks this image for your own reference (e.g. for a writeup). Unlike picking, it has no effect on the search: use it for images you like but don't want the next generation to build on.">?</span>
+     <button class="lb-cf-toggle">&#8635; generate counterfactual</button>
+     <span class="infobtn" data-id="lb-tip-cf" data-tip="A counterfactual asks 'what if this image had used different settings' by generating a brand-new image right now, keeping whichever fields you don't change and varying the ones you do. It costs real generation time/money (seconds if the endpoint is warm, minutes if it has to cold-start) and never feeds back into the search on its own: it's a side-by-side comparison tool, not a pick.">?</span>
+   </div>
+   <div class="lb-cf-panel">
+     <label>Prompt</label>
+     <textarea class="lb-cf-prompt"></textarea>
+     <div class="lb-cf-row">
+       <div><label>Strength</label><input class="lb-cf-strength" type="number" step="0.05"></div>
+@@ -270,31 +267,29 @@ _LIGHTBOX_JS = r"""(function(){
+ 
+     const mainImg = el.querySelector('.lb-main');
+     const imgWrap = el.querySelector('.lb-imgwrap');
+     mainImg.addEventListener('load', () => imgWrap.classList.remove('loading'));
+     mainImg.addEventListener('error', () => imgWrap.classList.remove('loading'));
+ 
+     el.querySelector('.lb-close').onclick = close;
+     el.querySelector('.lb-prev').onclick = () => step(-1);
+     el.querySelector('.lb-next').onclick = () => step(1);
+     el.querySelector('.lb-back').onclick = back;
+-    el.querySelector('.lb-pick').onclick = togglePick;
+     el.querySelector('.lb-favorite').onclick = toggleFavorite;
+     el.querySelector('.lb-cf-toggle').onclick = toggleCfPanel;
+     el.querySelector('.lb-cf-submit').onclick = submitCounterfactual;
+     el.addEventListener('click', e => { if (e.target === el) close(); });
+     document.addEventListener('keydown', e => {
+       if (!el.classList.contains('open')) return;
+       if (e.key === 'ArrowRight') step(1);
+       if (e.key === 'ArrowLeft') step(-1);
+       if (e.key === 'Escape') close();
+-      if (e.key === ' ') { e.preventDefault(); togglePick(); }
+       if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFavorite(); }
+       if (e.key === 'Backspace' && history.length) { e.preventDefault(); back(); }
+     });
+   }
+ 
+   function dataUrl(){
+     // Resolve scan_data.json relative to wherever this script tag was loaded from, so the
+     // module works no matter which tool page (in the same served directory) includes it.
+     const scripts = document.getElementsByTagName('script');
+     for (const s of scripts) {
+@@ -307,23 +302,20 @@ _LIGHTBOX_JS = r"""(function(){
+ 
+   function loadData(){
+     if (DATA) return Promise.resolve(DATA);
+     return fetch(dataUrl()).then(r => r.json()).then(d => {
+       DATA = d;
+       byTag = {};
+       d.forEach(it => byTag[it.tag] = it);
+       return d;
+     });
+   }
+-  function loadPicks(){
+-    return fetch('/api/picks').then(r => r.json()).then(p => { picks = p; }).catch(() => {});
+-  }
+   function loadFavorites(){
+     return fetch('/api/favorites').then(r => r.json()).then(f => { favorites = f; }).catch(() => {});
+   }
+   function loadCounterfactuals(){
+     return fetch('/api/counterfactuals').then(r => r.json()).then(c => { counterfactuals = c; }).catch(() => {});
+   }
+ 
+   // Shared full-size prefetch cache, keyed by tag: { img, done }. `done` means the load
+   // finished (success or error) and the browser now has it cached, so it's never restarted.
+   // While a prefetch is still in flight (`done` false, `img` set), it can be aborted by
+@@ -363,24 +355,20 @@ _LIGHTBOX_JS = r"""(function(){
+ 
+   function render(){
+     const d = order[idx];
+     const mainImg = el.querySelector('.lb-main');
+     el.querySelector('.lb-imgwrap').classList.add('loading');
+     mainImg.src = d.file;
+     prefetchNeighbors();
+     el.querySelector('.lb-info').textContent =
+       `${d.tag} | gen ${d.gen} | ${d.category} | type=${d.prompt_type} | prompt=${d.prompt_name} | ` +
+       `strength=${d.strength} cfg=${d.cfg} | faith=${d.faith} novelty=${d.novelty}`;
+-    const isPicked = !!picks[d.tag];
+-    const pickBtn = el.querySelector('.lb-pick');
+-    pickBtn.textContent = isPicked ? '★ picked (click to unpick)' : '☆ pick as winner';
+-    pickBtn.classList.toggle('picked', isPicked);
+     const isFav = !!favorites[d.tag];
+     const favBtn = el.querySelector('.lb-favorite');
+     favBtn.textContent = isFav ? '♥ favorited (click to remove)' : '♡ favorite';
+     favBtn.classList.toggle('favorited', isFav);
+     el.querySelector('.lb-back').style.display = history.length ? 'inline-block' : 'none';
+ 
+     const strip = el.querySelector('.lb-simstrip');
+     const simTags = d.sim || [];
+     if (simTags.length) {
+       strip.innerHTML = simTags.map(t => {
+@@ -486,51 +474,38 @@ _LIGHTBOX_JS = r"""(function(){
+     if (i === -1) { order = [d]; i = 0; }
+     idx = i;
+     render();
+   }
+   function back(){
+     if (!history.length) return;
+     const prev = history.pop();
+     order = prev.order; idx = prev.idx;
+     render();
+   }
+-  function togglePick(){
+-    const d = order[idx];
+-    const isPicked = !!picks[d.tag];
+-    const endpoint = isPicked ? '/api/unpick' : '/api/pick';
+-    const body = isPicked ? {tag: d.tag} : Object.assign({}, d);
+-    fetch(endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+-      .then(r => r.json())
+-      .then(() => {
+-        if (isPicked) delete picks[d.tag]; else picks[d.tag] = body;
+-        render();
+-        document.dispatchEvent(new CustomEvent('lightbox:pick', {detail: {tag: d.tag, picked: !isPicked}}));
+-      });
+-  }
+   function toggleFavorite(){
+     const d = order[idx];
+     const isFav = !!favorites[d.tag];
+     const endpoint = isFav ? '/api/unfavorite' : '/api/favorite';
+     const body = isFav ? {tag: d.tag} : Object.assign({}, d);
+     fetch(endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)})
+       .then(r => r.json())
+       .then(() => {
+         if (isFav) delete favorites[d.tag]; else favorites[d.tag] = body;
+         render();
+         document.dispatchEvent(new CustomEvent('lightbox:favorite', {detail: {tag: d.tag, favorited: !isFav}}));
+       });
+   }
+   function close(){ el.classList.remove('open'); }
+ 
+   function open(tag, localTags){
+     ensureDom();
+-    Promise.all([loadData(), loadPicks(), loadFavorites(), loadCounterfactuals()]).then(() => {
++    Promise.all([loadData(), loadFavorites(), loadCounterfactuals()]).then(() => {
+       history = [];
+       order = (localTags && localTags.length) ? localTags.map(t => byTag[t]).filter(Boolean) : DATA;
+       const d = byTag[tag];
+       if (!d) return;
+       idx = order.indexOf(d);
+       if (idx === -1) { order = [d]; idx = 0; }
+       render();
+       el.classList.add('open');
+     });
+   }
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index 002adc5..084ce4b 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -13,10 +13,17 @@ def test_run_allnight_round_argument_parses():
+     parser = build_parser()
+     args = parser.parse_args(["run", "allnight", "--round", "2"])
+     assert args.command == "run"
+     assert args.round == 2
+ 
+ 
+ def test_serve_subcommand_parses():
+     parser = build_parser()
+     args = parser.parse_args(["serve"])
+     assert args.command == "serve"
++
++
++def test_build_rate_subcommand_parses():
++    parser = build_parser()
++    args = parser.parse_args(["build", "rate"])
++    assert args.command == "build"
++    assert args.target == "rate"
+diff --git a/tests/test_config.py b/tests/test_config.py
+index 2840e4c..382a2e8 100644
+--- a/tests/test_config.py
++++ b/tests/test_config.py
+@@ -10,10 +10,14 @@ def test_repo_root_finds_pyproject():
+ 
+ def test_repo_root_env_override(tmp_path, monkeypatch):
+     monkeypatch.setenv("CLAWMARKS_ROOT", str(tmp_path))
+     assert config.repo_root() == tmp_path
+ 
+ 
+ def test_derived_paths_under_repo_root():
+     root = config.repo_root()
+     assert config.SWEEP_DIR == root / "notes" / "uncanny_sweep"
+     assert config.SWEEP2_DIR == root / "notes" / "uncanny_sweep2"
++
++
++def test_user_ratings_file_path():
++    assert config.USER_RATINGS_FILE == config.SWEEP_DIR / "user_ratings.json"
+diff --git a/tests/test_curation_server.py b/tests/test_curation_server.py
+new file mode 100644
+index 0000000..52947ae
+--- /dev/null
++++ b/tests/test_curation_server.py
+@@ -0,0 +1,41 @@
++# tests/test_curation_server.py
++from clawmarks import curation_server as cs
++
++
++def test_next_rating_response_returns_item_summary_shape():
++    manifest = [
++        {"tag": "a", "prompt_name": "p", "prompt_type": "style", "centroid_sim": 0.5,
++         "novelty": 0.3, "strength": 1.0, "cfg": 7.0, "file": "a.png"},
++    ]
++    result = cs.next_rating_response(manifest, reviewed_tags=set())
++    assert result["tag"] == "a"
++    assert result["faith"] == 0.5
++    assert "done" not in result
++
++
++def test_next_rating_response_reports_done_when_all_reviewed():
++    manifest = [{"tag": "a", "centroid_sim": 0.5, "novelty": 0.3, "prompt_name": "p",
++                 "prompt_type": "style", "strength": 1.0, "cfg": 7.0, "file": "a.png"}]
++    result = cs.next_rating_response(manifest, reviewed_tags={"a"})
++    assert result == {"done": True}
++
++
++def test_record_rating_upserts_with_timestamp():
++    ratings = {}
++    updated = cs.record_rating(ratings, "a", "yes", now="2026-07-10T00:00:00Z")
++    assert updated["a"] == {"label": "yes", "rated_at": "2026-07-10T00:00:00Z"}
++
++
++def test_record_rating_overwrites_not_duplicates():
++    ratings = {"a": {"label": "no", "rated_at": "t0"}}
++    updated = cs.record_rating(ratings, "a", "yes", now="t1")
++    assert updated == {"a": {"label": "yes", "rated_at": "t1"}}
++    assert len(updated) == 1
++
++
++def test_record_rating_rejects_invalid_label():
++    try:
++        cs.record_rating({}, "a", "maybe", now="t0")
++        assert False, "expected ValueError"
++    except ValueError:
++        pass
+diff --git a/tests/test_elite_archive.py b/tests/test_elite_archive.py
+new file mode 100644
+index 0000000..45892e6
+--- /dev/null
++++ b/tests/test_elite_archive.py
+@@ -0,0 +1,38 @@
++# tests/test_elite_archive.py
++import json
++import re
++
++from clawmarks.build import elite_archive
++
++
++def test_main_uses_yes_rated_images_not_user_picks(tmp_path, monkeypatch, capsys):
++    monkeypatch.setattr(elite_archive, "SWEEP_DIR", tmp_path)
++    # Force every image into a single cell, regardless of its faith/novelty values, so the test
++    # doesn't depend on how a 2-item manifest happens to quantile-split across N_BINS x N_BINS
++    # cells (bin_edges(vals, 1) always returns [], so bin_of always returns 0).
++    monkeypatch.setattr(elite_archive, "N_BINS", 1)
++    manifest = [
++        {"tag": "a", "prompt_name": "p", "prompt_type": "style", "centroid_sim": 0.9,
++         "novelty": 0.1, "strength": 1.0, "cfg": 7.0, "file": "a.png"},
++        {"tag": "b", "prompt_name": "p", "prompt_type": "style", "centroid_sim": 0.9,
++         "novelty": 0.9, "strength": 1.0, "cfg": 7.0, "file": "b.png"},
++    ]
++    (tmp_path / "scored_manifest.json").write_text(json.dumps(manifest))
++    # "a" has lower novelty than "b" but is yes-rated: it should win the cell despite that,
++    # exactly the behavior user_picks.json used to provide.
++    (tmp_path / "user_ratings.json").write_text(json.dumps({"a": {"label": "yes", "rated_at": "t0"}}))
++    # a stale user_picks.json should be ignored entirely
++    (tmp_path / "user_picks.json").write_text(json.dumps({"b": {"picked_at": "t0"}}))
++
++    elite_archive.main([])
++
++    captured = capsys.readouterr()
++    assert "1 occupied cells, 1 human-picked elites" in captured.out
++
++    html = (tmp_path / "archive.html").read_text()
++    match = re.search(r"const CELLS = (\[.+?\]);\nlet picks", html)
++    assert match is not None, "could not find 'const CELLS = [...]; let picks' in archive.html"
++    cells = json.loads(match.group(1))
++    assert len(cells) == 1
++    tags_in_cell = {item["tag"] for item in cells[0]["items"]}
++    assert tags_in_cell == {"a", "b"}
+diff --git a/tests/test_embed_cache.py b/tests/test_embed_cache.py
+new file mode 100644
+index 0000000..22422b5
+--- /dev/null
++++ b/tests/test_embed_cache.py
+@@ -0,0 +1,90 @@
++# tests/test_embed_cache.py
++import numpy as np
++import torch
++from PIL import Image
++
++from clawmarks.search import embed_cache
++
++
++class FakeOutput:
++    def __init__(self, pooler_output):
++        self.pooler_output = pooler_output
++
++
++class FakeModel:
++    """Deterministic per-image 'embedding' derived from mean pixel value, so tests exercise
++    embed_cache's own logic (batching, ordering, caching) without loading the real (slow,
++    network-fetched) DINOv2 model."""
++    def __call__(self, pixel_values):
++        means = pixel_values.mean(dim=(1, 2, 3))
++        feats = torch.stack([means, -means], dim=1)
++        return FakeOutput(feats)
++
++
++def _write_image(path, color):
++    Image.new("RGB", (32, 32), color=color).save(path)
++
++
++def test_embed_paths_returns_one_normalized_row_per_path(tmp_path):
++    p1 = tmp_path / "a.png"
++    p2 = tmp_path / "b.png"
++    _write_image(p1, (10, 10, 10))
++    _write_image(p2, (200, 200, 200))
++    embs = embed_cache.embed_paths([str(p1), str(p2)], FakeModel())
++    assert embs.shape == (2, 2)
++    norms = np.linalg.norm(embs, axis=1)
++    assert np.allclose(norms, 1.0, atol=1e-5)
++
++
++def test_save_and_load_cache_round_trips(tmp_path):
++    path = tmp_path / "embeddings.npz"
++    tags = ["a", "b"]
++    embeddings = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
++    embed_cache.save_cache(path, tags, embeddings)
++    loaded_tags, loaded_embeddings = embed_cache.load_cache(path)
++    assert loaded_tags == tags
++    assert np.allclose(loaded_embeddings, embeddings)
++
++
++def test_load_cache_missing_file_returns_empty(tmp_path):
++    tags, embeddings = embed_cache.load_cache(tmp_path / "missing.npz")
++    assert tags == []
++    assert embeddings.shape == (0, 0)
++
++
++def test_missing_tags_returns_manifest_tags_not_in_cache():
++    assert embed_cache.missing_tags(["a", "b", "c"], ["a", "c"]) == ["b"]
++
++
++def test_sync_adds_only_missing_tags_and_persists(tmp_path):
++    manifest = [{"tag": "a"}, {"tag": "b"}]
++    _write_image(tmp_path / "a.png", (10, 10, 10))
++    _write_image(tmp_path / "b.png", (200, 200, 200))
++    cache_path = tmp_path / "embeddings.npz"
++
++    def image_path_for(tag):
++        return str(tmp_path / f"{tag}.png")
++
++    tags, embeddings = embed_cache.sync(manifest, cache_path, FakeModel(), image_path_for)
++    assert tags == ["a", "b"]
++    assert embeddings.shape == (2, 2)
++
++    manifest.append({"tag": "c"})
++    _write_image(tmp_path / "c.png", (100, 50, 25))
++    tags2, embeddings2 = embed_cache.sync(manifest, cache_path, FakeModel(), image_path_for)
++    assert tags2 == ["a", "b", "c"]
++    assert np.allclose(embeddings2[:2], embeddings)
++
++
++def test_sync_raises_on_missing_image_file(tmp_path):
++    manifest = [{"tag": "missing"}]
++    cache_path = tmp_path / "embeddings.npz"
++
++    def image_path_for(tag):
++        return str(tmp_path / "does_not_exist.png")
++
++    try:
++        embed_cache.sync(manifest, cache_path, FakeModel(), image_path_for)
++        assert False, "expected FileNotFoundError"
++    except FileNotFoundError:
++        pass
+diff --git a/tests/test_manifest_index.py b/tests/test_manifest_index.py
+new file mode 100644
+index 0000000..1458a2e
+--- /dev/null
++++ b/tests/test_manifest_index.py
+@@ -0,0 +1,30 @@
++# tests/test_manifest_index.py
++from clawmarks.search import manifest_index
++
++
++def test_index_by_tag_builds_lookup():
++    manifest = [{"tag": "a", "x": 1}, {"tag": "b", "x": 2}]
++    idx = manifest_index.index_by_tag(manifest)
++    assert idx == {"a": {"tag": "a", "x": 1}, "b": {"tag": "b", "x": 2}}
++
++
++def test_item_summary_falls_back_to_basename_when_no_thumb(tmp_path):
++    m = {"tag": "t1", "prompt_name": "style_x", "prompt_type": "style",
++         "centroid_sim": 0.5, "novelty": 0.25, "strength": 1.0, "cfg": 7.0,
++         "file": str(tmp_path / "images" / "t1.png")}
++    summary = manifest_index.item_summary(m, tmp_path)
++    assert summary["thumb"] == "t1.png"
++    assert summary["file"] == "t1.png"
++    assert summary["faith"] == 0.5
++    assert summary["novelty"] == 0.25
++
++
++def test_item_summary_uses_thumb_when_present(tmp_path):
++    thumbs_dir = tmp_path / "thumbs"
++    thumbs_dir.mkdir()
++    (thumbs_dir / "t1.jpg").write_bytes(b"x")
++    m = {"tag": "t1", "prompt_name": "style_x", "prompt_type": "style",
++         "centroid_sim": 0.5, "novelty": 0.25, "strength": 1.0, "cfg": 7.0,
++         "file": str(tmp_path / "t1.png")}
++    summary = manifest_index.item_summary(m, tmp_path)
++    assert summary["thumb"] == "thumbs/t1.jpg"
+diff --git a/tests/test_migrate_picks_to_ratings.py b/tests/test_migrate_picks_to_ratings.py
+new file mode 100644
+index 0000000..fa4cd48
+--- /dev/null
++++ b/tests/test_migrate_picks_to_ratings.py
+@@ -0,0 +1,27 @@
++# tests/test_migrate_picks_to_ratings.py
++from clawmarks.search.migrate_picks_to_ratings import merge_picks_into_ratings
++
++
++def test_migrates_picks_not_already_rated():
++    picks = {"a": {"picked_at": "t0"}, "b": {"picked_at": "t1"}}
++    ratings = {}
++    updated, migrated = merge_picks_into_ratings(picks, ratings)
++    assert migrated == ["a", "b"]
++    assert updated["a"] == {"label": "yes", "rated_at": "t0"}
++    assert updated["b"] == {"label": "yes", "rated_at": "t1"}
++
++
++def test_does_not_overwrite_an_existing_rating():
++    picks = {"a": {"picked_at": "t0"}}
++    ratings = {"a": {"label": "no", "rated_at": "t9"}}
++    updated, migrated = merge_picks_into_ratings(picks, ratings)
++    assert migrated == []
++    assert updated["a"] == {"label": "no", "rated_at": "t9"}
++
++
++def test_leaves_existing_ratings_not_derived_from_picks_untouched():
++    picks = {}
++    ratings = {"c": {"label": "yes", "rated_at": "t5"}}
++    updated, migrated = merge_picks_into_ratings(picks, ratings)
++    assert migrated == []
++    assert updated == {"c": {"label": "yes", "rated_at": "t5"}}
+diff --git a/tests/test_rate_page.py b/tests/test_rate_page.py
+new file mode 100644
+index 0000000..5b90380
+--- /dev/null
++++ b/tests/test_rate_page.py
+@@ -0,0 +1,12 @@
++# tests/test_rate_page.py
++from clawmarks.build import rate_page
++
++
++def test_main_writes_rate_html(tmp_path, monkeypatch):
++    monkeypatch.setattr(rate_page, "SWEEP_DIR", tmp_path)
++    rate_page.main([])
++    out = tmp_path / "rate.html"
++    assert out.exists()
++    content = out.read_text()
++    assert "/api/rate/next" in content
++    assert "/api/rate" in content
+diff --git a/tests/test_rating_sampler.py b/tests/test_rating_sampler.py
+new file mode 100644
+index 0000000..470f986
+--- /dev/null
++++ b/tests/test_rating_sampler.py
+@@ -0,0 +1,53 @@
++# tests/test_rating_sampler.py
++import random
++
++from clawmarks.search import rating_sampler
++
++
++def _manifest(n):
++    return [{"tag": f"t{i}", "centroid_sim": i / n, "novelty": 1 - i / n} for i in range(n)]
++
++
++def test_bin_manifest_splits_into_n_bins_by_bin_count():
++    manifest = _manifest(16)
++    grid = rating_sampler.bin_manifest(manifest)
++    assert len(grid) <= rating_sampler.N_BINS * rating_sampler.N_BINS
++    assert sum(len(v) for v in grid.values()) == 16
++
++
++def test_eligible_grid_excludes_reviewed_tags():
++    manifest = _manifest(8)
++    reviewed = {"t0", "t1", "t2"}
++    grid = rating_sampler.eligible_grid(manifest, reviewed)
++    all_tags = {m["tag"] for items in grid.values() for m in items}
++    assert reviewed.isdisjoint(all_tags)
++    assert len(all_tags) == 5
++
++
++def test_pick_next_returns_none_when_everything_reviewed():
++    manifest = _manifest(4)
++    reviewed = {m["tag"] for m in manifest}
++    assert rating_sampler.pick_next(manifest, reviewed) is None
++
++
++def test_pick_next_only_returns_eligible_items():
++    manifest = _manifest(20)
++    reviewed = {f"t{i}" for i in range(15)}
++    rng = random.Random(0)
++    for _ in range(30):
++        item = rating_sampler.pick_next(manifest, reviewed, rng=rng)
++        assert item is not None
++        assert item["tag"] not in reviewed
++
++
++def test_pick_next_can_return_from_a_sparsely_populated_bin():
++    # one bin has a single eligible item, another has many; over enough draws the sparse
++    # bin's item should still turn up, proving bins are chosen uniformly, not by size.
++    manifest = _manifest(100)
++    reviewed = {m["tag"] for m in manifest[1:50]}  # leaves t0 alone in its low bin
++    rng = random.Random(1)
++    seen = set()
++    for _ in range(200):
++        item = rating_sampler.pick_next(manifest, reviewed, rng=rng)
++        seen.add(item["tag"])
++    assert "t0" in seen
+diff --git a/tests/test_yes_rated_images.py b/tests/test_yes_rated_images.py
+new file mode 100644
+index 0000000..629e84c
+--- /dev/null
++++ b/tests/test_yes_rated_images.py
+@@ -0,0 +1,26 @@
++# tests/test_yes_rated_images.py
++import json
++
++from clawmarks.search import driver
++
++
++def test_load_yes_rated_images_joins_ratings_against_manifest(tmp_path, monkeypatch):
++    monkeypatch.setattr(driver, "SWEEP_DIR", tmp_path)
++    manifest = [
++        {"tag": "a", "prompt_name": "p", "prompt": "trentbuckle style, a", "strength": 1.0,
++         "cfg": 7.0, "centroid_sim": 0.5, "novelty": 0.5, "file": "a.png"},
++        {"tag": "b", "prompt_name": "p", "prompt": "trentbuckle style, b", "strength": 1.0,
++         "cfg": 7.0, "centroid_sim": 0.5, "novelty": 0.5, "file": "b.png"},
++    ]
++    (tmp_path / "scored_manifest.json").write_text(json.dumps(manifest))
++    (tmp_path / "user_ratings.json").write_text(json.dumps({
++        "a": {"label": "yes", "rated_at": "t0"},
++        "b": {"label": "no", "rated_at": "t0"},
++    }))
++    result = driver._load_yes_rated_images()
++    assert [m["tag"] for m in result] == ["a"]
++
++
++def test_load_yes_rated_images_returns_empty_without_files(tmp_path, monkeypatch):
++    monkeypatch.setattr(driver, "SWEEP_DIR", tmp_path)
++    assert driver._load_yes_rated_images() == []

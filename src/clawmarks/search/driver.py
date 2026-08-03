@@ -1,7 +1,7 @@
 """
 Merged all-night driver for the CLAWMARKS liminal-band / uncanny-frontier search
 (lab_notebook.md Section 3b). Runs one named "leg" of generation within a named "expedition"
-(see docs/superpowers/specs/2026-07-14-expedition-leg-generation-design.md): the expedition
+(see .superpowers/.completed/specs/2026-07-14-expedition-leg-generation-design.md): the expedition
 holds shared prompt vocab and budget defaults (expedition.json); the leg holds whatever
 overrides make this run different (legs/<leg>.json), merged via load_leg_config.
 
@@ -381,7 +381,7 @@ def request_gpt55_subjects(cfg, existing_subjects, n=30):
 def _load_favorited_images(out_dir):
     """Favorites supersede raw novelty for what the exploit step mutates near, the same role
     yes/no ratings used to play before head-to-head comparisons replaced them (see
-    docs/superpowers/specs/2026-07-11-head-to-head-preference-design.md). Unlike the old ratings
+    .superpowers/.completed/specs/2026-07-11-head-to-head-preference-design.md). Unlike the old ratings
     store, user_favorites.json already holds a full item object per tag (tag, prompt_name,
     prompt, strength, cfg, ...), so favorited items can be returned directly without joining
     against scored_manifest.json."""

@@ -72,7 +72,7 @@ DARK_TOKENS = """
 
 # Sulfur Proof foundation (Task 2 of feat/sulfur-proof-shared-shell). Tokens, typography, and
 # base page chrome are defined here so page migration can replace the legacy DARK_TOKENS/BTN_CSS
-# styles incrementally. See docs/superpowers/specs/2026-07-16-sulfur-proof-design-system.md.
+# styles incrementally. See .superpowers/.completed/specs/2026-07-16-sulfur-proof-design-system.md.
 
 SULFUR_FONT_CSS = """
 @font-face { font-family:"Barlow Condensed"; src:url('/assets/fonts/BarlowCondensed-SemiBold.ttf') format('truetype'); font-weight:600; font-display:swap; }

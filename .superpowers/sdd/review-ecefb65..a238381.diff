@@ -1,0 +1,111 @@
+# Review package: ecefb65518f58a32144108b99c831b6cf7a450a3..HEAD
+
+## Commits
+a238381 feat(clawmarks): add shared manifest_index helpers and USER_RATINGS_FILE config
+
+## Files changed
+ src/clawmarks/config.py                |  1 +
+ src/clawmarks/search/manifest_index.py | 21 +++++++++++++++++++++
+ tests/test_config.py                   |  4 ++++
+ tests/test_manifest_index.py           | 30 ++++++++++++++++++++++++++++++
+ 4 files changed, 56 insertions(+)
+
+## Diff
+diff --git a/src/clawmarks/config.py b/src/clawmarks/config.py
+index 5cd3e85..b9aa1ab 100644
+--- a/src/clawmarks/config.py
++++ b/src/clawmarks/config.py
+@@ -18,10 +18,11 @@ def repo_root() -> Path:
+ 
+ 
+ ROOT = repo_root()
+ NOTES_DIR = ROOT / "notes"
+ SWEEP_DIR = NOTES_DIR / "uncanny_sweep"
+ SWEEP2_DIR = NOTES_DIR / "uncanny_sweep2"
+ PROBE_DIR = NOTES_DIR / "probe_uncanny"
+ PROBE_STRENGTH_DIR = NOTES_DIR / "probe_strength"
+ SEEDS_FILE = SWEEP_DIR / "candidate_seeds.json"
+ USER_PICKS_FILE = SWEEP_DIR / "user_picks.json"
++USER_RATINGS_FILE = SWEEP_DIR / "user_ratings.json"
+diff --git a/src/clawmarks/search/manifest_index.py b/src/clawmarks/search/manifest_index.py
+new file mode 100644
+index 0000000..6d87c57
+--- /dev/null
++++ b/src/clawmarks/search/manifest_index.py
+@@ -0,0 +1,21 @@
++"""Shared helpers for looking up scored_manifest.json entries by tag, and for building the
++small per-image summary dict several tool pages need. Extracted out of build/elite_archive.py
++so curation_server.py's ratings endpoints and build/preference_rank.py can reuse the exact same
++summary shape instead of re-deriving it."""
++import os
++
++
++def index_by_tag(manifest):
++    return {m["tag"]: m for m in manifest}
++
++
++def item_summary(m, sweep_dir):
++    thumb_path = os.path.join(str(sweep_dir), "thumbs", f"{m['tag']}.jpg")
++    return {
++        "tag": m["tag"], "prompt_name": m["prompt_name"], "prompt_type": m["prompt_type"],
++        "faith": round(m["centroid_sim"], 4), "novelty": round(m["novelty"], 4),
++        "strength": m["strength"], "cfg": m["cfg"],
++        "thumb": (f"thumbs/{m['tag']}.jpg" if os.path.exists(thumb_path)
++                  else os.path.basename(m["file"])),
++        "file": os.path.basename(m["file"]),
++    }
+diff --git a/tests/test_config.py b/tests/test_config.py
+index 2840e4c..382a2e8 100644
+--- a/tests/test_config.py
++++ b/tests/test_config.py
+@@ -10,10 +10,14 @@ def test_repo_root_finds_pyproject():
+ 
+ def test_repo_root_env_override(tmp_path, monkeypatch):
+     monkeypatch.setenv("CLAWMARKS_ROOT", str(tmp_path))
+     assert config.repo_root() == tmp_path
+ 
+ 
+ def test_derived_paths_under_repo_root():
+     root = config.repo_root()
+     assert config.SWEEP_DIR == root / "notes" / "uncanny_sweep"
+     assert config.SWEEP2_DIR == root / "notes" / "uncanny_sweep2"
++
++
++def test_user_ratings_file_path():
++    assert config.USER_RATINGS_FILE == config.SWEEP_DIR / "user_ratings.json"
+diff --git a/tests/test_manifest_index.py b/tests/test_manifest_index.py
+new file mode 100644
+index 0000000..1458a2e
+--- /dev/null
++++ b/tests/test_manifest_index.py
+@@ -0,0 +1,30 @@
++# tests/test_manifest_index.py
++from clawmarks.search import manifest_index
++
++
++def test_index_by_tag_builds_lookup():
++    manifest = [{"tag": "a", "x": 1}, {"tag": "b", "x": 2}]
++    idx = manifest_index.index_by_tag(manifest)
++    assert idx == {"a": {"tag": "a", "x": 1}, "b": {"tag": "b", "x": 2}}
++
++
++def test_item_summary_falls_back_to_basename_when_no_thumb(tmp_path):
++    m = {"tag": "t1", "prompt_name": "style_x", "prompt_type": "style",
++         "centroid_sim": 0.5, "novelty": 0.25, "strength": 1.0, "cfg": 7.0,
++         "file": str(tmp_path / "images" / "t1.png")}
++    summary = manifest_index.item_summary(m, tmp_path)
++    assert summary["thumb"] == "t1.png"
++    assert summary["file"] == "t1.png"
++    assert summary["faith"] == 0.5
++    assert summary["novelty"] == 0.25
++
++
++def test_item_summary_uses_thumb_when_present(tmp_path):
++    thumbs_dir = tmp_path / "thumbs"
++    thumbs_dir.mkdir()
++    (thumbs_dir / "t1.jpg").write_bytes(b"x")
++    m = {"tag": "t1", "prompt_name": "style_x", "prompt_type": "style",
++         "centroid_sim": 0.5, "novelty": 0.25, "strength": 1.0, "cfg": 7.0,
++         "file": str(tmp_path / "t1.png")}
++    summary = manifest_index.item_summary(m, tmp_path)
++    assert summary["thumb"] == "thumbs/t1.jpg"

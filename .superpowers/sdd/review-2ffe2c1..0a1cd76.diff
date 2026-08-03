@@ -1,0 +1,144 @@
+# Review package: 2ffe2c1..HEAD
+
+## Commits
+0a1cd76 feat(clawmarks): search driver exploit pool reads yes-ratings instead of picks
+
+## Files changed
+ src/clawmarks/search/driver.py | 34 ++++++++++++++++++++--------------
+ tests/test_yes_rated_images.py | 26 ++++++++++++++++++++++++++
+ 2 files changed, 46 insertions(+), 14 deletions(-)
+
+## Diff
+diff --git a/src/clawmarks/search/driver.py b/src/clawmarks/search/driver.py
+index d2de2f3..18b1b3b 100644
+--- a/src/clawmarks/search/driver.py
++++ b/src/clawmarks/search/driver.py
+@@ -24,20 +24,21 @@ import json
+ import os
+ import random
+ import subprocess
+ import time
+ import urllib.request
+ from dataclasses import dataclass, field
+ 
+ from clawmarks.config import SEEDS_FILE, SWEEP2_DIR, SWEEP_DIR
+ from clawmarks.search.scoring import bin_edges, bin_of, novelty_from_similarity
+ from clawmarks.search.seed_pool import merge as seed_pool_merge, load as seed_pool_load, save as seed_pool_save
++from clawmarks.search.manifest_index import index_by_tag
+ 
+ TRIGGER = "trentbuckle style, "
+ NEG_DEFAULT = "low quality, blurry, watermark"
+ TYPE_COLOR = {"style": "#5ec98a", "conflict": "#e0a25e"}
+ N_BINS = 4
+ PLATEAU_WINDOW = 3
+ PLATEAU_EPSILON = 0.01
+ 
+ 
+ @dataclass
+@@ -257,33 +258,38 @@ def request_gpt55_subjects(cfg, existing_subjects, n=30):
+             with open(out_path) as f:
+                 subjects = json.load(f)
+             if isinstance(subjects, list) and subjects:
+                 print(f"[gpt5.5] got {len(subjects)} subjects", flush=True)
+                 return [str(s) for s in subjects]
+         except Exception as e:
+             print(f"[gpt5.5] couldn't parse {out_path}: {e}", flush=True)
+     return []
+ 
+ 
+-def _load_user_picks():
+-    """Human-in-the-loop MAP-Elites: this project has no automated coherence/quality scorer,
+-    so per lab_notebook.md Section 3b there's no way for an image to automatically 'win' a
+-    bin. A person reviewing notes/uncanny_sweep/scan.html (served by
+-    notes/curation_server.py, which is what actually persists picks) can mark specific images
+-    as winners instead. When present, those picks anchor the exploit step's mutations in
+-    place of the raw novelty ranking, which is only ever a proxy for 'interesting,' not a
+-    verdict on it."""
+-    if SWEEP_DIR.joinpath("user_picks.json").exists():
+-        with open(SWEEP_DIR / "user_picks.json") as f:
+-            picks = json.load(f)
+-        return list(picks.values())
+-    return []
++def _load_yes_rated_images():
++    """Ratings supersede picks: a human's yes/no judgment on an image, not raw novelty, decides
++    what the exploit step mutates near. user_ratings.json stores only {label, rated_at} per tag
++    (the image metadata already lives in scored_manifest.json), so yes-rated tags are joined
++    against that manifest to recover prompt/strength/cfg for mutation."""
++    ratings_path = SWEEP_DIR / "user_ratings.json"
++    manifest_path = SWEEP_DIR / "scored_manifest.json"
++    if not ratings_path.exists() or not manifest_path.exists():
++        return []
++    with open(ratings_path) as f:
++        ratings = json.load(f)
++    yes_tags = {tag for tag, r in ratings.items() if r.get("label") == "yes"}
++    if not yes_tags:
++        return []
++    with open(manifest_path) as f:
++        manifest = json.load(f)
++    by_tag = index_by_tag(manifest)
++    return [by_tag[t] for t in yes_tags if t in by_tag]
+ 
+ 
+ def _load_prev_round_state(cfg):
+     """Round 1's body still reads its own state file (allnight_state.json) and the
+     first-run fixed-sweep manifest. Round 2 reads round 1's manifest as the exclusion set.
+     Returns (manifest, prev_embs_or_None) tuple."""
+     if cfg.exclude_prev_round:
+         prev_manifest_path = SWEEP_DIR / "scored_manifest.json"
+         if prev_manifest_path.exists():
+             with open(prev_manifest_path) as f:
+@@ -545,21 +551,21 @@ def main(argv=None):
+                   f"${cfg.budget_usd_cap - cfg.budget_safety_margin:.2f} safety threshold "
+                   f"(cap ${cfg.budget_usd_cap}, margin ${cfg.budget_safety_margin})", flush=True)
+             break
+ 
+         state["generation"] += 1
+         gen = state["generation"]
+         liminal_band_all = [m for m in manifest if real_ref[1] <= m["centroid_sim"] <= real_ref[2]]
+         elites = sorted(liminal_band_all, key=lambda m: -m["novelty"])[:15]
+         if not elites and cfg.round == 1:
+             elites = manifest[-30:] if manifest else []
+-        user_picks = _load_user_picks() if cfg.seed_from_start else []
++        user_picks = _load_yes_rated_images() if cfg.seed_from_start else []
+ 
+         print(f"\n=== generation {gen} | elapsed {elapsed_h:.2f}h | spend ${abs(spent):.3f} | "
+               f"stage {state['stage']} | plateau_count {state['plateau_count']} ===", flush=True)
+ 
+         jobs = build_generation_jobs(gen, subjects, textures, elites, user_picks,
+                                       cfg.gen_batch_size, cfg.explore_fraction,
+                                       style_subject_count=style_subject_count)
+         new_manifest = submit_and_collect(cfg, jobs, out_dir, f"gen{gen}")
+         new_scored = score_batch(model, real_embs, real_centroid, new_manifest, prev_embs=prev_embs)
+         manifest.extend(new_scored)
+diff --git a/tests/test_yes_rated_images.py b/tests/test_yes_rated_images.py
+new file mode 100644
+index 0000000..629e84c
+--- /dev/null
++++ b/tests/test_yes_rated_images.py
+@@ -0,0 +1,26 @@
++# tests/test_yes_rated_images.py
++import json
++
++from clawmarks.search import driver
++
++
++def test_load_yes_rated_images_joins_ratings_against_manifest(tmp_path, monkeypatch):
++    monkeypatch.setattr(driver, "SWEEP_DIR", tmp_path)
++    manifest = [
++        {"tag": "a", "prompt_name": "p", "prompt": "trentbuckle style, a", "strength": 1.0,
++         "cfg": 7.0, "centroid_sim": 0.5, "novelty": 0.5, "file": "a.png"},
++        {"tag": "b", "prompt_name": "p", "prompt": "trentbuckle style, b", "strength": 1.0,
++         "cfg": 7.0, "centroid_sim": 0.5, "novelty": 0.5, "file": "b.png"},
++    ]
++    (tmp_path / "scored_manifest.json").write_text(json.dumps(manifest))
++    (tmp_path / "user_ratings.json").write_text(json.dumps({
++        "a": {"label": "yes", "rated_at": "t0"},
++        "b": {"label": "no", "rated_at": "t0"},
++    }))
++    result = driver._load_yes_rated_images()
++    assert [m["tag"] for m in result] == ["a"]
++
++
++def test_load_yes_rated_images_returns_empty_without_files(tmp_path, monkeypatch):
++    monkeypatch.setattr(driver, "SWEEP_DIR", tmp_path)
++    assert driver._load_yes_rated_images() == []

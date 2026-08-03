@@ -2,7 +2,7 @@
 DINOv2 embedding cache: computes and persists an embedding per image in scored_manifest.json so
 the preference model (search/preference_model.py) can train on frozen features without
 re-running the (slow) DINOv2 model every time. Runs locally, no RunPod cost. See
-docs/superpowers/specs/2026-07-09-preference-classifier-design.md, Component 1.
+.superpowers/.completed/specs/2026-07-09-preference-classifier-design.md, Component 1.
 
 Run with: python -m clawmarks.search.embed_cache <out_dir>
 """
