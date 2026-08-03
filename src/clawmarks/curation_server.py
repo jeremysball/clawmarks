@@ -196,6 +196,15 @@ class NoActiveLegError(Exception):
     many call sites that don't make sense without a leg selected at all."""
 
 
+class ExpeditionNotFoundError(Exception):
+    """Raised by _ensure_scope_exists() when the resolved expedition/leg directory doesn't
+    exist on disk. Caught by do_GET/do_POST/do_PATCH and turned into a clean 404, so a
+    syntactically valid but nonexistent expedition/leg combination in a URL (e.g.
+    /api/cockpit/target_cells?expedition=foo&leg=bar) doesn't surface the missing absolute
+    path (embedded in the underlying FileNotFoundError's str()) and a Python traceback to
+    the browser via the catch-all 500 page."""
+
+
 def _require_out_dir():
     out_dir = _active_out_dir()
     if out_dir is None:
@@ -299,6 +308,22 @@ def _scope_out_dir(expedition, leg):
     _validate_expedition_or_leg_name(expedition, "expedition")
     _validate_expedition_or_leg_name(leg, "leg", reserved={"legs"})
     return config.leg_dir(expedition, leg)
+
+
+def _ensure_scope_exists(expedition, leg):
+    """Raise ExpeditionNotFoundError if the expedition/leg directory doesn't exist on disk,
+    so a syntactically valid but nonexistent URL scope doesn't reach a file read that raises
+    FileNotFoundError with the absolute path embedded in str(exc) (which the catch-all 500
+    page would otherwise render into the response body, see issue #58). The path returned by
+    _scope_out_dir() itself can legitimately point at a nonexistent directory for callers
+    that only need filesystem navigation (e.g. _load_sibling_leg_manifests walking the
+    expedition root to find sibling legs), so this validation lives separately rather than
+    inside _scope_out_dir()."""
+    out_dir = _scope_out_dir(expedition, leg)
+    if not out_dir.exists():
+        raise ExpeditionNotFoundError(
+            f"expedition {expedition!r} or leg {leg!r} does not exist"
+        )
 
 
 def _request_scope(expedition, leg):
@@ -1108,6 +1133,8 @@ class Handler(SimpleHTTPRequestHandler):
             self._send_context_error(e)
         except NoActiveLegError as e:
             self._send_no_active_leg_error(e)
+        except ExpeditionNotFoundError as e:
+            self._send_expedition_not_found(e)
         except Exception as e:
             if self._wants_json():
                 self._send_json_error(e)
@@ -1117,6 +1144,53 @@ class Handler(SimpleHTTPRequestHandler):
     def _wants_json(self):
         path = self.path.split("?")[0]
         return path.startswith("/api/") or path.endswith(".json")
+
+    def _send_expedition_not_found(self, exc):
+        # Server-side: log the underlying cause so an operator can see which expedition/leg
+        # was asked for. Client-side: a generic 404 -- never the absolute filesystem path
+        # the underlying FileNotFoundError would have embedded in its message.
+        _logger.info("expedition not found for %s: %s", self.path, exc)
+        if self._wants_json():
+            try:
+                self._json_response(404, {"error": "expedition or leg not found"})
+            except Exception:
+                pass
+            return
+        body = f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>clawmarks curation server: 404</title>
+<style>
+{SULFUR_FONT_CSS}
+{SULFUR_CSS}
+{CONTROL_CSS}
+{TOPNAV_CSS}
+{MOBILE_BASE_CSS}
+main {{ max-width:42rem; margin:2rem auto; padding:2rem;
+  background:var(--paper); border:1px solid var(--ink); }}
+h1 {{ font-size:22px; margin:0 0 12px; letter-spacing:0.02em; text-transform:uppercase; }}
+p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
+</style></head><body>
+
+{nav_bar_html('/status.html', active_expedition=_active_selection["expedition"],
+              active_leg=_active_selection["leg"],
+              running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)}
+<main>
+<h1>Expedition not found</h1>
+<p>{html.escape(str(exc))}</p>
+<p>Pick an existing expedition/leg from the status page, or create a new one from
+<a href="/">the picker</a>.</p>
+<p><a href="/">Back to status page</a></p>
+</main>
+<script src="/shared-ui.js"></script>
+</body></html>""".encode()
+        try:
+            self.send_response(404)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception:
+            pass  # client already gone; nothing left to send
 
     def _send_no_active_leg_error(self, exc):
         # A clean 400 for _require_out_dir()'s NoActiveLegError, instead of the generic 500
@@ -1152,17 +1226,32 @@ class Handler(SimpleHTTPRequestHandler):
             pass
 
     def _send_json_error(self, exc):
+        # Server-side: log the real exception (with full traceback) so an operator can
+        # diagnose it. Client-side: never include the raw exception class name or message;
+        # a FileNotFoundError's str() embeds the absolute filesystem path the missing file
+        # was being looked up under, which would otherwise leak the server's layout to the
+        # browser. The most useful structured signal -- whether the failure was caused by a
+        # missing scored_manifest.json on the active leg -- stays as a boolean for clients
+        # that know how to handle it, but its message no longer carries the path.
+        _logger.exception("unhandled exception in %s: %s", self.path, exc)
         no_manifest = isinstance(exc, FileNotFoundError) and "scored_manifest.json" in str(exc)
         try:
             self._json_response(500, {
-                "error": f"{type(exc).__name__}: {exc}",
+                "error": "internal server error",
                 "no_manifest": no_manifest,
             })
         except Exception:
             pass  # client already gone; nothing left to send
 
     def _send_error_page(self, exc, detail):
-        message = f"{type(exc).__name__}: {exc}"
+        # Server-side: log the real exception (with full traceback) so an operator can
+        # diagnose it. Client-side: never include the raw exception class name + message or
+        # the formatted traceback in the response body (the former leaks server-side paths
+        # from FileNotFoundError's str(); the latter leaks Python internals). The most common
+        # recoverable cause -- a missing scored_manifest.json on the active leg vs. an image
+        # file whose absolute path no longer resolves -- still gets its tailored hint, since
+        # those are user-actionable and don't embed server-side info.
+        _logger.exception("unhandled exception in %s: %s", self.path, exc)
         hint = ""
         if isinstance(exc, FileNotFoundError):
             missing_path = str(exc).split("'")[1] if "'" in str(exc) else ""
@@ -1172,7 +1261,7 @@ class Handler(SimpleHTTPRequestHandler):
                     '<a href="/">Pick a leg that has completed a search round</a>, or '
                     '<a href="/runs.html">launch a new round for this leg</a>.</p>'
                 )
-            else:
+            elif missing_path:
                 hint = (
                     "<p>This usually means <code>scored_manifest.json</code> still points at an "
                     "old absolute path (e.g. after the project directory was renamed or moved) "
@@ -1193,10 +1282,6 @@ h1 {{ color:var(--ink); font-size:22px; margin:0 0 12px; letter-spacing:0.02em; 
 h1.bad {{ color:#8a3030; }}
 p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
 p strong {{ color:var(--ink); }}
-details {{ margin-top:14px; }}
-summary {{ cursor:pointer; color:var(--ink); font-weight:600; }}
-pre.stack {{ white-space:pre-wrap; font-family:var(--font-mono); background:var(--paper-deep);
-  padding:1rem; border:1px solid var(--rule); }}
 </style></head><body>
 
 {nav_bar_html('/status.html', active_expedition=_active_selection["expedition"],
@@ -1205,12 +1290,8 @@ pre.stack {{ white-space:pre-wrap; font-family:var(--font-mono); background:var(
 <main>
 <h1 class="bad">Something went wrong</h1>
 <p>Route: <code>{html.escape(self.path)}</code></p>
-<p><strong>{html.escape(message)}</strong></p>
+<p><strong>An unexpected error occurred while handling this request.</strong></p>
 {hint}
-<details>
-<summary>Show stack trace</summary>
-<pre class="stack">{html.escape(detail)}</pre>
-</details>
 <p><a href="/">&larr; back to status page</a></p>
 </main>
 <script src="/shared-ui.js"></script>
@@ -1398,13 +1479,24 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
             if expedition is None or leg is None:
                 return expedition, leg
             try:
-                return _validate_scope_names(expedition, leg)
+                expedition, leg = _validate_scope_names(expedition, leg)
             except ValueError as e:
                 raise ContextQueryError(str(e)) from e
+            # Active scope: also validate the directory exists on disk. A scope pointing
+            # at a deleted expedition/leg would otherwise reach a file read that raises
+            # FileNotFoundError with the absolute path embedded in str(exc), which the
+            # catch-all 500 page would then render into the response body (issue #58).
+            _ensure_scope_exists(expedition, leg)
+            return expedition, leg
         try:
-            return _validate_scope_names(context.expedition, context.leg)
+            expedition, leg = _validate_scope_names(context.expedition, context.leg)
         except ValueError as e:
             raise ContextQueryError(str(e)) from e
+        # Explicit URL scope: same validation as above. _ensure_scope_exists raises
+        # ExpeditionNotFoundError when the directory is missing, which do_GET catches and
+        # turns into a clean 404.
+        _ensure_scope_exists(expedition, leg)
+        return expedition, leg
 
     def _status_page_data_body(self, manifest_summary):
         links = " &middot; ".join(f'<a href="{path}">{label}</a>' for path, label in _ROUTES)
@@ -1998,6 +2090,8 @@ needed.</p>
             self._do_POST()
         except NoActiveLegError as e:
             self._send_no_active_leg_error(e)
+        except ExpeditionNotFoundError as e:
+            self._send_expedition_not_found(e)
         except Exception as e:
             self._send_json_error(e)
 
@@ -2300,6 +2394,8 @@ needed.</p>
             self._do_PATCH()
         except NoActiveLegError as e:
             self._send_no_active_leg_error(e)
+        except ExpeditionNotFoundError as e:
+            self._send_expedition_not_found(e)
         except Exception as e:
             self._send_json_error(e)
 
