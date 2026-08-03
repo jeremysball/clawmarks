@@ -238,6 +238,10 @@ def test_post_preference_retrain_does_not_hold_lock_during_training(threaded_run
     tags = sorted({t for c in comparisons for t in (c["winner"], c["loser"])})
     embeddings = np.random.RandomState(0).normal(size=(len(tags), 2)).astype(np.float32)
     embed_cache.save_cache(tmp_path / "embeddings.npz", tags, embeddings)
+    (tmp_path / "scored_manifest.json").write_text(json.dumps([
+        {"tag": "concurrent_w"}, {"tag": "concurrent_l"},
+    ]))
+    cs._manifest_cache.clear()
 
     training_started = threading.Event()
     release_training = threading.Event()

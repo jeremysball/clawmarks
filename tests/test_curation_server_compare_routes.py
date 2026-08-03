@@ -22,6 +22,16 @@ def _post_json(url, payload=None):
         return json.loads(resp.read().decode())
 
 
+def _post_json_error(url, payload):
+    req = urllib.request.Request(
+        url, method="POST", data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(req)
+    return exc_info.value.code, json.loads(exc_info.value.read().decode())
+
+
 @pytest.fixture
 def running_server(tmp_path, monkeypatch):
     monkeypatch.setattr(cs, "_active_out_dir", lambda: tmp_path)
@@ -100,6 +110,48 @@ def test_post_compare_appends_a_comparison_record(running_server):
     assert comparisons[0]["winner"] == "t0"
     assert comparisons[0]["loser"] == "t1"
     assert "compared_at" in comparisons[0]
+
+
+@pytest.mark.parametrize("field", ("winner", "loser"))
+def test_post_compare_rejects_tag_not_in_manifest(running_server, field):
+    server, tmp_path = running_server
+    port = server.server_address[1]
+    payload = {"winner": "t0", "loser": "t1"}
+    payload[field] = "<script>alert(1)</script>"
+
+    status, body = _post_json_error(f"http://127.0.0.1:{port}/api/compare", payload)
+
+    assert status == 400
+    assert field in body["error"]
+    assert not (tmp_path / "user_comparisons.json").exists()
+
+
+@pytest.mark.parametrize("field", ("prompt", "hypothesis", "target", "negative"))
+def test_post_cockpit_queue_rejects_html_fields(running_server, field):
+    server, tmp_path = running_server
+    port = server.server_address[1]
+    payload = {"prompt": "safe prompt"}
+    payload[field] = "<script>alert(1)</script>"
+
+    status, body = _post_json_error(f"http://127.0.0.1:{port}/api/cockpit/queue", payload)
+
+    assert status == 400
+    assert field in body["error"]
+    assert not (tmp_path / "cockpit_queue.json").exists()
+
+
+def test_post_cockpit_queue_rejects_unknown_mission(running_server):
+    server, tmp_path = running_server
+    port = server.server_address[1]
+
+    status, body = _post_json_error(
+        f"http://127.0.0.1:{port}/api/cockpit/queue",
+        {"prompt": "safe prompt", "mission": "not-a-real-mission"},
+    )
+
+    assert status == 400
+    assert "mission" in body["error"]
+    assert not (tmp_path / "cockpit_queue.json").exists()
 
 
 def test_post_compare_retrains_and_caches_model_at_retrain_interval(running_server, monkeypatch):
