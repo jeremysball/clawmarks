@@ -1527,6 +1527,11 @@ needed.</p>
 
     def _do_GET(self):
         route_path = urllib.parse.urlparse(self.path).path
+        if route_path.rstrip("/") == "/healthz":
+            # Target of the Dockerfile HEALTHCHECK / app-watchdog.sh: proves the server is
+            # actually accepting and completing requests, not just that the process is alive.
+            self._json_response(200, {"status": "ok"})
+            return
         if self.path == "/api/active-leg":
             self._json_response(200, dict(_active_selection))
             return
@@ -2985,6 +2990,31 @@ def _warn_if_manifest_images_missing():
             file=sys.stderr,
             flush=True,
         )
+
+
+def healthcheck():
+    """Target of the Dockerfile HEALTHCHECK and app-watchdog.sh. Completes a real HTTP request
+    against the server's own /healthz route rather than just checking the process is alive: a
+    stuck accept loop can hold the port open with the process still running, so only an actual
+    request proves the server is serving. Uses the same host resolution as main() (CLAWMARKS_HOST
+    override, else tailscale_ip()) rather than hardcoding 127.0.0.1: unlike a server that binds
+    0.0.0.0, main() binds to the tailscale interface specifically (or 0.0.0.0 only as a fallback
+    when tailscale isn't up), so 127.0.0.1 would refuse the connection in the common case."""
+    host = os.environ.get("CLAWMARKS_HOST") or tailscale_ip()
+    url = f"http://{host}:{DEFAULT_PORT}/healthz"
+    try:
+        # proxies={} disables urllib's default HTTP_PROXY/HTTPS_PROXY env honoring: a proxy
+        # meant for outbound egress must never intercept this loopback-adjacent request.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(url, timeout=3) as resp:
+            if resp.status != 200:
+                print(f"healthcheck failed: {url} returned status {resp.status}", file=sys.stderr)
+                return 1
+    except Exception as e:
+        print(f"healthcheck failed: {e}", file=sys.stderr)
+        return 1
+    print("ok", flush=True)
+    return 0
 
 
 def main(argv=None):

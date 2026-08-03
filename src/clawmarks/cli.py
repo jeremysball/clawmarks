@@ -6,6 +6,7 @@ def build_parser():
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("serve")
+    sub.add_parser("healthcheck")
 
     run_p = sub.add_parser("run")
     run_sub = run_p.add_subparsers(dest="run_target", required=True)
@@ -50,6 +51,10 @@ def main(argv=None):
     if args.command == "serve":
         from clawmarks.curation_server import main as serve_main
         return serve_main([])
+
+    if args.command == "healthcheck":
+        from clawmarks.curation_server import healthcheck
+        return healthcheck()
 
     if args.command == "run":
         from clawmarks.search.driver import main as driver_main
