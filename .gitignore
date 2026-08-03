@@ -66,12 +66,9 @@ venv/
 .claude/
 .lavish/
 
-# .superpowers/ holds ephemeral SDD scratch state (task briefs, reports, progress ledgers) that
-# should never be committed, except plans/specs/completed-docs, which are the durable record.
-.superpowers/*
-!.superpowers/plans/
-!.superpowers/specs/
-!.superpowers/.completed/
-
 # scratch git worktrees for isolated agent/opencode dispatch
 .worktrees/
+
+# .superpowers/ is tracked in full (plans, specs, SDD scratch state, brainstorm output); override
+# the broader *.log/*.png/*.jpg/etc. rules above for this directory only.
+!.superpowers/**

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLAWMARKS Workbench: Layout Options</title>
+<style>
+  :root {
+    --bg: #0b0b0d;
+    --panel: #16161a;
+    --panel-2: #1d1d22;
+    --border: #2a2a30;
+    --border-bright: #3a3a44;
+    --text: #eaeaee;
+    --text-dim: #9a9aa4;
+    --text-faint: #6a6a74;
+    --accent: #7c9eff;
+    --gold: #f5c542;
+    --green: #5ec98a;
+    --red: #e0605e;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 20px;
+  }
+  .header {
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+  }
+  .header h1 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .header p {
+    font-size: 12px;
+    color: var(--text-dim);
+    max-width: 720px;
+  }
+  .option-block {
+    margin-bottom: 28px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .option-label {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .option-label .letter {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .option-label .title {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .option-label .desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+  /* Wireframe styling */
+  .wf {
+    display: grid;
+    gap: 1px;
+    background: var(--border);
+    min-height: 420px;
+    font-size: 11px;
+  }
+  .wf > div {
+    background: var(--panel);
+    padding: 8px 10px;
+  }
+  .wf-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+  .wf-item {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+  }
+  .wf-item:last-child { border-bottom: none; }
+  .wf-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 2px;
+    background: var(--panel-2);
+    color: var(--text-dim);
+  }
+  .wf-tag.drafted { color: var(--text-dim); }
+  .wf-tag.accepted { color: var(--green); background: rgba(94,201,138,0.08); }
+  .wf-tag.shelved { color: var(--text-faint); }
+  .wf-tag.runnable { color: var(--accent); }
+  .wf-tag.speculative { color: var(--gold); }
+  .wf-thumb {
+    display: inline-block;
+    width: 28px; height: 28px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    vertical-align: middle;
+    margin-right: 4px;
+    border-radius: 2px;
+  }
+  .wf-btn {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 8px;
+    border: 1px solid var(--border-bright);
+    border-radius: 2px;
+    color: var(--text-dim);
+    margin-right: 4px;
+  }
+  .wf-btn.accept { color: var(--green); border-color: rgba(94,201,138,0.3); }
+  .wf-btn.shelve { color: var(--text-faint); }
+  .wf-map-cell {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 1px solid var(--border);
+    margin: 1px;
+    font-size: 7px;
+    text-align: center;
+    line-height: 14px;
+    color: var(--text-faint);
+    vertical-align: top;
+  }
+  .wf-arrow {
+    color: var(--gold);
+    font-size: 10px;
+  }
+  .wf-insight {
+    border-left: 2px solid var(--text-faint);
+    padding-left: 8px;
+    margin-bottom: 6px;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .wf-insight .caveat {
+    font-style: italic;
+    color: var(--text-faint);
+    font-size: 9px;
+  }
+
+  /* Layout A: evidence-led three-column */
+  .layout-a {
+    grid-template-columns: 200px 1fr 180px;
+    grid-template-rows: 1fr 100px;
+  }
+  .layout-a .col-left { grid-row: 1; }
+  .layout-a .col-center { grid-row: 1; }
+  .layout-a .col-right { grid-row: 1; }
+  .layout-a .bottom { grid-column: 1 / -1; }
+
+  /* Layout B: map-led */
+  .layout-b {
+    grid-template-columns: 1fr 200px;
+    grid-template-rows: 1fr 90px;
+  }
+  .layout-b .map { grid-column: 1; grid-row: 1; }
+  .layout-b .detail { grid-column: 2; grid-row: 1; }
+  .layout-b .bottom { grid-column: 1 / -1; }
+
+  /* Layout C: ledger-led */
+  .layout-c {
+    grid-template-columns: 1fr 200px;
+    grid-template-rows: 1fr 90px;
+  }
+  .layout-c .entries { grid-column: 1; }
+  .layout-c .insights { grid-column: 2; }
+  .layout-c .bottom { grid-column: 1 / -1; }
+
+  @media (max-width: 700px) {
+    .layout-a, .layout-b, .layout-c {
+      grid-template-columns: 1fr;
+    }
+    .layout-a .col-right, .layout-b .detail, .layout-c .insights { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>CLAWMARKS idea workbench: three layout directions</h1>
+  <p>Each wireframe uses the existing CLAWMARKS dark palette and data density. The question is
+  which information architecture feels like a real instrument. None of these are finished
+  designs. They show where the proposal tree, evidence links, coverage map, and insights
+  digest sit relative to each other.</p>
+</div>
+
+<!-- LAYOUT A -->
+<div class="option-block">
+  <div class="option-label">
+    <span class="letter">A</span>
+    <span class="title">Evidence-led notebook</span>
+    <span class="desc">proposal tree left, selected proposal center, coverage map right, insights bottom</span>
+  </div>
+  <div class="wf layout-a">
+    <div class="col-left">
+      <div class="wf-label">Proposal tree</div>
+      <div class="wf-item"><span class="wf-tag drafted">drafted</span> void 3,5 liminal push</div>
+      <div class="wf-item" style="padding-left:14px"><span class="wf-tag drafted">drafted</span> variant: low CFG</div>
+      <div class="wf-item"><span class="wf-tag drafted">drafted</span> declining owl family retire</div>
+      <div class="wf-item"><span class="wf-tag accepted">accepted</span> strength overdrive 1.6x</div>
+      <div class="wf-item"><span class="wf-tag accepted">accepted</span> watercolor texture bracket</div>
+      <div class="wf-item" style="padding-left:14px"><span class="wf-tag accepted">accepted</span> variant: paper texture</div>
+      <div class="wf-item"><span class="wf-tag shelved">shelved</span> IP-Adapter likeness</div>
+      <div class="wf-item"><span class="wf-tag shelved">shelved</span> base model swap</div>
+      <div style="margin-top:8px"><span class="wf-tag speculative">speculative</span><br><span style="font-size:10px;color:var(--text-faint)">video frame generalization</span></div>
+    </div>
+    <div class="col-center">
+      <div class="wf-label">Selected: void 3,5 liminal push</div>
+      <div style="font-size:12px;margin-bottom:6px">Push the liminal-corridor subject into very low CFG (2.0-3.5) to see how far the style bends before it breaks faithfulness.</div>
+      <div style="font-size:11px;color:var(--gold);margin-bottom:8px"><b>Why interesting:</b> The low-faith high-novelty quadrant is the only unexplored region adjacent to two dense clusters. Round 2 never went below CFG 4.0. The style grammar might survive lower guidance than expected, opening territory the exploit mutator cannot reach from current seeds.</div>
+      <div class="wf-label">Inspired by</div>
+      <div style="margin-bottom:6px"><span class="wf-thumb"></span><span class="wf-thumb"></span><span class="wf-thumb"></span> void cell 3,5 &middot; novelty trend: style_owl declining &middot; chain_4 dead end</div>
+      <div class="wf-label">What you would do</div>
+      <div style="margin-bottom:6px;font-size:10px;font-family:var(--mono);color:var(--text-dim)">cfg range [2.0, 2.5, 3.0, 3.5] x 4 seeds x liminal prompt = 16 jobs</div>
+      <div><span class="wf-tag runnable">runnable</span> <span class="wf-tag">~$0.40</span> <span class="wf-tag">~8 min</span></div>
+      <div style="margin-top:8px"><span class="wf-btn accept">accept</span><span class="wf-btn shelve">shelve</span><span class="wf-btn">edit</span></div>
+    </div>
+    <div class="col-right">
+      <div class="wf-label">Coverage map</div>
+      <div>
+        <div class="wf-map-cell">12</div><div class="wf-map-cell">8</div><div class="wf-map-cell">3</div><div class="wf-map-cell" style="outline:1px solid var(--gold)"></div><div class="wf-map-cell" style="outline:1px solid var(--gold)"></div>
+        <div class="wf-map-cell">9</div><div class="wf-map-cell">15</div><div class="wf-map-cell">7</div><div class="wf-map-cell">2</div><div class="wf-map-cell" style="outline:1px solid var(--gold)"></div>
+        <div class="wf-map-cell">6</div><div class="wf-map-cell">11</div><div class="wf-map-cell" style="outline:1px solid var(--gold)"></div><div class="wf-map-cell">4</div><div class="wf-map-cell">1</div>
+        <div class="wf-map-cell">3</div><div class="wf-map-cell">5</div><div class="wf-map-cell">2</div><div class="wf-map-cell">8</div><div class="wf-map-cell">6</div>
+      </div>
+      <div class="wf-label" style="margin-top:8px">Frontier cells</div>
+      <div style="font-size:10px;color:var(--text-dim)">4 voids adjacent to dense cells</div>
+    </div>
+    <div class="bottom">
+      <div class="wf-label">Insights digest (patterns with caveats)</div>
+      <div class="wf-insight">Explore images get picked 12x more often than exploit images proportionally (2.4% vs 0.2%). <span class="caveat">n=39 picks, round 1 only, round 2 unreviewed.</span></div>
+      <div class="wf-insight">Novelty plateaued at 0.840 for 23 generations straight despite GPT-5.5 creative handoff. <span class="caveat">Could be a real ceiling or an exploit-heavy search bias artifact.</span></div>
+      <div class="wf-insight">Yes-rated images skew toward higher faithfulness (0.487 vs 0.324 mean). <span class="caveat">Small sample, preference model not yet trained below 50 labels.</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- LAYOUT B -->
+<div class="option-block">
+  <div class="option-label">
+    <span class="letter">B</span>
+    <span class="title">Map-led canvas</span>
+    <span class="desc">coverage map is the workbench, proposals live on it as annotated directions</span>
+  </div>
+  <div class="wf layout-b">
+    <div class="map">
+      <div class="wf-label">Faithfulness x novelty map (the workbench surface)</div>
+      <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:2px;margin-top:6px">
+        <div class="wf-map-cell" style="height:28px">14</div><div class="wf-map-cell" style="height:28px">9</div><div class="wf-map-cell" style="height:28px">4</div><div class="wf-map-cell" style="height:28px;outline:1px solid var(--gold)"></div><div class="wf-map-cell" style="height:28px;outline:1px solid var(--gold)"></div><div class="wf-map-cell" style="height:28px">2</div><div class="wf-map-cell" style="height:28px">1</div><div class="wf-map-cell" style="height:28px"></div>
+        <div class="wf-map-cell" style="height:28px">11</div><div class="wf-map-cell" style="height:28px">18</div><div class="wf-map-cell" style="height:28px">8</div><div class="wf-map-cell" style="height:28px">3</div><div class="wf-map-cell" style="height:28px"><span class="wf-arrow">&rarr;</span></div><div class="wf-map-cell" style="height:28px">2</div><div class="wf-map-cell" style="height:28px"></div><div class="wf-map-cell" style="height:28px"></div>
+        <div class="wf-map-cell" style="height:28px">7</div><div class="wf-map-cell" style="height:28px">14</div><div class="wf-map-cell" style="height:28px"><span class="wf-arrow">&uarr;</span></div><div class="wf-map-cell" style="height:28px">9</div><div class="wf-map-cell" style="height:28px">5</div><div class="wf-map-cell" style="height:28px">3</div><div class="wf-map-cell" style="height:28px">1</div><div class="wf-map-cell" style="height:28px"></div>
+        <div class="wf-map-cell" style="height:28px">4</div><div class="wf-map-cell" style="height:28px">6</div><div class="wf-map-cell" style="height:28px">8</div><div class="wf-map-cell" style="height:28px">12</div><div class="wf-map-cell" style="height:28px">7</div><div class="wf-map-cell" style="height:28px">4</div><div class="wf-map-cell" style="height:28px">2</div><div class="wf-map-cell" style="height:28px">1</div>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text-dim)">
+        <span class="wf-arrow">&rarr;</span> proposed: liminal low-CFG push &nbsp;&nbsp;
+        <span class="wf-arrow">&uarr;</span> proposed: strength overdrive 1.6x &nbsp;&nbsp;
+        <span style="color:var(--gold)">&#9672;</span> frontier cells
+      </div>
+    </div>
+    <div class="detail">
+      <div class="wf-label">Selected direction</div>
+      <div style="font-size:11px;margin-bottom:6px">Liminal low-CFG push</div>
+      <div style="font-size:10px;color:var(--gold);margin-bottom:6px"><b>Why interesting:</b> Only unexplored region adjacent to two dense clusters.</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px">cfg [2.0-3.5] x 4 seeds x liminal = 16 jobs</div>
+      <div style="margin-bottom:8px"><span class="wf-tag runnable">runnable</span> <span class="wf-tag">$0.40</span></div>
+      <div><span class="wf-btn accept">accept</span><span class="wf-btn shelve">shelve</span></div>
+      <div class="wf-label" style="margin-top:10px">All proposals</div>
+      <div class="wf-item"><span class="wf-tag drafted">d</span> liminal low-CFG</div>
+      <div class="wf-item"><span class="wf-tag drafted">d</span> owl family retire</div>
+      <div class="wf-item"><span class="wf-tag accepted">a</span> strength 1.6x</div>
+      <div class="wf-item"><span class="wf-tag speculative">s</span> video frames</div>
+    </div>
+    <div class="bottom">
+      <div class="wf-label">Insights digest</div>
+      <div class="wf-insight">Explore picked 12x more than exploit (2.4% vs 0.2%). <span class="caveat">n=39, round 1 only.</span></div>
+      <div class="wf-insight">Novelty flat at 0.840 for 23 gens. <span class="caveat">Ceiling or search bias?</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- LAYOUT C -->
+<div class="option-block">
+  <div class="option-label">
+    <span class="letter">C</span>
+    <span class="title">Ledger scroll</span>
+    <span class="desc">proposals as dated notebook entries in a scroll, sticky insights panel right</span>
+  </div>
+  <div class="wf layout-c">
+    <div class="entries">
+      <div class="wf-label">Proposal ledger</div>
+      <div class="wf-item">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-faint)">2026-07-10 14:32 &middot; drafted &middot; <span class="wf-tag runnable">runnable</span></div>
+        <div style="font-size:12px;margin:2px 0">Void 3,5 liminal low-CFG push</div>
+        <div style="font-size:10px;color:var(--gold);margin-bottom:4px"><b>Why interesting:</b> Only unexplored region adjacent to two dense clusters. Round 2 never went below CFG 4.0.</div>
+        <div style="font-size:10px;color:var(--text-dim)"><span class="wf-thumb"></span><span class="wf-thumb"></span><span class="wf-thumb"></span> inspired by: void 3,5, owl declining, chain_4 dead end</div>
+        <div style="font-size:10px;font-family:var(--mono);color:var(--text-dim);margin:4px 0">cfg [2.0, 2.5, 3.0, 3.5] x 4 seeds x liminal = 16 jobs &middot; $0.40 &middot; 8 min</div>
+        <div><span class="wf-btn accept">accept</span><span class="wf-btn shelve">shelve</span><span class="wf-btn">edit</span></div>
+      </div>
+      <div class="wf-item">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-faint)">2026-07-10 14:28 &middot; drafted &middot; <span class="wf-tag speculative">speculative</span></div>
+        <div style="font-size:12px;margin:2px 0">Video frame generalization</div>
+        <div style="font-size:10px;color:var(--gold);margin-bottom:4px"><b>Why interesting:</b> If the style grammar survives motion, the frontier extends past static portraits entirely. Untested for any LoRA.</div>
+        <div style="font-size:10px;color:var(--text-dim)"><span class="wf-thumb"></span> inspired by: probe report liminal figure, reach probe</div>
+        <div style="font-size:10px;color:var(--text-faint);margin:4px 0">Blocker: no video pipeline in ComfyUI workflow. No execution path yet.</div>
+        <div><span class="wf-btn shelve">shelve</span><span class="wf-btn">edit</span></div>
+      </div>
+      <div class="wf-item">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-faint)">2026-07-10 14:25 &middot; accepted &middot; <span class="wf-tag accepted">accepted</span></div>
+        <div style="font-size:12px;margin:2px 0">Strength overdrive 1.6x bracket</div>
+        <div style="font-size:10px;color:var(--gold);margin-bottom:4px"><b>Why interesting:</b> Round 1 capped at 2.0x. Overdrive past 1.4x extrapolates past learned style rather than reproducing it.</div>
+        <div style="font-size:10px;color:var(--text-dim)"><span class="wf-thumb"></span><span class="wf-thumb"></span> inspired by: strength sweep probe, 3 high-novelty outliers</div>
+        <div style="font-size:10px;font-family:var(--mono);color:var(--text-dim);margin:4px 0">strength [1.4, 1.6, 1.8] x 5 subjects x 2 seeds = 30 jobs &middot; $0.75 &middot; 15 min</div>
+      </div>
+      <div class="wf-item">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text-faint)">2026-07-10 14:20 &middot; shelved &middot; <span class="wf-tag shelved">shelved</span></div>
+        <div style="font-size:12px;margin:2px 0">Base model swap (Illustrious to Pony)</div>
+        <div style="font-size:10px;color:var(--text-faint);margin-bottom:4px"><b>Why interesting:</b> Tests whether the style is checkpoint-specific or transfers across SDXL bases.</div>
+      </div>
+    </div>
+    <div class="insights">
+      <div class="wf-label">Insights (sticky)</div>
+      <div class="wf-insight">Explore picked 12x more than exploit (2.4% vs 0.2%). <span class="caveat">n=39, round 1 only, round 2 unreviewed.</span></div>
+      <div class="wf-insight">Novelty flat at 0.840 for 23 gens despite GPT-5.5 handoff. <span class="caveat">Ceiling or bias artifact?</span></div>
+      <div class="wf-insight">Yes-rated skew high-faith (0.487 vs 0.324). <span class="caveat">Preference model untrained below 50 labels.</span></div>
+      <div class="wf-insight">Generations anchor to 6 of 31 real images. <span class="caveat">Mode collapse on a sliver of the style.</span></div>
+      <div class="wf-label" style="margin-top:10px">Quick filters</div>
+      <div style="font-size:10px;color:var(--text-dim)">
+        <div><span class="wf-tag drafted">drafted 3</span></div>
+        <div style="margin-top:3px"><span class="wf-tag accepted">accepted 2</span></div>
+        <div style="margin-top:3px"><span class="wf-tag shelved">shelved 2</span></div>
+        <div style="margin-top:3px"><span class="wf-tag speculative">speculative 1</span></div>
+      </div>
+    </div>
+    <div class="bottom">
+      <div class="wf-label">Run monitor (live runs only)</div>
+      <div style="font-size:10px;color:var(--text-dim);font-family:var(--mono)">
+        strength 1.6x bracket &middot; RUNNING &middot; gen 12/30 &middot; $0.31 spent &middot; ETA 4 min &middot; 0 failures
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
