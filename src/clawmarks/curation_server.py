@@ -1426,7 +1426,7 @@ p {{ color:var(--text-soft); font-size:13px; line-height:1.6; }}
               active_leg=_active_selection["leg"],
               running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)}
 <h1>clawmarks curation server</h1>
-<p>sweep dir: <code>{html.escape(str(_active_out_dir() or 'none selected'))}</code></p>
+<p>sweep dir: <code>{html.escape(f"{_active_selection['expedition']}/{_active_selection['leg']}" if _active_out_dir() else 'none selected')}</code></p>
 <p>{html.escape(manifest_summary)}</p>
 <p id="cmpStat" class="sub">&nbsp;</p>
 <script>
@@ -2622,9 +2622,14 @@ needed.</p>
             return
         if balance < BALANCE_FLOOR_USD:
             error = (
-                f"RunPod balance ${balance:.4f} is below the ${BALANCE_FLOOR_USD:.2f} safety "
-                "floor. Add funds before generating (a negative/near-zero balance has "
-                "previously caused jobs to silently stall in queue instead of erroring)."
+                "RunPod balance is below the safety floor. Add funds before generating "
+                "(a negative/near-zero balance has previously caused jobs to silently "
+                "stall in queue instead of erroring)."
+            )
+            print(
+                f"refusing cockpit trial {trial_id}: balance {balance:.4f} is below "
+                f"floor {BALANCE_FLOOR_USD:.2f}",
+                file=sys.stderr,
             )
             _revert(error)
             self._json_response(402, {"error": error})
@@ -2676,10 +2681,17 @@ needed.</p>
             self._json_response(502, {"error": f"balance check failed: {e}"})
             return
         if balance < BALANCE_FLOOR_USD:
+            print(
+                f"refusing counterfactual for {expedition}/{leg}: balance {balance:.4f} is below "
+                f"floor {BALANCE_FLOOR_USD:.2f}",
+                file=sys.stderr,
+            )
             self._json_response(402, {
-                "error": f"RunPod balance ${balance:.4f} is below the ${BALANCE_FLOOR_USD:.2f} "
-                         "safety floor. Add funds before generating (a negative/near-zero balance "
-                         "has previously caused jobs to silently stall in queue instead of erroring)."
+                "error": (
+                    "RunPod balance is below the safety floor. Add funds before generating "
+                    "(a negative/near-zero balance has previously caused jobs to silently "
+                    "stall in queue instead of erroring)."
+                )
             })
             return
 
