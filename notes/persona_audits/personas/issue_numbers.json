@@ -1,0 +1,258 @@
+[
+  {
+    "severity": "P0",
+    "title": "500 error leaks Python traceback and real filesystem path on invalid expedition/leg params",
+    "stdout": "issue:\n  number: 58\n  title: 500 error leaks Python traceback and real filesystem path on invalid expedition/leg params\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/58\"\nhelp[2]:\n  Run `gh-axi issue view 58 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 58 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "58"
+  },
+  {
+    "severity": "P0",
+    "title": "/api/searchrun/report leaks live RunPod dollar balance; status.html leaks filesystem path and username",
+    "stdout": "issue:\n  number: 59\n  title: /api/searchrun/report leaks live RunPod dollar balance; status.html leaks filesystem path and username\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/59\"\nhelp[2]:\n  Run `gh-axi issue view 59 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 59 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "59"
+  },
+  {
+    "severity": "P0",
+    "title": "Search-run records omit seed, sampler, steps, CFG, strength schedule, prompt pool, and search bounds",
+    "stdout": "issue:\n  number: 60\n  title: \"Search-run records omit seed, sampler, steps, CFG, strength schedule, prompt pool, and search bounds\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/60\"\nhelp[2]:\n  Run `gh-axi issue view 60 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 60 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "60"
+  },
+  {
+    "severity": "P0",
+    "title": "No LoRA/checkpoint identity recorded per run",
+    "stdout": "issue:\n  number: 61\n  title: No LoRA/checkpoint identity recorded per run\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/61\"\nhelp[2]:\n  Run `gh-axi issue view 61 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 61 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "61"
+  },
+  {
+    "severity": "P0",
+    "title": "No timestamp or code/git-commit version recorded per run",
+    "stdout": "issue:\n  number: 62\n  title: No timestamp or code/git-commit version recorded per run\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/62\"\nhelp[2]:\n  Run `gh-axi issue view 62 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 62 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "62"
+  },
+  {
+    "severity": "P0",
+    "title": "Stored XSS: cockpit queue and compare endpoints persist raw <script> payloads unsanitized at ingestion",
+    "stdout": "issue:\n  number: 63\n  title: \"Stored XSS: cockpit queue and compare endpoints persist raw <script> payloads unsanitized at ingestion\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/63\"\nhelp[2]:\n  Run `gh-axi issue view 63 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 63 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "63"
+  },
+  {
+    "severity": "P0",
+    "title": "\"Guide\" button references a nonexistent element (dead ARIA reference, aria-controls=\"guidePanel\")",
+    "stdout": "issue:\n  number: 64\n  title: \"\\\"Guide\\\" button references a nonexistent element (dead ARIA reference, aria-controls=\\\"guidePanel\\\")\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/64\"\nhelp[2]:\n  Run `gh-axi issue view 64 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 64 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "64"
+  },
+  {
+    "severity": "P1",
+    "title": "No auth or CSRF token on any state-mutating endpoint",
+    "stdout": "issue:\n  number: 65\n  title: No auth or CSRF token on any state-mutating endpoint\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/65\"\nhelp[2]:\n  Run `gh-axi issue view 65 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 65 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "65"
+  },
+  {
+    "severity": "P1",
+    "title": "IDOR: any expedition/leg value is reachable by direct URL/param guess",
+    "stdout": "issue:\n  number: 66\n  title: \"IDOR: any expedition/leg value is reachable by direct URL/param guess\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/66\"\nhelp[2]:\n  Run `gh-axi issue view 66 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 66 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "66"
+  },
+  {
+    "severity": "P1",
+    "title": "Missing security headers (CSP, X-Frame-Options, X-Content-Type-Options, etc.) on all responses",
+    "stdout": "issue:\n  number: 67\n  title: \"Missing security headers (CSP, X-Frame-Options, X-Content-Type-Options, etc.) on all responses\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/67\"\nhelp[2]:\n  Run `gh-axi issue view 67 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 67 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "67"
+  },
+  {
+    "severity": "P1",
+    "title": "\"Elite\"/\"Best\" labels imply aesthetic quality but actually mean highest-novelty-per-cell",
+    "stdout": "issue:\n  number: 68\n  title: \"\\\"Elite\\\"/\\\"Best\\\" labels imply aesthetic quality but actually mean highest-novelty-per-cell\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/68\"\nhelp[2]:\n  Run `gh-axi issue view 68 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 68 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "68"
+  },
+  {
+    "severity": "P1",
+    "title": "Several billable buttons carry no cost warning, unlike \"Launch search\" and \"Generate\"",
+    "stdout": "issue:\n  number: 69\n  title: \"Several billable buttons carry no cost warning, unlike \\\"Launch search\\\" and \\\"Generate\\\"\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/69\"\nhelp[2]:\n  Run `gh-axi issue view 69 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 69 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "69"
+  },
+  {
+    "severity": "P1",
+    "title": "Gallery thumbnails are keyboard-unreachable and have no alt text",
+    "stdout": "issue:\n  number: 70\n  title: Gallery thumbnails are keyboard-unreachable and have no alt text\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/70\"\nhelp[2]:\n  Run `gh-axi issue view 70 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 70 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "70"
+  },
+  {
+    "severity": "P1",
+    "title": "Image lightbox omits full generation recipe even though the underlying page JS already has the data",
+    "stdout": "issue:\n  number: 71\n  title: Image lightbox omits full generation recipe even though the underlying page JS already has the data\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/71\"\nhelp[2]:\n  Run `gh-axi issue view 71 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 71 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "71"
+  },
+  {
+    "severity": "P1",
+    "title": "No training-dataset version surfaced anywhere",
+    "stdout": "issue:\n  number: 72\n  title: No training-dataset version surfaced anywhere\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/72\"\nhelp[2]:\n  Run `gh-axi issue view 72 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 72 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "72"
+  },
+  {
+    "severity": "P1",
+    "title": "No DINOv2 model/checkpoint version documented anywhere in the UI",
+    "stdout": "issue:\n  number: 73\n  title: No DINOv2 model/checkpoint version documented anywhere in the UI\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/73\"\nhelp[2]:\n  Run `gh-axi issue view 73 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 73 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "73"
+  },
+  {
+    "severity": "P1",
+    "title": "No image lineage/parent_tag recorded for exploit images",
+    "stdout": "issue:\n  number: 74\n  title: No image lineage/parent_tag recorded for exploit images\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/74\"\nhelp[2]:\n  Run `gh-axi issue view 74 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 74 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "74"
+  },
+  {
+    "severity": "P1",
+    "title": "Faithfulness min/max spinbuttons silently accept out-of-range or inverted values",
+    "stdout": "issue:\n  number: 75\n  title: Faithfulness min/max spinbuttons silently accept out-of-range or inverted values\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/75\"\nhelp[2]:\n  Run `gh-axi issue view 75 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 75 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "75"
+  },
+  {
+    "severity": "P1",
+    "title": "Empty search/filter results show only a bare count, no explanation of why",
+    "stdout": "issue:\n  number: 76\n  title: \"Empty search/filter results show only a bare count, no explanation of why\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/76\"\nhelp[2]:\n  Run `gh-axi issue view 76 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 76 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "76"
+  },
+  {
+    "severity": "P1",
+    "title": "Mobile: generation cockpit's target-coverage-cell cards are cut off horizontally with no scroll affordance",
+    "stdout": "issue:\n  number: 77\n  title: \"Mobile: generation cockpit's target-coverage-cell cards are cut off horizontally with no scroll affordance\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/77\"\nhelp[2]:\n  Run `gh-axi issue view 77 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 77 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "77"
+  },
+  {
+    "severity": "P1",
+    "title": "Mobile: generation cockpit's two-column form doesn't collapse, truncating input text mid-word",
+    "stdout": "issue:\n  number: 78\n  title: \"Mobile: generation cockpit's two-column form doesn't collapse, truncating input text mid-word\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/78\"\nhelp[2]:\n  Run `gh-axi issue view 78 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 78 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "78"
+  },
+  {
+    "severity": "P2",
+    "title": "Orange/green used as the only signal for type/category (red-green colorblindness collision)",
+    "stdout": "issue:\n  number: 79\n  title: Orange/green used as the only signal for type/category (red-green colorblindness collision)\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/79\"\nhelp[2]:\n  Run `gh-axi issue view 79 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 79 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "79"
+  },
+  {
+    "severity": "P2",
+    "title": "Duplicate \"Choose between two images\" entry in the nav dropdown",
+    "stdout": "issue:\n  number: 80\n  title: \"Duplicate \\\"Choose between two images\\\" entry in the nav dropdown\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/80\"\nhelp[2]:\n  Run `gh-axi issue view 80 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 80 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "80"
+  },
+  {
+    "severity": "P2",
+    "title": "Nav dropdown label, top-bar label, and on-page <h1> use three different names for the same page",
+    "stdout": "issue:\n  number: 81\n  title: \"Nav dropdown label, top-bar label, and on-page <h1> use three different names for the same page\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/81\"\nhelp[2]:\n  Run `gh-axi issue view 81 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 81 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "81"
+  },
+  {
+    "severity": "P2",
+    "title": "Metric definitions live only in transient tooltips, no linked methods doc or scorer-versioning warning",
+    "stdout": "issue:\n  number: 82\n  title: \"Metric definitions live only in transient tooltips, no linked methods doc or scorer-versioning warning\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/82\"\nhelp[2]:\n  Run `gh-axi issue view 82 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 82 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "82"
+  },
+  {
+    "severity": "P2",
+    "title": "Console error \"Transition was skipped\" fires on multiple page loads",
+    "stdout": "issue:\n  number: 83\n  title: \"Console error \\\"Transition was skipped\\\" fires on multiple page loads\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/83\"\nhelp[2]:\n  Run `gh-axi issue view 83 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 83 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "83"
+  },
+  {
+    "severity": "P2",
+    "title": "\"session status\" banner link is hard-coded to trent_v3_epoch4/freeform1 regardless of current context",
+    "stdout": "issue:\n  number: 84\n  title: \"\\\"session status\\\" banner link is hard-coded to trent_v3_epoch4/freeform1 regardless of current context\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/84\"\nhelp[2]:\n  Run `gh-axi issue view 84 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 84 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "84"
+  },
+  {
+    "severity": "P2",
+    "title": "Inconsistent input validation across endpoints (some reject path traversal, some silently ignore bad input)",
+    "stdout": "issue:\n  number: 85\n  title: \"Inconsistent input validation across endpoints (some reject path traversal, some silently ignore bad input)\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/85\"\nhelp[2]:\n  Run `gh-axi issue view 85 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 85 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "85"
+  },
+  {
+    "severity": "P2",
+    "title": "Inconsistent error response formats across endpoints (JSON, raw HTML, silent empty object)",
+    "stdout": "issue:\n  number: 86\n  title: \"Inconsistent error response formats across endpoints (JSON, raw HTML, silent empty object)\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/86\"\nhelp[2]:\n  Run `gh-axi issue view 86 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 86 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "86"
+  },
+  {
+    "severity": "P2",
+    "title": "Server header leaks Python version (SimpleHTTP/0.6 Python/3.14.6)",
+    "stdout": "issue:\n  number: 87\n  title: Server header leaks Python version (SimpleHTTP/0.6 Python/3.14.6)\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/87\"\nhelp[2]:\n  Run `gh-axi issue view 87 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 87 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "87"
+  },
+  {
+    "severity": "P2",
+    "title": "No rate limiting on any mutating endpoint",
+    "stdout": "issue:\n  number: 88\n  title: No rate limiting on any mutating endpoint\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/88\"\nhelp[2]:\n  Run `gh-axi issue view 88 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 88 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "88"
+  },
+  {
+    "severity": "P2",
+    "title": "Mobile: generation cockpit's bottom tab bar is cramped into 5 items at 375px width",
+    "stdout": "issue:\n  number: 89\n  title: \"Mobile: generation cockpit's bottom tab bar is cramped into 5 items at 375px width\"\n  state: open\n  url: \"https://github.com/jeremysball/clawmarks/issues/89\"\nhelp[2]:\n  Run `gh-axi issue view 89 -R jeremysball/clawmarks` to see the full issue\n  Run `gh-axi issue edit 89 --add-label <label> -R jeremysball/clawmarks` to label",
+    "stderr": "",
+    "returncode": 0,
+    "number": "89"
+  }
+]
