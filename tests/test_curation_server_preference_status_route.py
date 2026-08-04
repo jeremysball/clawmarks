@@ -93,6 +93,9 @@ def test_post_preference_toggle_accepts_enable_with_model_and_persists(running_s
 def test_preference_rank_flags_persist_without_becoming_training_labels(running_server):
     server, tmp_path = running_server
     port = server.server_address[1]
+    # /api/preference_rank/flag now requires the tag to name a real manifest entry (issue
+    # #63: a stored-XSS vector via an arbitrary tag string), so seed one here.
+    (tmp_path / "scored_manifest.json").write_text(json.dumps([{"tag": "sample"}]))
 
     result = _post_json(
         f"http://127.0.0.1:{port}/api/preference_rank/flag",
@@ -238,6 +241,10 @@ def test_post_preference_retrain_does_not_hold_lock_during_training(threaded_run
     tags = sorted({t for c in comparisons for t in (c["winner"], c["loser"])})
     embeddings = np.random.RandomState(0).normal(size=(len(tags), 2)).astype(np.float32)
     embed_cache.save_cache(tmp_path / "embeddings.npz", tags, embeddings)
+    (tmp_path / "scored_manifest.json").write_text(json.dumps([
+        {"tag": "concurrent_w"}, {"tag": "concurrent_l"},
+    ]))
+    cs._manifest_cache.clear()
 
     training_started = threading.Event()
     release_training = threading.Event()
