@@ -1401,7 +1401,8 @@ standalone report), Grace (blind art-judgment, corroborating Viktor's finding th
 faithfulness don't track perceived quality), and Diego (a mobile-viewport sweep compiled from
 captured screenshots after the worker crashed four times in a row). Grace's, Nadia's, and Oren's
 full reports, the consolidated issue list, and every supporting screenshot now live under
-`notes/persona_audits/`. No fix has started on any of the 32 filed issues.
+`notes/persona_audits/`. Fixes for the security-flavored issues in this list started 2026-08-03;
+see the lab log entry below for progress.
 
 ### 2026-07-18: Task 5 regression gate and live accessibility verification
 
@@ -1451,3 +1452,47 @@ Stopped the server after verification (`kill 857060`). Post-task `pgrep -af "cla
 Note: I was unable to find the `.claude/skills/run/SKILL.md` file referenced in the task brief. The
 project's `cli.py` already has a `clawmarks serve` command that calls `curation_server.main([])`,
 using `CLAWMARKS_HOST` env var for binding. This workaround was used without issue.
+
+### 2026-08-03: Fixed issue #58 (traceback/path leak on nonexistent expedition/leg), PR #99
+
+A syntactically valid but nonexistent expedition/leg URL used to reach a file read that raised
+`FileNotFoundError` with the real filesystem path embedded in its message; the catch-all 500
+handler rendered that message and a full Python traceback into the response body. Fixed with a new
+`ExpeditionNotFoundError` and `_ensure_scope_exists()` check, caught by `do_GET`/`do_PATCH` and
+turned into a generic 404.
+
+A taskferry-dispatched multi-angle review of the fix (before merge) found 8 real problems in the
+first pass, all closed in this same branch before merge:
+
+- The active-scope branch of `_page_scope()` 404'd a bare `/status.html` request whenever the
+  persisted active selection pointed at a deleted expedition/leg, even though the user never named
+  one in the URL. Now clears the stale selection (`_clear_active_selection()`) and falls back to
+  "no active leg selected" instead.
+- `_ensure_scope_exists()` (used by GET routes) only checked the leg's output directory,
+  while `_request_scope()` (used by POST/PATCH) accepted either the output directory or the
+  leg's `legs/<leg>.json` config record, so a leg whose config record existed but whose
+  output directory had been deleted was accepted by POST/PATCH and 404'd by GET for the same
+  scope. Added the same OR to `_ensure_scope_exists()` rather than tightening it to require
+  `expedition.json` too, since several existing tests construct a leg's output directory
+  directly without ever writing an `expedition.json`.
+- The `FileNotFoundError` hint on the 500 error page extracted the missing path via
+  `str(exc).split("'")[1]`, which breaks on any path containing an apostrophe; switched to the
+  built-in `exc.filename` attribute.
+- The hint's fallback branch was narrowed from `else:` to `elif missing_path:`, silently dropping
+  the "stale absolute path" hint whenever `FileNotFoundError` had no filename set; restored `else:`.
+- The new 404 JSON response was missing the `no_manifest` flag that `cockpit.py`'s
+  `fetchTargetCells()` branches on, so cockpit's frontier-cells panel regressed from an actionable
+  "no search data yet, launch a round" message to a generic "could not load" one for a nonexistent
+  scope. Added the flag back.
+- `_send_error_page()` still computed `traceback.format_exc()` even though nothing read the
+  resulting string after the stack-trace block was removed from the response; dropped the unused
+  parameter and the now-dead `import traceback`.
+- `do_PATCH`'s new `except ExpeditionNotFoundError` clause had no reachable producer (neither
+  `_handle_focus_update` nor `_handle_focus_archive` calls anything that raises it); removed.
+- Fixed the review's own em-dash-substitute (` -- `) violations introduced by this branch's new
+  comments, per this repo's writing-style rule.
+
+Full suite passed after the fixes (see verification note in the PR). Not folded in: `dead-traceback`,
+`dead-except-do-patch` in fixed form above; `duplicated-404-shell`, `nav-bar-args-duplicated` were
+also flagged (both are pre-existing patterns this PR follows rather than introduces) and left as
+follow-up cleanup rather than blocking this security fix.
