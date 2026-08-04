@@ -126,6 +126,7 @@ def test_launch_refuses_when_balance_below_floor(running_server, monkeypatch):
 
     assert status == 402
     assert "floor" in data["error"]
+    assert "$" not in data["error"]
 
 
 def test_launch_rejects_unknown_leg(running_server):
@@ -169,6 +170,53 @@ def test_report_reflects_state_and_manifest_on_disk(running_server):
     assert data["plateau_count"] == 1
     assert data["total_images"] == 1
     assert "start_balance" not in data
+
+
+def test_report_computes_spend_from_live_balance_without_leaking_it(running_server, monkeypatch):
+    """The runs page's spend figure (runs_page.py) regressed to always showing '-' once
+    start_balance was dropped from the report, because the production route never passed
+    current_balance to build_report(). The route should fetch the live balance itself and
+    pass it through, so `spend` (a relative delta) populates, without ever exposing the raw
+    balance figure anywhere in the response."""
+    server, out_dir = running_server
+    port = server.server_address[1]
+    monkeypatch.setenv("RUNPOD_API_KEY", "fake-key")
+    monkeypatch.setattr(cs, "runpod_balance", lambda key: 2.83)
+    (out_dir / "allnight_state.json").write_text(json.dumps({
+        "generation": 2, "stage": 0, "plateau_count": 1,
+        "novelty_history": [0.3, 0.35], "gpt55_subjects": [],
+        "start_balance": 5.0, "start_time": 1.0,
+    }))
+
+    status, data = _get_json(f"http://127.0.0.1:{port}/api/searchrun/report?expedition=demo&leg=leg1")
+
+    assert status == 200
+    assert data["spend"] == pytest.approx(2.17)
+    assert "start_balance" not in data
+    assert "2.83" not in json.dumps(data)
+
+
+def test_report_omits_spend_when_balance_check_fails(running_server, monkeypatch):
+    """A failed live balance check (RunPod down, bad key) must not fail the whole report;
+    spend is just omitted, same as when RUNPOD_API_KEY isn't set at all."""
+    server, out_dir = running_server
+    port = server.server_address[1]
+    monkeypatch.setenv("RUNPOD_API_KEY", "fake-key")
+
+    def _boom(key):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(cs, "runpod_balance", _boom)
+    (out_dir / "allnight_state.json").write_text(json.dumps({
+        "generation": 2, "stage": 0, "plateau_count": 1,
+        "novelty_history": [], "gpt55_subjects": [],
+        "start_balance": 5.0, "start_time": 1.0,
+    }))
+
+    status, data = _get_json(f"http://127.0.0.1:{port}/api/searchrun/report?expedition=demo&leg=leg1")
+
+    assert status == 200
+    assert "spend" not in data
 
 
 def test_report_rejects_unsafe_scope_names(running_server):
@@ -225,43 +273,38 @@ def test_stop_passes_confirmed_run_identity_to_manager(running_server, monkeypat
     assert captured == {"pid": 12345, "start_time_ticks": 999}
 
 
-def test_cockpit_run_floor_error_does_not_include_dollar_figure(running_server, monkeypatch):
-    """GitHub issue #59: the cockpit trial-run endpoint must refuse to run a trial when the
-    RunPod balance is below the safety floor, but the refusal message returned to the client
-    must not echo back the actual dollar balance. That's an info leak to any unauthenticated
-    caller. The real balance still goes to server-side stderr for operators."""
+@pytest.mark.parametrize("endpoint,path,payload,seed_queue", [
+    pytest.param(
+        "cockpit", "/api/cockpit/queue/trial-a/run",
+        {"expedition": "demo", "leg": "leg1"}, True,
+        id="cockpit",
+    ),
+    pytest.param(
+        "counterfactual", "/api/counterfactual",
+        {"expedition": "demo", "leg": "leg1", "origin_tag": "gen1_a", "prompt": "p"}, False,
+        id="counterfactual",
+    ),
+])
+def test_floor_error_does_not_include_dollar_figure(
+    running_server, monkeypatch, endpoint, path, payload, seed_queue
+):
+    """GitHub issue #59: the cockpit trial-run and counterfactual endpoints must refuse to
+    generate when the RunPod balance is below the safety floor, but the refusal message
+    returned to the (unauthenticated) client must not echo back the actual dollar balance.
+    The real balance still goes to server-side stderr for operators."""
     server, out_dir = running_server
     port = server.server_address[1]
     monkeypatch.setattr(cs, "runpod_balance", lambda key: 0.001)
-    queue_file = out_dir / "cockpit_queue.json"
-    queue_file.write_text(json.dumps({
-        "trial-a": {"id": "trial-a", "status": "draft", "mission": "freeform",
-                     "prompt": "p", "seed_strategy": "random", "n": 1, "strength": 1.0,
-                     "sampler": "ddim", "steps": 28, "cfg": 7.5, "negative": "n",
-                     "result_tags": [], "error": None},
-    }))
+    if seed_queue:
+        queue_file = out_dir / "cockpit_queue.json"
+        queue_file.write_text(json.dumps({
+            "trial-a": {"id": "trial-a", "status": "draft", "mission": "freeform",
+                         "prompt": "p", "seed_strategy": "random", "n": 1, "strength": 1.0,
+                         "sampler": "ddim", "steps": 28, "cfg": 7.5, "negative": "n",
+                         "result_tags": [], "error": None},
+        }))
 
-    status, data = _post_json(
-        f"http://127.0.0.1:{port}/api/cockpit/queue/trial-a/run",
-        {"expedition": "demo", "leg": "leg1"},
-    )
-
-    assert status == 402
-    assert "$" not in data["error"]
-    assert "safety floor" in data["error"]
-
-
-def test_counterfactual_floor_error_does_not_include_dollar_figure(running_server, monkeypatch):
-    """GitHub issue #59: the counterfactual endpoint's floor refusal message must not echo
-    the actual RunPod dollar balance back to the (unauthenticated) client."""
-    server, _ = running_server
-    port = server.server_address[1]
-    monkeypatch.setattr(cs, "runpod_balance", lambda key: 0.001)
-
-    status, data = _post_json(
-        f"http://127.0.0.1:{port}/api/counterfactual",
-        {"expedition": "demo", "leg": "leg1", "origin_tag": "gen1_a", "prompt": "p"},
-    )
+    status, data = _post_json(f"http://127.0.0.1:{port}{path}", payload)
 
     assert status == 402
     assert "$" not in data["error"]
