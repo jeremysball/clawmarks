@@ -128,7 +128,11 @@ def launch_run(expedition, leg, out_dir, api_key, popen_fn=subprocess.Popen, bal
     try:
         balance = balance_fn(api_key)
         if balance < BALANCE_FLOOR_USD:
-            raise LaunchError(f"balance ${balance:.2f} is below floor ${BALANCE_FLOOR_USD:.2f}")
+            # No dollar figures in this message: it's echoed verbatim to the client by
+            # curation_server.py's /api/searchrun/launch handler, and the actual RunPod
+            # balance shouldn't be exposed there (see the matching cockpit/counterfactual
+            # balance-floor messages, which are sanitized the same way).
+            raise LaunchError("balance is below floor: add funds before launching a run")
 
         out_dir = Path(out_dir)
         if out_dir.exists():
@@ -207,7 +211,6 @@ def build_report(out_dir, favorites=None, current_balance=None):
         "novelty_trajectory": state.get("novelty_history", []),
         "plateau_count": state.get("plateau_count", 0),
         "generation": state.get("generation", 0),
-        "start_balance": state.get("start_balance"),
         "total_images": len(manifest),
         "explore_exploit_split": {cat: v["count"] for cat, v in by_category.items()},
         "pick_rate_by_category": {
