@@ -93,6 +93,9 @@ def test_post_preference_toggle_accepts_enable_with_model_and_persists(running_s
 def test_preference_rank_flags_persist_without_becoming_training_labels(running_server):
     server, tmp_path = running_server
     port = server.server_address[1]
+    # /api/preference_rank/flag now requires the tag to name a real manifest entry (issue
+    # #63: a stored-XSS vector via an arbitrary tag string), so seed one here.
+    (tmp_path / "scored_manifest.json").write_text(json.dumps([{"tag": "sample"}]))
 
     result = _post_json(
         f"http://127.0.0.1:{port}/api/preference_rank/flag",
