@@ -250,7 +250,26 @@ def test_build_report_reads_novelty_trajectory_and_plateau_count_from_state(tmp_
     assert report["novelty_trajectory"] == [0.5, 0.6, 0.61]
     assert report["plateau_count"] == 2
     assert report["generation"] == 3
-    assert report["start_balance"] == 10.0
+
+
+def test_build_report_never_includes_the_raw_start_balance(tmp_path):
+    """GitHub issue #59: the report dict served by /api/searchrun/report must not expose the
+    live RunPod dollar balance. The report is unauthenticated, so a real dollar figure is an
+    info leak to any caller. spend (a relative delta) is fine; only the raw balance figure is
+    the leak."""
+    out_dir = tmp_path / "sweep"
+    out_dir.mkdir()
+    state = {
+        "generation": 1, "stage": 0, "plateau_count": 0,
+        "novelty_history": [0.1], "gpt55_subjects": [],
+        "start_balance": 42.17, "start_time": 1.0,
+    }
+    (out_dir / "allnight_state.json").write_text(json.dumps(state))
+
+    report = run_manager.build_report(out_dir, current_balance=40.0)
+
+    assert "start_balance" not in report
+    assert report["spend"] == pytest.approx(2.17)
 
 
 def test_build_report_reads_allnight_state_file_name(tmp_path):

@@ -553,7 +553,9 @@ DEFAULT_PORT = 8420
 
 COMFY_ENDPOINT_ID = "uix4vdb2cec7sb"  # same serverless endpoint the search uses
 COMFY_BASE = f"https://api.runpod.ai/v2/{COMFY_ENDPOINT_ID}"
-BALANCE_FLOOR_USD = 0.05  # refuse to submit below this rather than risk a silent stall
+# Shared with run_manager.launch_run's floor check, not redefined here, so the cockpit/
+# counterfactual and launch-run balance checks can never enforce different thresholds.
+BALANCE_FLOOR_USD = run_manager.BALANCE_FLOOR_USD
 GENERATION_TIMEOUT_S = 330  # a cold endpoint (scaled to zero) took ~215s to spin up a worker in testing
 SEED_GEN_TIMEOUT_S = 300  # matches search/driver.py's request_gpt55_subjects timeout
 NEG_DEFAULT = "low quality, blurry, watermark"
@@ -1543,7 +1545,7 @@ p {{ color:var(--text-soft); font-size:13px; line-height:1.6; }}
               active_leg=_active_selection["leg"],
               running=(_run["expedition"], _run["leg"]) if (_run := run_manager.current_run()) else None)}
 <h1>clawmarks curation server</h1>
-<p>sweep dir: <code>{html.escape(str(_active_out_dir() or 'none selected'))}</code></p>
+<p>sweep dir: <code>{html.escape(f"{_active_selection['expedition']}/{_active_selection['leg']}" if _active_selection['expedition'] and _active_selection['leg'] else 'none selected')}</code></p>
 <p>{html.escape(manifest_summary)}</p>
 <p id="cmpStat" class="sub">&nbsp;</p>
 <script>
@@ -1677,7 +1679,20 @@ needed.</p>
                 return
             out_dir = _scope_out_dir(expedition, leg)
             favorites = load_store(out_dir / "user_favorites.json")
-            self._json_response(200, run_manager.build_report(out_dir, favorites=favorites))
+            # current_balance is only used to compute the relative `spend` field (a dollar
+            # delta, not the raw balance itself, see build_report). Best-effort: a missing
+            # key or a failed balance check just omits `spend` from the report rather than
+            # failing the whole request.
+            current_balance = None
+            api_key = os.environ.get("RUNPOD_API_KEY")
+            if api_key:
+                try:
+                    current_balance = runpod_balance(api_key)
+                except Exception:
+                    _logger.exception("searchrun report for %s/%s: balance check failed", expedition, leg)
+            self._json_response(200, run_manager.build_report(
+                out_dir, favorites=favorites, current_balance=current_balance,
+            ))
             return
         if route_path == "/api/compare/next":
             context = self._page_context()
@@ -2735,15 +2750,25 @@ needed.</p>
 
         try:
             balance = runpod_balance(api_key)
-        except Exception as e:
-            _revert(f"balance check failed: {e}")
-            self._json_response(502, {"error": f"balance check failed: {e}"})
+        except Exception:
+            # Never echo str(e) to the client or persist it to queue_file: cockpit_queue.json
+            # is served back verbatim by the unauthenticated GET /api/cockpit/queue, and a
+            # RunPod HTTPError's message can carry request/response details we don't want
+            # exposed. The real exception still goes to the server log.
+            _logger.exception("cockpit trial %s: balance check failed", trial_id)
+            _revert("balance check failed")
+            self._json_response(502, {"error": "balance check failed"})
             return
         if balance < BALANCE_FLOOR_USD:
             error = (
-                f"RunPod balance ${balance:.4f} is below the ${BALANCE_FLOOR_USD:.2f} safety "
-                "floor. Add funds before generating (a negative/near-zero balance has "
-                "previously caused jobs to silently stall in queue instead of erroring)."
+                "RunPod balance is below the safety floor. Add funds before generating "
+                "(a negative/near-zero balance has previously caused jobs to silently "
+                "stall in queue instead of erroring)."
+            )
+            print(
+                f"refusing cockpit trial {trial_id}: balance {balance:.4f} is below "
+                f"floor {BALANCE_FLOOR_USD:.2f}",
+                file=sys.stderr,
             )
             _revert(error)
             self._json_response(402, {"error": error})
@@ -2791,14 +2816,27 @@ needed.</p>
 
         try:
             balance = runpod_balance(api_key)
-        except Exception as e:
-            self._json_response(502, {"error": f"balance check failed: {e}"})
+        except Exception:
+            # Never echo str(e) to the client: a RunPod HTTPError's message can carry
+            # request/response details we don't want exposed. The real exception still goes
+            # to the server log.
+            _logger.exception(
+                "counterfactual for %s/%s: balance check failed", expedition, leg
+            )
+            self._json_response(502, {"error": "balance check failed"})
             return
         if balance < BALANCE_FLOOR_USD:
+            print(
+                f"refusing counterfactual for {expedition}/{leg}: balance {balance:.4f} is below "
+                f"floor {BALANCE_FLOOR_USD:.2f}",
+                file=sys.stderr,
+            )
             self._json_response(402, {
-                "error": f"RunPod balance ${balance:.4f} is below the ${BALANCE_FLOOR_USD:.2f} "
-                         "safety floor. Add funds before generating (a negative/near-zero balance "
-                         "has previously caused jobs to silently stall in queue instead of erroring)."
+                "error": (
+                    "RunPod balance is below the safety floor. Add funds before generating "
+                    "(a negative/near-zero balance has previously caused jobs to silently "
+                    "stall in queue instead of erroring)."
+                )
             })
             return
 
