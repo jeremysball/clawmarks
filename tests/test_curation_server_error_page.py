@@ -52,7 +52,7 @@ def test_error_page_missing_manifest_hint(running_server, monkeypatch):
     port = server.server_address[1]
 
     def raise_missing_manifest(*args):
-        raise FileNotFoundError("[Errno 2] No such file or directory: '/x/scored_manifest.json'")
+        raise FileNotFoundError(2, "No such file or directory", "/x/scored_manifest.json")
 
     monkeypatch.setattr(cs, "_get_map_data", raise_missing_manifest)
 
@@ -69,7 +69,7 @@ def test_error_page_stale_image_path_hint(running_server, monkeypatch):
     port = server.server_address[1]
 
     def raise_missing_image(*args):
-        raise FileNotFoundError("[Errno 2] No such file or directory: '/x/thumbs/gen0_a.jpg'")
+        raise FileNotFoundError(2, "No such file or directory", "/x/thumbs/gen0_a.jpg")
 
     monkeypatch.setattr(cs, "_get_map_data", raise_missing_image)
 
@@ -244,3 +244,52 @@ def test_invalid_expedition_leg_returns_html_404_without_path_or_traceback(runni
     assert str(config.EXPEDITIONS_DIR) not in body
     assert "Traceback (most recent call last)" not in body
     assert "<pre class=\"stack\"" not in body
+
+
+def test_invalid_expedition_leg_json_404_includes_no_manifest_flag(running_server):
+    """cockpit.py's fetchTargetCells() only branches on `no_manifest` to choose between an
+    actionable hint and a generic failure message; a nonexistent expedition/leg has no
+    coverage data either, so the JSON 404 should set the flag the same way a missing
+    scored_manifest.json 500 does."""
+    port = running_server.server_address[1]
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/cockpit/target_cells"
+            "?expedition=does_not_exist&leg=also_missing"
+        )
+
+    body = json.loads(exc_info.value.read().decode())
+    assert body["no_manifest"] is True
+
+
+def test_stale_active_selection_clears_instead_of_404ing(running_server, monkeypatch, tmp_path):
+    """A bare-query request (no expedition/leg named in the URL) that falls through to the
+    persisted active selection must not 404 just because that selection's directory was
+    deleted out-of-band; it should clear the stale selection and behave like the fresh-
+    install 'no active leg' state instead."""
+    port = running_server.server_address[1]
+
+    (config.EXPEDITIONS_DIR / "ghost_expedition" / "legs").mkdir(parents=True)
+    (config.EXPEDITIONS_DIR / "ghost_expedition" / "expedition.json").write_text("{}")
+    (config.EXPEDITIONS_DIR / "ghost_expedition" / "legs" / "ghost_leg.json").write_text("{}")
+    cs._active_selection["expedition"] = "ghost_expedition"
+    cs._active_selection["leg"] = "ghost_leg"
+    monkeypatch.setattr(cs, "_active_out_dir", lambda: None)
+
+    # Delete the leg directory the selection points at, simulating out-of-band removal.
+    import shutil
+
+    shutil.rmtree(config.EXPEDITIONS_DIR / "ghost_expedition" / "legs")
+    (config.EXPEDITIONS_DIR / "ghost_expedition" / "expedition.json").unlink()
+
+    # Clearing a stale selection still leaves no leg selected, so the route now hits the
+    # same "no active leg" 400 a fresh install with no selection ever made would hit, not
+    # the "expedition or leg not found" 404 a stale-but-present selection used to produce.
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/")
+    assert exc_info.value.code == 400
+    body = exc_info.value.read().decode()
+    assert "No expedition/leg selected" in body
+    assert cs._active_selection["expedition"] is None
+    assert cs._active_selection["leg"] is None

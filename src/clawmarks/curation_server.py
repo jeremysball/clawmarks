@@ -93,7 +93,6 @@ import subprocess
 import sys
 import threading
 import time
-import traceback
 import urllib.parse
 import urllib.request
 import uuid
@@ -219,6 +218,15 @@ def _set_active_selection(expedition, leg):
     atomic_json_write(config.ACTIVE_LEG_FILE, dict(_active_selection))
 
 
+def _clear_active_selection():
+    """Reset the active expedition/leg to unset, e.g. when it points at a directory that no
+    longer exists (deleted out-of-band). Mirrors the fresh-install state where no selection
+    has ever been made, which every _active_out_dir()/_active_scope() caller already handles."""
+    _active_selection["expedition"] = None
+    _active_selection["leg"] = None
+    atomic_json_write(config.ACTIVE_LEG_FILE, dict(_active_selection))
+
+
 def _list_expeditions():
     if not config.EXPEDITIONS_DIR.exists():
         return []
@@ -311,16 +319,23 @@ def _scope_out_dir(expedition, leg):
 
 
 def _ensure_scope_exists(expedition, leg):
-    """Raise ExpeditionNotFoundError if the expedition/leg directory doesn't exist on disk,
-    so a syntactically valid but nonexistent URL scope doesn't reach a file read that raises
+    """Raise ExpeditionNotFoundError if the expedition/leg doesn't exist on disk, so a
+    syntactically valid but nonexistent URL scope doesn't reach a file read that raises
     FileNotFoundError with the absolute path embedded in str(exc) (which the catch-all 500
     page would otherwise render into the response body, see issue #58). The path returned by
     _scope_out_dir() itself can legitimately point at a nonexistent directory for callers
     that only need filesystem navigation (e.g. _load_sibling_leg_manifests walking the
     expedition root to find sibling legs), so this validation lives separately rather than
     inside _scope_out_dir()."""
+    _validate_scope_names(expedition, leg)
     out_dir = _scope_out_dir(expedition, leg)
-    if not out_dir.exists():
+    # Accept either signal a leg is real: its output directory (out_dir), or its config
+    # record (legs/<leg>.json). _request_scope (POST/PATCH) already accepts either; GET used
+    # to require out_dir alone, so a leg whose config record existed but whose output
+    # directory had been deleted was accepted by POST/PATCH and 404'd by GET for the same
+    # scope. Matching the OR here keeps both request paths agreeing on what "exists" means.
+    legs_json = config.EXPEDITIONS_DIR / expedition / "legs" / f"{leg}.json"
+    if not out_dir.exists() and not legs_json.exists():
         raise ExpeditionNotFoundError(
             f"expedition {expedition!r} or leg {leg!r} does not exist"
         )
@@ -1139,7 +1154,7 @@ class Handler(SimpleHTTPRequestHandler):
             if self._wants_json():
                 self._send_json_error(e)
             else:
-                self._send_error_page(e, traceback.format_exc())
+                self._send_error_page(e)
 
     def _wants_json(self):
         path = self.path.split("?")[0]
@@ -1147,12 +1162,17 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _send_expedition_not_found(self, exc):
         # Server-side: log the underlying cause so an operator can see which expedition/leg
-        # was asked for. Client-side: a generic 404 -- never the absolute filesystem path
+        # was asked for. Client-side: a generic 404, never the absolute filesystem path
         # the underlying FileNotFoundError would have embedded in its message.
         _logger.info("expedition not found for %s: %s", self.path, exc)
         if self._wants_json():
             try:
-                self._json_response(404, {"error": "expedition or leg not found"})
+                # no_manifest: true even though this is a missing expedition/leg, not a
+                # missing scored_manifest.json, because JSON callers like cockpit.py's
+                # fetchTargetCells only branch on this flag to decide between the actionable
+                # "no search data yet" hint and a generic failure message; a scope that
+                # doesn't exist has no coverage data either, so the same hint applies.
+                self._json_response(404, {"error": "expedition or leg not found", "no_manifest": True})
             except Exception:
                 pass
             return
@@ -1230,8 +1250,8 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
         # diagnose it. Client-side: never include the raw exception class name or message;
         # a FileNotFoundError's str() embeds the absolute filesystem path the missing file
         # was being looked up under, which would otherwise leak the server's layout to the
-        # browser. The most useful structured signal -- whether the failure was caused by a
-        # missing scored_manifest.json on the active leg -- stays as a boolean for clients
+        # browser. The most useful structured signal, whether the failure was caused by a
+        # missing scored_manifest.json on the active leg, stays as a boolean for clients
         # that know how to handle it, but its message no longer carries the path.
         _logger.exception("unhandled exception in %s: %s", self.path, exc)
         no_manifest = isinstance(exc, FileNotFoundError) and "scored_manifest.json" in str(exc)
@@ -1243,25 +1263,25 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
         except Exception:
             pass  # client already gone; nothing left to send
 
-    def _send_error_page(self, exc, detail):
+    def _send_error_page(self, exc):
         # Server-side: log the real exception (with full traceback) so an operator can
         # diagnose it. Client-side: never include the raw exception class name + message or
         # the formatted traceback in the response body (the former leaks server-side paths
         # from FileNotFoundError's str(); the latter leaks Python internals). The most common
-        # recoverable cause -- a missing scored_manifest.json on the active leg vs. an image
-        # file whose absolute path no longer resolves -- still gets its tailored hint, since
+        # recoverable cause, a missing scored_manifest.json on the active leg vs. an image
+        # file whose absolute path no longer resolves, still gets its tailored hint, since
         # those are user-actionable and don't embed server-side info.
         _logger.exception("unhandled exception in %s: %s", self.path, exc)
         hint = ""
         if isinstance(exc, FileNotFoundError):
-            missing_path = str(exc).split("'")[1] if "'" in str(exc) else ""
+            missing_path = exc.filename or ""
             if missing_path.endswith("scored_manifest.json"):
                 hint = (
                     "<p>The active leg has no scored manifest yet. "
                     '<a href="/">Pick a leg that has completed a search round</a>, or '
                     '<a href="/runs.html">launch a new round for this leg</a>.</p>'
                 )
-            elif missing_path:
+            else:
                 hint = (
                     "<p>This usually means <code>scored_manifest.json</code> still points at an "
                     "old absolute path (e.g. after the project directory was renamed or moved) "
@@ -1482,11 +1502,16 @@ p {{ color:var(--text-soft); font-size:13.5px; line-height:1.6; }}
                 expedition, leg = _validate_scope_names(expedition, leg)
             except ValueError as e:
                 raise ContextQueryError(str(e)) from e
-            # Active scope: also validate the directory exists on disk. A scope pointing
-            # at a deleted expedition/leg would otherwise reach a file read that raises
-            # FileNotFoundError with the absolute path embedded in str(exc), which the
-            # catch-all 500 page would then render into the response body (issue #58).
-            _ensure_scope_exists(expedition, leg)
+            # Active scope: also validate the directory exists on disk. Unlike an explicit
+            # URL scope (below), the user never named this expedition/leg in the request, so
+            # a stale selection pointing at a deleted expedition/leg shouldn't 404 the
+            # request; clear it and fall back to the same "no active leg" state a fresh
+            # install starts in, which every downstream caller already handles.
+            try:
+                _ensure_scope_exists(expedition, leg)
+            except ExpeditionNotFoundError:
+                _clear_active_selection()
+                return None, None
             return expedition, leg
         try:
             expedition, leg = _validate_scope_names(context.expedition, context.leg)
@@ -2394,8 +2419,6 @@ needed.</p>
             self._do_PATCH()
         except NoActiveLegError as e:
             self._send_no_active_leg_error(e)
-        except ExpeditionNotFoundError as e:
-            self._send_expedition_not_found(e)
         except Exception as e:
             self._send_json_error(e)
 
