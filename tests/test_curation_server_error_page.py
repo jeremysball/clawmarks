@@ -6,7 +6,22 @@ import urllib.request
 
 import pytest
 
+from clawmarks import config
 from clawmarks import curation_server as cs
+
+
+@pytest.fixture(autouse=True)
+def _isolate(tmp_path, monkeypatch):
+    # _page_scope now calls _ensure_scope_exists, which checks the resolved expedition/leg
+    # directory exists via config.leg_dir(). Patch those away from the real production tree
+    # so the new tests that hit /api/... and /map.html with a nonexistent expedition/leg
+    # query don't accidentally touch the real disk during validation.
+    monkeypatch.setattr(config, "EXPEDITIONS_DIR", tmp_path / "expeditions")
+    monkeypatch.setattr(config, "STATE_DIR", tmp_path / "state")
+    monkeypatch.setattr(config, "ACTIVE_LEG_FILE", tmp_path / "state" / "active_leg.json")
+    cs._active_selection["expedition"] = None
+    cs._active_selection["leg"] = None
+    yield
 
 
 @pytest.fixture
@@ -37,7 +52,7 @@ def test_error_page_missing_manifest_hint(running_server, monkeypatch):
     port = server.server_address[1]
 
     def raise_missing_manifest(*args):
-        raise FileNotFoundError("[Errno 2] No such file or directory: '/x/scored_manifest.json'")
+        raise FileNotFoundError(2, "No such file or directory", "/x/scored_manifest.json")
 
     monkeypatch.setattr(cs, "_get_map_data", raise_missing_manifest)
 
@@ -54,7 +69,7 @@ def test_error_page_stale_image_path_hint(running_server, monkeypatch):
     port = server.server_address[1]
 
     def raise_missing_image(*args):
-        raise FileNotFoundError("[Errno 2] No such file or directory: '/x/thumbs/gen0_a.jpg'")
+        raise FileNotFoundError(2, "No such file or directory", "/x/thumbs/gen0_a.jpg")
 
     monkeypatch.setattr(cs, "_get_map_data", raise_missing_image)
 
@@ -139,3 +154,142 @@ def test_500_error_page_uses_sulfur_proof_shell(running_server, monkeypatch):
     # stack trace <pre> is gone, replaced by a class-based rule in the page-local <style>.
     assert 'style="white-space:pre-wrap;font-family:monospace;background:#f3f4f6' not in body
     assert "border-radius:4px" not in body
+
+
+def test_error_page_omits_raw_exception_text_and_traceback(running_server, monkeypatch):
+    """Issue #58: the generic 500 page must not include the raw exception class name +
+    message or the formatted Python traceback in the response body, since both can leak
+    server-side information (a FileNotFoundError's str() embeds the absolute filesystem
+    path; a traceback embeds internal source paths and library versions). The real
+    exception is still logged server-side via _logger.exception; the body just gets a
+    generic message plus the existing scored_manifest/image-path hints when relevant."""
+    port = running_server.server_address[1]
+    monkeypatch.setattr(
+        cs, "_get_map_data",
+        lambda *args: (_ for _ in ()).throw(
+            FileNotFoundError("[Errno 2] No such file or directory: '/srv/secret/scored_manifest.json'")
+        ),
+    )
+
+    body = _fetch_error_page(port, "/map.html")
+    assert "/srv/secret" not in body
+    assert "FileNotFoundError" not in body
+    assert "Traceback (most recent call last)" not in body
+    assert "<pre class=\"stack\"" not in body
+    assert "An unexpected error occurred" in body
+
+
+def test_json_error_omits_raw_exception_text(running_server, monkeypatch):
+    """Issue #58: the generic JSON 500 path (_send_json_error) must not include the raw
+    exception class name + message either, since a FileNotFoundError's str() embeds the
+    absolute filesystem path. The structured 'no_manifest' flag stays as a hint for
+    clients that know how to act on it."""
+    port = running_server.server_address[1]
+    monkeypatch.setattr(
+        cs, "_get_map_data",
+        lambda *args: (_ for _ in ()).throw(
+            FileNotFoundError("[Errno 2] No such file or directory: '/srv/secret/scored_manifest.json'")
+        ),
+    )
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/api/cockpit/target_cells")
+    assert exc_info.value.code == 500
+    assert exc_info.value.headers.get_content_type() == "application/json"
+    raw_body = exc_info.value.read().decode()
+    body = json.loads(raw_body)
+    assert body["error"] == "internal server error"
+    assert "/srv/secret" not in raw_body
+    assert body["no_manifest"] is True
+
+
+def test_invalid_expedition_leg_returns_json_404_without_path_or_traceback(running_server):
+    """Issue #58 trigger: a syntactically valid but nonexistent expedition/leg combination
+    in an API URL must return a clean 404 with a generic message, not a 500 page that
+    embeds the underlying FileNotFoundError's absolute path. The path/traceback stays
+    server-side only."""
+    port = running_server.server_address[1]
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/cockpit/target_cells"
+            "?expedition=does_not_exist&leg=also_missing"
+        )
+
+    assert exc_info.value.code == 404
+    assert exc_info.value.headers.get_content_type() == "application/json"
+    raw_body = exc_info.value.read().decode()
+    body = json.loads(raw_body)
+    assert body["error"] == "expedition or leg not found"
+    # The expedition/leg names are user-supplied, so echoing them is fine; the absolute
+    # filesystem path the legacy bug would have leaked is not.
+    assert str(config.EXPEDITIONS_DIR) not in raw_body
+
+
+def test_invalid_expedition_leg_returns_html_404_without_path_or_traceback(running_server):
+    """Same as the JSON variant, but for an HTML page: an invalid expedition/leg in a
+    query string on /map.html returns a generic styled 404, not a 500 page that leaks
+    the underlying FileNotFoundError's path."""
+    port = running_server.server_address[1]
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/map.html"
+            "?expedition=does_not_exist&leg=also_missing"
+        )
+
+    assert exc_info.value.code == 404
+    body = exc_info.value.read().decode()
+    assert "Expedition not found" in body
+    assert str(config.EXPEDITIONS_DIR) not in body
+    assert "Traceback (most recent call last)" not in body
+    assert "<pre class=\"stack\"" not in body
+
+
+def test_invalid_expedition_leg_json_404_includes_no_manifest_flag(running_server):
+    """cockpit.py's fetchTargetCells() only branches on `no_manifest` to choose between an
+    actionable hint and a generic failure message; a nonexistent expedition/leg has no
+    coverage data either, so the JSON 404 should set the flag the same way a missing
+    scored_manifest.json 500 does."""
+    port = running_server.server_address[1]
+
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/cockpit/target_cells"
+            "?expedition=does_not_exist&leg=also_missing"
+        )
+
+    body = json.loads(exc_info.value.read().decode())
+    assert body["no_manifest"] is True
+
+
+def test_stale_active_selection_clears_instead_of_404ing(running_server, monkeypatch, tmp_path):
+    """A bare-query request (no expedition/leg named in the URL) that falls through to the
+    persisted active selection must not 404 just because that selection's directory was
+    deleted out-of-band; it should clear the stale selection and behave like the fresh-
+    install 'no active leg' state instead."""
+    port = running_server.server_address[1]
+
+    (config.EXPEDITIONS_DIR / "ghost_expedition" / "legs").mkdir(parents=True)
+    (config.EXPEDITIONS_DIR / "ghost_expedition" / "expedition.json").write_text("{}")
+    (config.EXPEDITIONS_DIR / "ghost_expedition" / "legs" / "ghost_leg.json").write_text("{}")
+    cs._active_selection["expedition"] = "ghost_expedition"
+    cs._active_selection["leg"] = "ghost_leg"
+    monkeypatch.setattr(cs, "_active_out_dir", lambda: None)
+
+    # Delete the leg directory the selection points at, simulating out-of-band removal.
+    import shutil
+
+    shutil.rmtree(config.EXPEDITIONS_DIR / "ghost_expedition" / "legs")
+    (config.EXPEDITIONS_DIR / "ghost_expedition" / "expedition.json").unlink()
+
+    # Clearing a stale selection still leaves no leg selected, so the route now hits the
+    # same "no active leg" 400 a fresh install with no selection ever made would hit, not
+    # the "expedition or leg not found" 404 a stale-but-present selection used to produce.
+    with pytest.raises(urllib.error.HTTPError) as exc_info:
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/")
+    assert exc_info.value.code == 400
+    body = exc_info.value.read().decode()
+    assert "No expedition/leg selected" in body
+    assert cs._active_selection["expedition"] is None
+    assert cs._active_selection["leg"] is None
