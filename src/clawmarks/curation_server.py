@@ -722,11 +722,38 @@ def next_compare_response(manifest, comparisons, expedition=None, leg=None):
 SAMPLERS = ("ddim", "dpmpp_2m", "euler")
 
 
+# ComfyUI/SDXL LoRA syntax embedded directly in a prompt, e.g. <lora:papertexture:0.9> or
+# <lora:papertexture:0.9:0.9> (separate model/clip strengths). CLIPTextEncode (see the ComfyUI
+# workflow this server submits) parses these directly out of the prompt string, so a routine
+# prompt containing one must not 400 just because it contains angle brackets.
+_LORA_TOKEN_RE = re.compile(r"<lora:[^<>:]+:-?[0-9.]+(?::-?[0-9.]+)?>")
+
+
+def _validate_trial_text(field, value, default=""):
+    value = value or default
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
+    residual = _LORA_TOKEN_RE.sub("", value)
+    if "<" in residual or ">" in residual:
+        raise ValueError(f"{field} may not contain HTML markup")
+    return value
+
+
+def _is_known_mission(mission):
+    """Single source of truth for 'is this a mission the cockpit UI knows about', shared by
+    build_trial (rejects an unknown mission outright, a single user-submitted trial) and
+    filter_autopilot_suggestions (silently drops an unknown-mission suggestion out of an
+    LLM-generated batch, rather than failing the whole batch over one bad item) so the two
+    call sites can't drift onto different mission whitelists even though their handling of a
+    failed check differs by design."""
+    return isinstance(mission, str) and mission in cockpit.MISSIONS
+
+
 def build_trial(payload, now, trial_id):
     """Validates and shapes a draft trial for cockpit_queue.json. Raises ValueError with a
     user-facing message on any invalid field, so the POST handler can turn it straight into a
     400 without duplicating validation logic."""
-    prompt = (payload.get("prompt") or "").strip()
+    prompt = _validate_trial_text("prompt", payload.get("prompt")).strip()
     if not prompt:
         raise ValueError("missing 'prompt'")
     seed_strategy = payload.get("seed_strategy") or "random"
@@ -743,16 +770,20 @@ def build_trial(payload, now, trial_id):
     except (TypeError, ValueError):
         raise ValueError("n/strength/steps/cfg must be numbers")
     mission = payload.get("mission") or "freeform"
-    queue_title = cockpit.MISSIONS.get(mission, {}).get("queue", mission)
+    if not _is_known_mission(mission):
+        raise ValueError(f"mission must be one of {tuple(cockpit.MISSIONS)}")
+    queue_title = cockpit.MISSIONS[mission]["queue"]
     focus_id = payload.get("focus_id")
     return {
         "id": trial_id, "status": "draft", "mission": mission, "queue_title": queue_title,
-        "prompt": prompt, "hypothesis": (payload.get("hypothesis") or "").strip(),
-        "target": payload.get("target") or "", "target_cell": payload.get("target_cell"),
+        "prompt": prompt, "hypothesis": _validate_trial_text(
+            "hypothesis", payload.get("hypothesis")
+        ).strip(),
+        "target": _validate_trial_text("target", payload.get("target")).strip(), "target_cell": payload.get("target_cell"),
         "focus_id": focus_id,
         "seed_strategy": seed_strategy, "n": n, "strength": strength,
         "sampler": sampler, "steps": steps, "cfg": cfg,
-        "negative": payload.get("negative") or NEG_DEFAULT,
+        "negative": _validate_trial_text("negative", payload.get("negative"), NEG_DEFAULT).strip(),
         "created_at": now, "result_tags": [], "error": None,
     }
 
@@ -964,7 +995,7 @@ def filter_autopilot_suggestions(suggestions):
             continue
         if not s.get("title") or not s.get("prompt") or not isinstance(s.get("rationale"), str):
             continue
-        if s.get("mission") not in cockpit.MISSIONS:
+        if not _is_known_mission(s.get("mission")):
             continue
         if suggestion_has_numeric_forecast(s["rationale"]):
             continue
@@ -1045,9 +1076,19 @@ def load_manifest(expedition, leg):
         return cached["manifest"]
 
 
-def manifest_entry_by_tag(tag, expedition, leg):
+def manifest_by_tag(expedition, leg):
+    """The by-tag lookup dict for a single manifest snapshot. Callers that need to validate
+    more than one tag (e.g. /api/compare's winner/loser pair) should call this once and look
+    both tags up in the same dict, rather than calling manifest_entry_by_tag() once per tag:
+    each of those calls independently re-reads the manifest's mtime under the cache lock, so
+    a manifest rewrite between two separate calls could validate the tags against different
+    snapshots."""
     load_manifest(expedition, leg)
-    return _manifest_cache[(expedition, leg)]["by_tag"].get(tag)
+    return _manifest_cache[(expedition, leg)]["by_tag"]
+
+
+def manifest_entry_by_tag(tag, expedition, leg):
+    return manifest_by_tag(expedition, leg).get(tag)
 
 
 def _manifest_file_in_scope(entry, out_dir):
@@ -2184,6 +2225,9 @@ needed.</p>
             if not winner or not loser:
                 self._json_response(400, {"error": "missing 'winner' or 'loser'"})
                 return
+            if not isinstance(winner, str) or not isinstance(loser, str):
+                self._json_response(400, {"error": "'winner' and 'loser' must be manifest tags"})
+                return
             if winner == loser:
                 self._json_response(400, {"error": "'winner' and 'loser' must be different images"})
                 return
@@ -2193,6 +2237,21 @@ needed.</p>
                 )
             except ValueError as e:
                 self._json_response(400, {"error": str(e)})
+                return
+            try:
+                by_tag = manifest_by_tag(expedition, leg)
+                winner_entry = by_tag.get(winner)
+                loser_entry = by_tag.get(loser)
+            except FileNotFoundError:
+                # No scored_manifest.json yet for this leg: neither tag can be a real
+                # manifest entry, so this is a validation failure (400), not a server error.
+                self._json_response(400, {"error": "no manifest found for this expedition/leg"})
+                return
+            if winner_entry is None:
+                self._json_response(400, {"error": "winner is not in the current manifest"})
+                return
+            if loser_entry is None:
+                self._json_response(400, {"error": "loser is not in the current manifest"})
                 return
             with _lock:
                 comparisons = load_comparisons(expedition, leg)
@@ -2242,6 +2301,16 @@ needed.</p>
                 )
             except ValueError as e:
                 self._json_response(400, {"error": str(e)})
+                return
+            # Same manifest-membership guard /api/compare uses (see issue #63): a tag must
+            # name a real manifest entry before it's accepted and stored, closing this route
+            # as a second stored-XSS vector alongside /api/compare's winner/loser tags.
+            try:
+                if manifest_entry_by_tag(tag, expedition, leg) is None:
+                    self._json_response(400, {"error": "tag is not in the current manifest"})
+                    return
+            except FileNotFoundError:
+                self._json_response(400, {"error": "no manifest found for this expedition/leg"})
                 return
             with _lock:
                 flags = load_store(_preference_rank_flags_file(expedition, leg))
@@ -2315,6 +2384,19 @@ needed.</p>
                 return
             else:
                 favorites_file = _favorites_file(expedition, leg)
+            if expedition is not None and leg is not None:
+                # Same manifest-membership guard /api/compare uses (see issue #63): a tag
+                # must name a real manifest entry before it's accepted and stored, closing
+                # this route as a second stored-XSS vector alongside /api/compare's winner/
+                # loser tags. Skipped on the deprecated no-scope legacy path above, which has
+                # no expedition/leg to validate a manifest tag against.
+                try:
+                    if manifest_entry_by_tag(tag, expedition, leg) is None:
+                        self._json_response(400, {"error": "tag is not in the current manifest"})
+                        return
+                except FileNotFoundError:
+                    self._json_response(400, {"error": "no manifest found for this expedition/leg"})
+                    return
             with _lock:
                 favorites = load_store(favorites_file)
                 payload["favorited_at"] = datetime.now(timezone.utc).isoformat()

@@ -1531,3 +1531,48 @@ floor-refusal message still embedded the exact dollar balance. All three closed 
 - Parametrized the two near-identical floor-error dollar-leak tests instead of duplicating them.
 
 Full suite run in progress at the time of this entry; see PR #97 for the final result.
+
+### 2026-08-03: Fixed issue #63 (stored XSS via cockpit queue and compare tags), PR #100
+
+Cockpit queue trials stored `prompt`/`hypothesis`/`target`/`negative` as raw free text, and the
+compare endpoint persisted `winner`/`loser` tags with no check that they referred to real manifest
+entries, so an attacker could store a `<script>` payload server-side, relying only on client-side
+render-time escaping to neutralize it. Fixed with an ingestion-time `<`/`>` blocklist on the trial
+text fields and a manifest-membership check on compare's winner/loser tags.
+
+A taskferry-dispatched multi-angle review of the fix (before merge) found the coverage was
+incomplete and one part of the fix broke a legitimate workflow, both closed in this branch:
+
+- `/api/favorite` and `/api/preference_rank/flag` accept and store a `tag` string the same way
+  `/api/compare` does, but only `/api/compare` got the new manifest-membership guard. Both now
+  reject a tag that isn't a real manifest entry the same way, closing the same stored-XSS vector
+  on all three routes instead of just one.
+- The blanket `<`/`>` blocklist rejected any prompt containing a standard ComfyUI/SDXL LoRA token
+  (`<lora:name:weight>`), which `CLIPTextEncode` is built to parse directly out of the prompt
+  string, a real functional regression for a routine prompt. The validator now strips a matched
+  `<lora:name:weight>` token before checking for remaining `<`/`>`, so the token is accepted while
+  a payload disguised alongside one (`<lora:x:0.9> <script>...`) is still rejected.
+- The new manifest-membership check had no exception handling: a missing `scored_manifest.json`
+  turned a normal 400 validation failure into an unhandled 500. Now caught and returned as 400.
+- The winner and loser tags in `/api/compare` were each validated via a separate call into the
+  manifest cache, so a manifest rewrite between the two calls could validate them against
+  different snapshots. Added a `manifest_by_tag()` helper that loads the manifest once and looks
+  both tags up in the same dict. (A second, harder race, the manifest changing between the GET
+  that offers a pair and the POST that submits it, is architectural and wasn't fixed here: it
+  would need a versioned/ETag-style token on the offered pair, disproportionate effort for a race
+  that requires an active manifest rewrite during the exact window a user is comparing two images.)
+- `target`/`negative` trial fields weren't stripped of surrounding whitespace, unlike
+  `prompt`/`hypothesis`, which use the same validation helper; now all four strip consistently.
+  Also unified the duplicated mission-whitelist check (`build_trial` vs.
+  `filter_autopilot_suggestions`) behind one `_is_known_mission()` helper, keeping each call
+  site's differing failure behavior (reject vs. silently drop) but removing the duplicated
+  membership check itself.
+- Added API-layer tests for the LoRA-token carve-out and confirmed a trial's prompt round-trips
+  through the JSON queue API unmodified (never as literal HTML), which is what makes cockpit.js's
+  client-side `escapeHtml()` the single, sufficient point of defense. A true browser-level
+  end-to-end render check (load cockpit.html, seed a trial, confirm no live `<`/`>` bytes in the
+  DOM) wasn't added: the ingestion-time blocklist already makes storing a raw `<`/`>` payload
+  impossible via the API, so there's nothing for a browser check to catch that the API-layer tests
+  don't already cover.
+
+Full suite run in progress at the time of this entry; see PR #100 for the final result.
