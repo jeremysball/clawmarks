@@ -1496,3 +1496,38 @@ Full suite passed after the fixes (see verification note in the PR). Not folded 
 `dead-except-do-patch` in fixed form above; `duplicated-404-shell`, `nav-bar-args-duplicated` were
 also flagged (both are pre-existing patterns this PR follows rather than introduces) and left as
 follow-up cleanup rather than blocking this security fix.
+
+### 2026-08-03: Fixed issue #59 (RunPod balance and filesystem path/username leak), PR #97
+
+The cockpit trial-run, counterfactual, and `/api/searchrun/report` endpoints echoed the live
+RunPod dollar balance to unauthenticated clients (in a floor-refusal error message or a report
+field), and `status.html` rendered the active sweep directory's absolute filesystem path, which
+leaks the OS username on Linux. Fixed by sanitizing every balance-floor message to a fixed string
+and dropping `start_balance` from the report.
+
+A taskferry-dispatched multi-angle review of the fix (before merge) found the sanitization was
+incomplete: two `except Exception` branches (the cockpit and counterfactual balance *check*
+failure paths, not the balance-*floor* refusal paths the original fix covered) still interpolated
+the raw exception via `str(e)` into the client response, and `run_manager.launch_run`'s own
+floor-refusal message still embedded the exact dollar balance. All three closed in this branch:
+
+- Cockpit and counterfactual `except Exception` handlers around `runpod_balance()` now log the
+  real exception server-side and return a fixed `"balance check failed"` string to the client,
+  instead of `f"balance check failed: {e}"`.
+- `run_manager.launch_run`'s floor-refusal `LaunchError` message dropped its `${balance:.2f}`
+  and `${BALANCE_FLOOR_USD:.2f}` interpolation, matching the cockpit/counterfactual messages'
+  existing sanitized wording. Added the missing `"$" not in data["error"]` assertion to its test,
+  which the PR's other two floor-refusal tests already had but this one was missing (that gap is
+  exactly how the dollar leak shipped in the first fix).
+- Removing `start_balance` from the report also silently broke the runs page's spend display
+  (it always showed `-` in production, since the route never passed `current_balance` to
+  `build_report()`). The route now fetches the live balance itself (best-effort: a failed check
+  just omits `spend` rather than failing the request) so the relative `spend` figure, which the
+  original fix's own test comment already says is fine to expose, populates again.
+- `BALANCE_FLOOR_USD` was defined independently in both `run_manager.py` and `curation_server.py`;
+  the latter now imports it from `run_manager` so the two floor checks can't drift apart.
+- `status.html`'s sweep-dir line called `_active_out_dir()` (which validates names and builds a
+  `Path`) purely for its truthiness; switched to checking `_active_selection`'s fields directly.
+- Parametrized the two near-identical floor-error dollar-leak tests instead of duplicating them.
+
+Full suite run in progress at the time of this entry; see PR #97 for the final result.

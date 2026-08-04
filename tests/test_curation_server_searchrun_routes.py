@@ -2,6 +2,7 @@ import json
 import os
 import threading
 from http.server import HTTPServer
+from pathlib import Path
 import urllib.error
 import urllib.request
 
@@ -125,6 +126,7 @@ def test_launch_refuses_when_balance_below_floor(running_server, monkeypatch):
 
     assert status == 402
     assert "floor" in data["error"]
+    assert "$" not in data["error"]
 
 
 def test_launch_rejects_unknown_leg(running_server):
@@ -167,6 +169,54 @@ def test_report_reflects_state_and_manifest_on_disk(running_server):
     assert data["novelty_trajectory"] == [0.3, 0.35]
     assert data["plateau_count"] == 1
     assert data["total_images"] == 1
+    assert "start_balance" not in data
+
+
+def test_report_computes_spend_from_live_balance_without_leaking_it(running_server, monkeypatch):
+    """The runs page's spend figure (runs_page.py) regressed to always showing '-' once
+    start_balance was dropped from the report, because the production route never passed
+    current_balance to build_report(). The route should fetch the live balance itself and
+    pass it through, so `spend` (a relative delta) populates, without ever exposing the raw
+    balance figure anywhere in the response."""
+    server, out_dir = running_server
+    port = server.server_address[1]
+    monkeypatch.setenv("RUNPOD_API_KEY", "fake-key")
+    monkeypatch.setattr(cs, "runpod_balance", lambda key: 2.83)
+    (out_dir / "allnight_state.json").write_text(json.dumps({
+        "generation": 2, "stage": 0, "plateau_count": 1,
+        "novelty_history": [0.3, 0.35], "gpt55_subjects": [],
+        "start_balance": 5.0, "start_time": 1.0,
+    }))
+
+    status, data = _get_json(f"http://127.0.0.1:{port}/api/searchrun/report?expedition=demo&leg=leg1")
+
+    assert status == 200
+    assert data["spend"] == pytest.approx(2.17)
+    assert "start_balance" not in data
+    assert "2.83" not in json.dumps(data)
+
+
+def test_report_omits_spend_when_balance_check_fails(running_server, monkeypatch):
+    """A failed live balance check (RunPod down, bad key) must not fail the whole report;
+    spend is just omitted, same as when RUNPOD_API_KEY isn't set at all."""
+    server, out_dir = running_server
+    port = server.server_address[1]
+    monkeypatch.setenv("RUNPOD_API_KEY", "fake-key")
+
+    def _boom(key):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(cs, "runpod_balance", _boom)
+    (out_dir / "allnight_state.json").write_text(json.dumps({
+        "generation": 2, "stage": 0, "plateau_count": 1,
+        "novelty_history": [], "gpt55_subjects": [],
+        "start_balance": 5.0, "start_time": 1.0,
+    }))
+
+    status, data = _get_json(f"http://127.0.0.1:{port}/api/searchrun/report?expedition=demo&leg=leg1")
+
+    assert status == 200
+    assert "spend" not in data
 
 
 def test_report_rejects_unsafe_scope_names(running_server):
@@ -221,3 +271,87 @@ def test_stop_passes_confirmed_run_identity_to_manager(running_server, monkeypat
     assert status == 200
     assert data == {"running": True}
     assert captured == {"pid": 12345, "start_time_ticks": 999}
+
+
+@pytest.mark.parametrize("endpoint,path,payload,seed_queue", [
+    pytest.param(
+        "cockpit", "/api/cockpit/queue/trial-a/run",
+        {"expedition": "demo", "leg": "leg1"}, True,
+        id="cockpit",
+    ),
+    pytest.param(
+        "counterfactual", "/api/counterfactual",
+        {"expedition": "demo", "leg": "leg1", "origin_tag": "gen1_a", "prompt": "p"}, False,
+        id="counterfactual",
+    ),
+])
+def test_floor_error_does_not_include_dollar_figure(
+    running_server, monkeypatch, endpoint, path, payload, seed_queue
+):
+    """GitHub issue #59: the cockpit trial-run and counterfactual endpoints must refuse to
+    generate when the RunPod balance is below the safety floor, but the refusal message
+    returned to the (unauthenticated) client must not echo back the actual dollar balance.
+    The real balance still goes to server-side stderr for operators."""
+    server, out_dir = running_server
+    port = server.server_address[1]
+    monkeypatch.setattr(cs, "runpod_balance", lambda key: 0.001)
+    if seed_queue:
+        queue_file = out_dir / "cockpit_queue.json"
+        queue_file.write_text(json.dumps({
+            "trial-a": {"id": "trial-a", "status": "draft", "mission": "freeform",
+                         "prompt": "p", "seed_strategy": "random", "n": 1, "strength": 1.0,
+                         "sampler": "ddim", "steps": 28, "cfg": 7.5, "negative": "n",
+                         "result_tags": [], "error": None},
+        }))
+
+    status, data = _post_json(f"http://127.0.0.1:{port}{path}", payload)
+
+    assert status == 402
+    assert "$" not in data["error"]
+    assert "safety floor" in data["error"]
+
+
+@pytest.fixture
+def running_server_with_manifest_image(tmp_path, monkeypatch):
+    """Like running_server, but with one scored-manifest image present on disk so the
+    status-page data branch (_status_page_data_body, the one that used to leak the absolute
+    sweep-dir path) is the one that actually renders."""
+    monkeypatch.setattr(run_manager, "LOCK_FILE", tmp_path / ".searchrun.lock")
+    monkeypatch.setenv("RUNPOD_API_KEY", "fake-key")
+    monkeypatch.setattr(config, "EXPEDITIONS_DIR", tmp_path / "expeditions")
+    monkeypatch.setattr(config, "STATE_DIR", tmp_path / "state")
+    monkeypatch.setattr(config, "ACTIVE_LEG_FILE", tmp_path / "state" / "active_leg.json")
+    (config.EXPEDITIONS_DIR / "demo" / "legs").mkdir(parents=True)
+    (config.EXPEDITIONS_DIR / "demo" / "expedition.json").write_text("{}")
+    (config.EXPEDITIONS_DIR / "demo" / "legs" / "leg1.json").write_text("{}")
+    cs._set_active_selection("demo", "leg1")
+    out_dir = config.leg_dir("demo", "leg1")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    image_path = out_dir / "gen1_a.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 16)
+    (out_dir / "scored_manifest.json").write_text(json.dumps([
+        {"tag": "gen1_a", "file": str(image_path)},
+    ]))
+    server = HTTPServer(("127.0.0.1", 0), cs.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield server, out_dir
+    server.shutdown()
+    thread.join(timeout=2)
+
+
+def test_status_page_data_branch_does_not_leak_absolute_state_dir_path(running_server_with_manifest_image):
+    """GitHub issue #59: status.html must not echo the absolute filesystem path of the active
+    sweep directory. That path contains the OS username on Linux (for example
+    /home/<user>/.local/state/clawmarks/...). The data branch (the one that renders when the
+    active leg has at least one scored-manifest image present on disk) used to render
+    str(_active_out_dir()) verbatim; it now renders just the expedition/leg pair."""
+    server, out_dir = running_server_with_manifest_image
+    port = server.server_address[1]
+
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/status.html") as resp:
+        body = resp.read().decode()
+
+    assert str(out_dir) not in body
+    assert "/home/" not in body
+    assert str(Path.home()) not in body
